@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export default function AdminDashboard() {
@@ -19,9 +19,10 @@ export default function AdminDashboard() {
   const [invName, setInvName] = useState('');
   const [invCategory, setInvCategory] = useState('');
   const [invPrice, setInvPrice] = useState('');
-  const [invQuantity, setInvQuantity] = useState('1'); // Default to 1, can be set to 5-10 for bundles
+  const [invQuantity, setInvQuantity] = useState('1'); 
   const [invMessage, setInvMessage] = useState({ type: '', text: '' });
   const [recentInventory, setRecentInventory] = useState<any[]>([]);
+  const [stockSearchQuery, setStockSearchQuery] = useState('');
 
   // Refund State
   const [refundBarcode, setRefundBarcode] = useState('');
@@ -32,6 +33,8 @@ export default function AdminDashboard() {
   const [salesRecord, setSalesRecord] = useState<any[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [revenueByMethod, setRevenueByMethod] = useState<Record<string, number>>({});
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Auth Handler
   const handleLogin = (e: React.FormEvent) => {
@@ -73,7 +76,6 @@ export default function AdminDashboard() {
       return;
     }
 
-    // 1. Log the individual sale item
     const { error: saleError } = await supabase.from('sales').insert([
       {
         dress_id: currentDress.id,
@@ -89,7 +91,6 @@ export default function AdminDashboard() {
       return;
     }
 
-    // 2. Deduct 1 from stock quantity
     const newQuantity = currentDress.quantity - 1;
     await supabase
       .from('dresses')
@@ -112,11 +113,12 @@ export default function AdminDashboard() {
 
   // --- INVENTORY FUNCTIONS ---
   const fetchRecentInventory = async () => {
+    // Increased limit to 1000 so the search bar has all your recent items to filter through!
     const { data } = await supabase
       .from('dresses')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(5);
+      .limit(1000); 
     if (data) setRecentInventory(data);
   };
 
@@ -173,7 +175,6 @@ export default function AdminDashboard() {
   const processRefund = async (sale: any) => {
     if (!window.confirm(`Are you sure you want to refund this purchase of ${sale.dresses.name}?`)) return;
 
-    // 1. Mark the specific transaction as refunded
     const { error: updateSaleError } = await supabase
       .from('sales')
       .update({ status: 'refunded' })
@@ -184,7 +185,6 @@ export default function AdminDashboard() {
       return;
     }
 
-    // 2. Put 1 item back into the active stock bundle
     const restoredQuantity = sale.dresses.quantity + 1;
     await supabase
       .from('dresses')
@@ -202,14 +202,27 @@ export default function AdminDashboard() {
   };
 
   // --- REPORTS FUNCTIONS ---
-  const fetchSalesData = async () => {
-    const { data } = await supabase
+  const fetchSalesData = useCallback(async () => {
+    let query = supabase
       .from('sales')
       .select(`
         *,
         dresses ( name, barcode )
       `)
       .order('sold_at', { ascending: false });
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      query = query.gte('sold_at', start.toISOString());
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query = query.lte('sold_at', end.toISOString());
+    }
+
+    const { data } = await query;
 
     if (data) {
       setSalesRecord(data);
@@ -218,7 +231,6 @@ export default function AdminDashboard() {
       const methods: Record<string, number> = { cash: 0, bkash: 0, nagad: 0, upay: 0, rocket: 0 };
 
       data.forEach(sale => {
-        // Only add up revenue from COMPLETED non-refunded transactions
         if (sale.status === 'completed') {
           const amount = Number(sale.amount_paid);
           total += amount;
@@ -231,11 +243,22 @@ export default function AdminDashboard() {
       setTotalRevenue(total);
       setRevenueByMethod(methods);
     }
-  };
+  }, [startDate, endDate]);
 
   useEffect(() => {
     if (activeTab === 'reports') fetchSalesData();
-  }, [activeTab]);
+  }, [activeTab, fetchSalesData]);
+
+  const clearDateFilters = () => {
+    setStartDate('');
+    setEndDate('');
+  };
+
+  // Helper for Inventory Filtering
+  const filteredInventory = recentInventory.filter(item => 
+    item.name.toLowerCase().includes(stockSearchQuery.toLowerCase()) || 
+    item.barcode.toLowerCase().includes(stockSearchQuery.toLowerCase())
+  );
 
   if (!isAuthenticated) {
     return (
@@ -321,6 +344,10 @@ export default function AdminDashboard() {
                       <option value="Shirt">Shirt</option>
                       <option value="T-Shirt">T-Shirt</option>
                       <option value="Pant">Pant</option>
+                      <option value="0-5">0-5</option>
+                      <option value="small baby dress">Small baby dress</option>
+                      <option value="medium dress">Medium dress</option>
+                      <option value="maximum dress">Maximum dress</option>
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -339,19 +366,33 @@ export default function AdminDashboard() {
 
               <div className="bg-white p-6 rounded-lg shadow">
                 <h2 className="text-xl font-bold mb-4 border-b pb-2 text-black">Active Dress Stock</h2>
-                <div className="space-y-3">
-                  {recentInventory.map(item => (
-                    <div key={item.id} className="p-3 border rounded flex justify-between items-center">
-                      <div>
-                        <p className="font-bold text-black">{item.name}</p>
-                        <p className="text-xs text-gray-500 font-mono">Barcode: {item.barcode}</p>
+                
+                {/* Search Bar */}
+                <input 
+                  type="text" 
+                  placeholder="Search by dress title or barcode..." 
+                  className="w-full p-2 mb-4 border border-gray-300 rounded text-black focus:outline-none focus:border-black"
+                  value={stockSearchQuery}
+                  onChange={(e) => setStockSearchQuery(e.target.value)}
+                />
+
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                  {filteredInventory.length === 0 ? (
+                    <p className="text-gray-500 text-sm italic">No items match your search.</p>
+                  ) : (
+                    filteredInventory.map(item => (
+                      <div key={item.id} className="p-3 border rounded flex justify-between items-center bg-gray-50">
+                        <div>
+                          <p className="font-bold text-black">{item.name}</p>
+                          <p className="text-xs text-gray-500 font-mono">Barcode: {item.barcode}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-green-600">৳ {item.price}</p>
+                          <p className={`text-xs px-2 py-0.5 rounded font-bold inline-block ${item.quantity > 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'}`}>{item.quantity} In Stock</p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-green-600">৳ {item.price}</p>
-                        <p className={`text-xs px-2 py-0.5 rounded font-bold inline-block ${item.quantity > 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'}`}>{item.quantity} In Stock</p>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
            </div>
@@ -389,9 +430,37 @@ export default function AdminDashboard() {
         {/* TAB 4: SALES REPORTS */}
         {activeTab === 'reports' && (
           <div className="space-y-6 print:hidden">
+            {/* DATE FILTER BAR */}
+            <div className="bg-white p-4 rounded-lg shadow flex items-end gap-4 border border-gray-200">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Start Date</label>
+                <input 
+                  type="date" 
+                  className="p-2 border rounded text-black focus:outline-none focus:border-black"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">End Date</label>
+                <input 
+                  type="date" 
+                  className="p-2 border rounded text-black focus:outline-none focus:border-black"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+              <button 
+                onClick={clearDateFilters}
+                className="p-2 px-4 border border-gray-300 text-gray-600 rounded hover:bg-gray-100 font-bold text-sm"
+              >
+                Clear Filters (All Time)
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 gap-6">
               <div className="bg-white p-6 rounded-lg shadow border-l-4 border-black">
-                <p className="text-sm text-gray-500 font-bold uppercase">Net Revenue (Excluding Refunds)</p>
+                <p className="text-sm text-gray-500 font-bold uppercase">Net Revenue {startDate ? '(Filtered)' : '(All Time)'}</p>
                 <p className="text-3xl font-extrabold text-black mt-2">৳ {totalRevenue.toLocaleString()}</p>
               </div>
               <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
@@ -426,6 +495,9 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
+                    {salesRecord.length === 0 && (
+                      <tr><td colSpan={5} className="p-4 text-center text-gray-500">No sales found for this period.</td></tr>
+                    )}
                     {salesRecord.map((sale) => (
                       <tr key={sale.id} className={`text-sm ${sale.status === 'refunded' ? 'bg-red-50/40 line-through text-gray-400' : 'hover:bg-gray-50 text-black'}`}>
                         <td className="p-3 border-b">{new Date(sale.sold_at).toLocaleString('en-BD')}</td>
