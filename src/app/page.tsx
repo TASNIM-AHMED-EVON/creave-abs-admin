@@ -9,9 +9,8 @@ export default function AdminDashboard() {
 
   // POS State
   const [barcodeInput, setBarcodeInput] = useState('');
-  // Changed from currentDress to a cart array to hold multiple items
   const [cart, setCart] = useState<any[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad' | 'upay' | 'rocket' | 'cash'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad' | 'upay' | 'rocket' | 'cash' | 'bank/card'>('cash');
   const [trxId, setTrxId] = useState('');
   const [posMessage, setPosMessage] = useState({ type: '', text: '' });
 
@@ -64,11 +63,9 @@ export default function AdminDashboard() {
     if (error || !data) {
       setPosMessage({ type: 'error', text: 'Dress not found! Check the barcode.' });
     } else {
-      // Check if we already have this item in the cart to increase quantity
       const existingCartItem = cart.find(item => item.id === data.id);
       const currentCartQty = existingCartItem ? existingCartItem.cartQty : 0;
 
-      // Prevent adding to cart if it exceeds available stock
       if (currentCartQty + 1 > data.quantity) {
          setPosMessage({ type: 'error', text: 'Not enough stock available for this item!' });
       } else {
@@ -82,6 +79,22 @@ export default function AdminDashboard() {
     setBarcodeInput('');
   };
 
+  // Manual Quantity Control Modifiers (+ / -)
+  const updateCartItemQuantity = (id: string, increment: boolean) => {
+    setCart(cart.map(item => {
+      if (item.id === id) {
+        const newQty = increment ? item.cartQty + 1 : item.cartQty - 1;
+        if (newQty <= 0) return item; // Use remove button instead
+        if (newQty > item.quantity) {
+          setPosMessage({ type: 'error', text: `Cannot exceed available physical stock (${item.quantity} available).` });
+          return item;
+        }
+        return { ...item, cartQty: newQty };
+      }
+      return item;
+    }));
+  };
+
   const removeFromCart = (id: string) => {
     setCart(cart.filter(item => item.id !== id));
   };
@@ -89,15 +102,13 @@ export default function AdminDashboard() {
   const handleCheckout = async () => {
     if (cart.length === 0) return;
 
-    // Prepare all items for the sales log
     const salesData: any[] = [];
     cart.forEach(item => {
-      // If someone buys 2 of the same item, it logs as 2 separate rows in the database
       for(let i = 0; i < item.cartQty; i++) {
         salesData.push({
           dress_id: item.id,
           payment_method: paymentMethod,
-          transaction_id: paymentMethod === 'cash' ? 'CASH-SALE' : trxId,
+          transaction_id: (paymentMethod === 'cash' || paymentMethod === 'bank/card') ? 'DIRECT-SALE' : trxId,
           amount_paid: item.price,
           status: 'completed'
         });
@@ -111,7 +122,6 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Deduct stock quantities for all items in the cart
     for (const item of cart) {
       const newQuantity = item.quantity - item.cartQty;
       await supabase
@@ -134,7 +144,6 @@ export default function AdminDashboard() {
     }, 500);
   };
 
-  // Calculate cart total
   const cartTotal = cart.reduce((total, item) => total + (item.price * item.cartQty), 0);
 
   // --- INVENTORY FUNCTIONS ---
@@ -227,7 +236,7 @@ export default function AdminDashboard() {
     if (data) {
       setSalesRecord(data);
       let total = 0;
-      const methods: Record<string, number> = { cash: 0, bkash: 0, nagad: 0, upay: 0, rocket: 0 };
+      const methods: Record<string, number> = { cash: 0, bkash: 0, nagad: 0, upay: 0, rocket: 0, 'bank/card': 0 };
 
       data.forEach(sale => {
         if (sale.status === 'completed') {
@@ -284,6 +293,14 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 print:bg-white">
       
+      {/* Global CSS style tag to wipe the native browser headers/footers (Vercel URL details) during prints */}
+      <style jsx global>{`
+        @media print {
+          @page { margin: 0; }
+          body { margin: 1.6cm 1cm; }
+        }
+      `}</style>
+
       {/* Top Navigation Bar */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm print:hidden">
         <div className="max-w-7xl mx-auto px-6">
@@ -300,7 +317,6 @@ export default function AdminDashboard() {
                 }`}
               >
                 {tab === 'pos' ? 'Terminal (POS)' : tab === 'inventory' ? 'Stock & Bundles' : tab === 'refund' ? 'Refunds' : 'Reports'}
-                {/* Active Indicator Underline */}
                 {activeTab === tab && (
                   <div className={`absolute bottom-0 left-0 right-0 h-1 rounded-t-full ${tab === 'refund' ? 'bg-red-600' : 'bg-slate-900'}`} />
                 )}
@@ -345,15 +361,38 @@ export default function AdminDashboard() {
                   <div className="space-y-3 mb-6">
                     {cart.map((item) => (
                       <div key={item.id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                        <div>
+                        <div className="flex-1">
                           <p className="font-bold text-slate-900 text-sm">{item.name}</p>
-                          <p className="text-xs text-slate-500 mt-1">৳ {item.price} x {item.cartQty} (Stock: {item.quantity - item.cartQty} left)</p>
+                          <p className="text-xs text-slate-500 mt-1">Base: ৳ {item.price} (Stock: {item.quantity} available)</p>
                         </div>
-                        <div className="flex items-center gap-6">
-                          <p className="font-bold text-slate-900">৳ {item.price * item.cartQty}</p>
+                        
+                        {/* Interactive Quantity Button Controls */}
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
+                            <button 
+                              type="button"
+                              onClick={() => updateCartItemQuantity(item.id, false)}
+                              className="w-7 h-7 bg-white rounded-md text-slate-700 font-bold hover:bg-slate-50 transition-colors flex items-center justify-center border border-slate-200/60 shadow-sm"
+                            >
+                              -
+                            </button>
+                            <span className="px-3 font-mono font-bold text-sm text-slate-900">{item.cartQty}</span>
+                            <button 
+                              type="button"
+                              onClick={() => updateCartItemQuantity(item.id, true)}
+                              className="w-7 h-7 bg-white rounded-md text-slate-700 font-bold hover:bg-slate-50 transition-colors flex items-center justify-center border border-slate-200/60 shadow-sm"
+                            >
+                              +
+                            </button>
+                          </div>
+                          
+                          <div className="text-right min-w-[80px]">
+                            <p className="font-black text-slate-900">৳ {item.price * item.cartQty}</p>
+                          </div>
+
                           <button 
                             onClick={() => removeFromCart(item.id)}
-                            className="text-red-500 text-xs font-bold hover:underline"
+                            className="text-red-500 text-xs font-bold hover:underline ml-2"
                           >
                             Remove
                           </button>
@@ -370,11 +409,11 @@ export default function AdminDashboard() {
 
                   <div className="pt-2">
                     <h3 className="text-sm font-bold mb-3 text-slate-700 uppercase tracking-wider">Select Payment Method</h3>
-                    <div className="flex flex-wrap gap-3 mb-6">
-                      {['cash', 'bkash', 'nagad', 'upay', 'rocket'].map((method) => (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                      {['cash', 'bkash', 'nagad', 'upay', 'rocket', 'bank/card'].map((method) => (
                         <button 
                           key={method} 
-                          className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold uppercase tracking-wider transition-all duration-200 border ${
+                          className={`py-3 px-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 border text-center ${
                             paymentMethod === method 
                               ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-105' 
                               : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
@@ -386,7 +425,7 @@ export default function AdminDashboard() {
                       ))}
                     </div>
                     
-                    {paymentMethod !== 'cash' && (
+                    {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && (
                       <div className="mb-6 animate-in slide-in-from-top-2 duration-200">
                         <input type="text" placeholder="Enter Mobile Banking TrxID" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 outline-none text-slate-900 font-mono text-sm" value={trxId} onChange={(e) => setTrxId(e.target.value)} />
                       </div>
@@ -459,7 +498,7 @@ export default function AdminDashboard() {
                       Save to Database
                     </button>
                   </form>
-              </div>
+                </div>
               </div>
 
               {/* Right Column: List */}
@@ -554,7 +593,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-slate-500 flex items-center gap-1 font-mono">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
                           <span className="uppercase font-bold text-slate-700">{sale.payment_method}</span> 
-                          {sale.transaction_id !== 'CASH-SALE' && ` | Trx: ${sale.transaction_id}`}
+                          {(sale.transaction_id !== 'CASH-SALE' && sale.transaction_id !== 'DIRECT-SALE') && ` | Trx: ${sale.transaction_id}`}
                         </p>
                       </div>
                     </div>
@@ -613,14 +652,14 @@ export default function AdminDashboard() {
                 <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
                 Revenue by Payment Method
               </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
                 {Object.entries(revenueByMethod).map(([method, amount]) => (
                   <div key={method} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-center hover:border-slate-300 transition-colors">
                     <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100">
                       <span className="text-xs font-black text-slate-600 uppercase">{method.charAt(0)}</span>
                     </div>
-                    <p className="uppercase text-xs font-bold text-slate-400 tracking-wider mb-1">{method}</p>
-                    <p className="text-lg font-bold text-slate-900">৳ {amount.toLocaleString()}</p>
+                    <p className="uppercase text-[10px] font-bold text-slate-400 tracking-wider mb-1 whitespace-nowrap">{method}</p>
+                    <p className="text-base font-bold text-slate-900">৳ {amount.toLocaleString()}</p>
                   </div>
                 ))}
               </div>
@@ -678,7 +717,7 @@ export default function AdminDashboard() {
       {cart.length > 0 && activeTab === 'pos' && (
         <div className="hidden print:block w-[80mm] text-black font-mono text-sm p-2 mx-auto">
           <div className="text-center font-bold text-xl mb-1 tracking-widest">CRAVE ABS</div>
-          <div className="text-center text-xs mb-4 uppercase">Khulna, Bangladesh</div>
+          <div className="text-center text-xs mb-4 uppercase">Mymensingh, Bangladesh</div>
           <div className="border-b border-dashed border-black my-2"></div>
           <div className="flex justify-between text-xs">
             <span>Date: {new Date().toLocaleDateString()}</span>
@@ -705,7 +744,7 @@ export default function AdminDashboard() {
             <span>Tk {cartTotal}</span>
           </div>
           <div className="text-xs mt-2 uppercase">Paid via: <span className="font-bold">{paymentMethod}</span></div>
-          {paymentMethod !== 'cash' && <div className="text-xs font-mono mt-1">TrxID: {trxId}</div>}
+          {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && <div className="text-xs font-mono mt-1">TrxID: {trxId}</div>}
           <div className="border-b border-dashed border-black my-2 mt-4"></div>
           <div className="text-center text-xs font-bold mt-2">THANK YOU FOR SHOPPING!</div>
           <div className="text-center text-[10px] mt-1">No refunds without receipt.</div>
