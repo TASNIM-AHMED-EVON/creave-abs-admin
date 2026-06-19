@@ -270,7 +270,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-subtle-pulse"></span>
+               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                <span className="text-xs font-medium text-zinc-500">System Online</span>
             </div>
           </div>
@@ -285,7 +285,7 @@ export default function AdminDashboard() {
           <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 print:hidden">
             
             <div className="md:col-span-7">
-              <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm animate-fade-in">
+              <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
                 <h2 className="text-base font-semibold mb-4 text-zinc-900">Scan Item</h2>
                 
                 {posMessage.text && (
@@ -304,7 +304,7 @@ export default function AdminDashboard() {
                 </form>
 
                 {currentDress && (
-                  <div className="mt-6 border-t border-zinc-100 pt-6 animate-fade-in">
+                  <div className="mt-6 border-t border-zinc-100 pt-6">
                     <h3 className="text-sm font-medium mb-3 text-zinc-500">Transaction Details</h3>
                     <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200 mb-6">
                       <div className="flex justify-between items-start mb-2">
@@ -325,11 +325,11 @@ export default function AdminDashboard() {
             </div>
 
             <div className="md:col-span-5">
-               <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm h-full animate-fade-in">
+               <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm h-full">
                   <h2 className="text-base font-semibold mb-4 text-zinc-900">Payment Routing</h2>
                   {currentDress ? (
                     currentDress.quantity > 0 ? (
-                      <div className="space-y-5 animate-fade-in">
+                      <div className="space-y-5">
                         <div>
                           <label className="block text-xs font-medium text-zinc-500 mb-2">Method</label>
                           <div className="grid grid-cols-2 gap-2">
@@ -350,7 +350,7 @@ export default function AdminDashboard() {
                         </div>
                         
                         {paymentMethod !== 'cash' && (
-                          <div className="animate-fade-in">
+                          <div>
                             <label className="block text-xs font-medium text-zinc-500 mb-2">Transaction ID</label>
                             <input type="text" className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none text-zinc-900 font-mono text-sm" value={trxId} onChange={(e) => setTrxId(e.target.value)} />
                           </div>
@@ -367,7 +367,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                     ) : (
-                      <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200 text-sm font-medium animate-fade-in">
+                      <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200 text-sm font-medium">
                         Inventory depleted. Cannot route payment.
                       </div>
                     )
@@ -387,7 +387,7 @@ export default function AdminDashboard() {
               
               {/* Left Column: Form */}
               <div className="lg:col-span-4 space-y-6">
-                <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm animate-fade-in">
+                <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
                   <h2 className="text-base font-semibold mb-5 text-zinc-900">Inventory Registration</h2>
                   
                   {invMessage.text && <div className={`p-3 mb-5 rounded-lg text-sm border ${invMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>{invMessage.text}</div>}
@@ -433,7 +433,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Right Column: List */}
-              <div className="lg:col-span-8 animate-fade-in">
+              <div className="lg:col-span-8">
                 <div className="bg-white rounded-xl border border-zinc-200 shadow-sm h-full flex flex-col overflow-hidden">
                   <div className="p-4 border-b border-zinc-200 bg-zinc-50/50 flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-zinc-900">Active Inventory Registry</h2>
@@ -463,7 +463,7 @@ export default function AdminDashboard() {
                           <tr><td colSpan={4} className="p-8 text-center text-sm text-zinc-500">No matching records found.</td></tr>
                         ) : (
                           filteredInventory.map(item => (
-                            <tr key={item.id} className="hover:bg-zinc-50 transition-colors animate-fade-in">
+                            <tr key={item.id} className="hover:bg-zinc-50 transition-colors">
                               <td className="px-4 py-3">
                                 <p className="font-medium text-sm text-zinc-900">{item.name}</p>
                                 <p className="text-xs text-zinc-500 font-mono mt-0.5">{item.barcode}</p>
@@ -489,7 +489,7 @@ export default function AdminDashboard() {
         {/* TAB 3: REFUND */}
         {activeTab === 'refund' && (
           <div className="max-w-3xl mx-auto print:hidden">
-            <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm animate-fade-in">
+            <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
               <div className="mb-6">
                 <h2 className="text-base font-semibold text-zinc-900">Process Return / Refund</h2>
                 <p className="text-zinc-500 mt-1 text-sm">Query completed transactions via barcode identification.</p>
@@ -504,7 +504,7 @@ export default function AdminDashboard() {
 
               <div className="space-y-3">
                 {refundItemSales.map((sale) => (
-                  <div key={sale.id} className="p-4 border border-zinc-200 rounded-lg bg-zinc-50 flex justify-between items-center animate-fade-in">
+                  <div key={sale.id} className="p-4 border border-zinc-200 rounded-lg bg-zinc-50 flex justify-between items-center">
                     <div>
                       <p className="font-semibold text-zinc-900 text-sm">{sale.dresses.name}</p>
                       <div className="flex gap-4 mt-1">
@@ -530,7 +530,7 @@ export default function AdminDashboard() {
           <div className="space-y-6 print:hidden">
             
             {/* Filter Bar */}
-            <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm flex flex-wrap items-end gap-4 animate-fade-in">
+            <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm flex flex-wrap items-end gap-4">
               <div className="w-48">
                 <label className="block text-xs font-medium text-zinc-500 mb-1.5">Date Origin</label>
                 <input type="date" className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-md text-sm text-zinc-900 focus:ring-2 focus:ring-indigo-500 outline-none" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -545,7 +545,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="col-span-2 bg-zinc-900 p-6 rounded-xl shadow-sm text-white">
                 <p className="text-xs font-medium text-zinc-400 mb-1">Gross Net Revenue {startDate ? '(Filtered)' : '(Lifetime)'}</p>
                 <p className="text-4xl font-semibold tracking-tight">৳ {totalRevenue.toLocaleString()}</p>
@@ -557,7 +557,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Ledger Table */}
-            <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden animate-fade-in">
+            <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
               <div className="p-4 border-b border-zinc-200 bg-zinc-50/50 flex justify-between items-center">
                 <h2 className="text-sm font-semibold text-zinc-900">Master Transaction Ledger</h2>
               </div>
@@ -577,7 +577,7 @@ export default function AdminDashboard() {
                       <tr><td colSpan={5} className="p-8 text-center text-sm text-zinc-500">No records available for criteria.</td></tr>
                     )}
                     {salesRecord.map((sale) => (
-                      <tr key={sale.id} className="hover:bg-zinc-50 transition-colors animate-fade-in">
+                      <tr key={sale.id} className="hover:bg-zinc-50 transition-colors">
                         <td className="px-5 py-3 text-sm text-zinc-600 whitespace-nowrap">{new Date(sale.sold_at).toLocaleString('en-GB')}</td>
                         <td className="px-5 py-3">
                           <p className={`text-sm font-medium ${sale.status === 'refunded' ? 'text-zinc-400' : 'text-zinc-900'}`}>{sale.dresses?.name}</p>
@@ -606,7 +606,7 @@ export default function AdminDashboard() {
 
       {/* RECEIPT PRINT LAYOUT */}
       {currentDress && activeTab === 'pos' && (
-        <div className="hidden print:block w-[80mm] text-black font-mono text-sm p-2 mx-auto receipt-block">
+        <div className="hidden print:block w-[80mm] text-black font-mono text-sm p-2 mx-auto">
           <div className="text-center font-bold text-xl mb-1 tracking-widest">CRAVE ABS</div>
           <div className="text-center text-xs mb-4 uppercase">Khulna, Bangladesh</div>
           <div className="border-b border-dashed border-black my-2"></div>
