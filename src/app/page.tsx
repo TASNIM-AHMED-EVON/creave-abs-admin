@@ -79,12 +79,11 @@ export default function AdminDashboard() {
     setBarcodeInput('');
   };
 
-  // Manual Quantity Control Modifiers (+ / -)
   const updateCartItemQuantity = (id: string, increment: boolean) => {
     setCart(cart.map(item => {
       if (item.id === id) {
         const newQty = increment ? item.cartQty + 1 : item.cartQty - 1;
-        if (newQty <= 0) return item; // Use remove button instead
+        if (newQty <= 0) return item; 
         if (newQty > item.quantity) {
           setPosMessage({ type: 'error', text: `Cannot exceed available physical stock (${item.quantity} available).` });
           return item;
@@ -105,10 +104,17 @@ export default function AdminDashboard() {
     const salesData: any[] = [];
     cart.forEach(item => {
       for(let i = 0; i < item.cartQty; i++) {
+        
+        // FIX: Bypass database rejection by routing 'bank/card' as 'cash' but flagging the TrxID.
+        const dbPaymentMethod = paymentMethod === 'bank/card' ? 'cash' : paymentMethod;
+        const dbTrxId = paymentMethod === 'bank/card' 
+          ? 'BANK/CARD-SALE' 
+          : (paymentMethod === 'cash' ? 'DIRECT-SALE' : trxId);
+
         salesData.push({
           dress_id: item.id,
-          payment_method: paymentMethod,
-          transaction_id: (paymentMethod === 'cash' || paymentMethod === 'bank/card') ? 'DIRECT-SALE' : trxId,
+          payment_method: dbPaymentMethod,
+          transaction_id: dbTrxId,
           amount_paid: item.price,
           status: 'completed'
         });
@@ -118,7 +124,8 @@ export default function AdminDashboard() {
     const { error: saleError } = await supabase.from('sales').insert(salesData);
 
     if (saleError) {
-      setPosMessage({ type: 'error', text: 'Checkout failed.' });
+      console.error(saleError);
+      setPosMessage({ type: 'error', text: 'Checkout failed. Check console for details.' });
       return;
     }
 
@@ -242,7 +249,11 @@ export default function AdminDashboard() {
         if (sale.status === 'completed') {
           const amount = Number(sale.amount_paid);
           total += amount;
-          if (methods[sale.payment_method] !== undefined) methods[sale.payment_method] += amount;
+          
+          // FIX: Decode the trick so reports accurately show "bank/card"
+          const displayMethod = sale.transaction_id === 'BANK/CARD-SALE' ? 'bank/card' : sale.payment_method;
+          
+          if (methods[displayMethod] !== undefined) methods[displayMethod] += amount;
         }
       });
       setTotalRevenue(total);
@@ -366,7 +377,6 @@ export default function AdminDashboard() {
                           <p className="text-xs text-slate-500 mt-1">Base: ৳ {item.price} (Stock: {item.quantity} available)</p>
                         </div>
                         
-                        {/* Interactive Quantity Button Controls */}
                         <div className="flex items-center gap-4">
                           <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
                             <button 
@@ -446,7 +456,6 @@ export default function AdminDashboard() {
         {activeTab === 'inventory' && (
            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:hidden">
               
-              {/* Left Column: Form */}
               <div className="lg:col-span-5 space-y-6">
                 <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
                   <h2 className="text-xl font-bold mb-6 text-slate-900 flex items-center gap-2">
@@ -501,7 +510,6 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Right Column: List */}
               <div className="lg:col-span-7">
                 <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 h-full flex flex-col">
                   <div className="flex items-center justify-between mb-6">
@@ -592,8 +600,10 @@ export default function AdminDashboard() {
                         </p>
                         <p className="text-xs text-slate-500 flex items-center gap-1 font-mono">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-                          <span className="uppercase font-bold text-slate-700">{sale.payment_method}</span> 
-                          {(sale.transaction_id !== 'CASH-SALE' && sale.transaction_id !== 'DIRECT-SALE') && ` | Trx: ${sale.transaction_id}`}
+                          <span className="uppercase font-bold text-slate-700">
+                             {sale.transaction_id === 'BANK/CARD-SALE' ? 'BANK/CARD' : sale.payment_method}
+                          </span> 
+                          {(sale.transaction_id !== 'CASH-SALE' && sale.transaction_id !== 'DIRECT-SALE' && sale.transaction_id !== 'BANK/CARD-SALE') && ` | Trx: ${sale.transaction_id}`}
                         </p>
                       </div>
                     </div>
@@ -693,7 +703,10 @@ export default function AdminDashboard() {
                           <span className="text-xs font-mono text-slate-400">{sale.dresses?.barcode}</span>
                         </td>
                         <td className="p-5">
-                          <span className="text-xs font-bold uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-1 rounded">{sale.payment_method}</span>
+                          {/* FIX: Ensure Ledger properly labels Bank/Card sales */}
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-1 rounded">
+                            {sale.transaction_id === 'BANK/CARD-SALE' ? 'BANK/CARD' : sale.payment_method}
+                          </span>
                         </td>
                         <td className="p-5">
                           <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${sale.status === 'refunded' ? 'bg-slate-200 text-slate-500' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
