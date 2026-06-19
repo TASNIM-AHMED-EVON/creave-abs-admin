@@ -9,7 +9,8 @@ export default function AdminDashboard() {
 
   // POS State
   const [barcodeInput, setBarcodeInput] = useState('');
-  const [currentDress, setCurrentDress] = useState<any>(null);
+  // Changed from currentDress to a cart array to hold multiple items
+  const [cart, setCart] = useState<any[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad' | 'upay' | 'rocket' | 'cash'>('cash');
   const [trxId, setTrxId] = useState('');
   const [posMessage, setPosMessage] = useState({ type: '', text: '' });
@@ -62,54 +63,79 @@ export default function AdminDashboard() {
 
     if (error || !data) {
       setPosMessage({ type: 'error', text: 'Dress not found! Check the barcode.' });
-      setCurrentDress(null);
     } else {
-      setCurrentDress(data);
+      // Check if we already have this item in the cart to increase quantity
+      const existingCartItem = cart.find(item => item.id === data.id);
+      const currentCartQty = existingCartItem ? existingCartItem.cartQty : 0;
+
+      // Prevent adding to cart if it exceeds available stock
+      if (currentCartQty + 1 > data.quantity) {
+         setPosMessage({ type: 'error', text: 'Not enough stock available for this item!' });
+      } else {
+         if (existingCartItem) {
+           setCart(cart.map(item => item.id === data.id ? { ...item, cartQty: item.cartQty + 1 } : item));
+         } else {
+           setCart([...cart, { ...data, cartQty: 1 }]);
+         }
+      }
     }
     setBarcodeInput('');
   };
 
-  const handleCheckout = async () => {
-    if (!currentDress) return;
-    if (currentDress.quantity <= 0) {
-      setPosMessage({ type: 'error', text: 'This item is Out of Stock!' });
-      return;
-    }
+  const removeFromCart = (id: string) => {
+    setCart(cart.filter(item => item.id !== id));
+  };
 
-    const { error: saleError } = await supabase.from('sales').insert([
-      {
-        dress_id: currentDress.id,
-        payment_method: paymentMethod,
-        transaction_id: paymentMethod === 'cash' ? 'CASH-SALE' : trxId,
-        amount_paid: currentDress.price,
-        status: 'completed'
-      },
-    ]);
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+
+    // Prepare all items for the sales log
+    const salesData: any[] = [];
+    cart.forEach(item => {
+      // If someone buys 2 of the same item, it logs as 2 separate rows in the database
+      for(let i = 0; i < item.cartQty; i++) {
+        salesData.push({
+          dress_id: item.id,
+          payment_method: paymentMethod,
+          transaction_id: paymentMethod === 'cash' ? 'CASH-SALE' : trxId,
+          amount_paid: item.price,
+          status: 'completed'
+        });
+      }
+    });
+
+    const { error: saleError } = await supabase.from('sales').insert(salesData);
 
     if (saleError) {
       setPosMessage({ type: 'error', text: 'Checkout failed.' });
       return;
     }
 
-    const newQuantity = currentDress.quantity - 1;
-    await supabase
-      .from('dresses')
-      .update({ 
-        quantity: newQuantity,
-        status: newQuantity === 0 ? 'sold' : 'available' 
-      })
-      .eq('id', currentDress.id);
+    // Deduct stock quantities for all items in the cart
+    for (const item of cart) {
+      const newQuantity = item.quantity - item.cartQty;
+      await supabase
+        .from('dresses')
+        .update({ 
+          quantity: newQuantity,
+          status: newQuantity === 0 ? 'sold' : 'available' 
+        })
+        .eq('id', item.id);
+    }
 
     setPosMessage({ type: 'success', text: 'Sale recorded! Printing receipt...' });
 
     setTimeout(() => {
       window.print();
-      setCurrentDress(null);
+      setCart([]);
       setTrxId('');
       fetchRecentInventory();
       fetchSalesData();
     }, 500);
   };
+
+  // Calculate cart total
+  const cartTotal = cart.reduce((total, item) => total + (item.price * item.cartQty), 0);
 
   // --- INVENTORY FUNCTIONS ---
   const fetchRecentInventory = async () => {
@@ -117,7 +143,7 @@ export default function AdminDashboard() {
       .from('dresses')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(1000); 
+      .limit(1000);
     if (data) setRecentInventory(data);
   };
 
@@ -125,7 +151,6 @@ export default function AdminDashboard() {
     e.preventDefault();
     setInvMessage({ type: '', text: '' });
     const qty = parseInt(invQuantity);
-
     const { error } = await supabase.from('dresses').insert([
       {
         barcode: invBarcode,
@@ -136,12 +161,12 @@ export default function AdminDashboard() {
         status: qty > 0 ? 'available' : 'sold'
       }
     ]);
-
     if (error) {
       setInvMessage({ type: 'error', text: 'Failed to add item. Barcode might already exist.' });
     } else {
       setInvMessage({ type: 'success', text: `Successfully stocked ${qty} item(s)!` });
-      setInvBarcode(''); setInvName(''); setInvCategory(''); setInvPrice(''); setInvQuantity('1');
+      setInvBarcode(''); setInvName(''); setInvCategory('');
+      setInvPrice(''); setInvQuantity('1');
       fetchRecentInventory();
     }
   };
@@ -158,7 +183,6 @@ export default function AdminDashboard() {
       .eq('dresses.barcode', refundBarcode)
       .eq('status', 'completed')
       .order('sold_at', { ascending: false });
-
     if (error || !data || data.length === 0) {
       setRefundMessage({ type: 'error', text: 'No active sales history found for this barcode.' });
       setRefundItemSales([]);
@@ -169,7 +193,6 @@ export default function AdminDashboard() {
 
   const processRefund = async (sale: any) => {
     if (!window.confirm(`Are you sure you want to refund this purchase of ${sale.dresses.name}?`)) return;
-
     const { error: updateSaleError } = await supabase.from('sales').update({ status: 'refunded' }).eq('id', sale.id);
     if (updateSaleError) {
       setRefundMessage({ type: 'error', text: 'Failed to update sale status.' });
@@ -178,7 +201,6 @@ export default function AdminDashboard() {
 
     const restoredQuantity = sale.dresses.quantity + 1;
     await supabase.from('dresses').update({ quantity: restoredQuantity, status: 'available' }).eq('id', sale.dresses.id);
-
     setRefundMessage({ type: 'success', text: 'Refund successful! Stock levels updated.' });
     setRefundBarcode('');
     setRefundItemSales([]);
@@ -222,7 +244,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (activeTab === 'reports') fetchSalesData();
   }, [activeTab, fetchSalesData]);
-
+  
   const clearDateFilters = () => { setStartDate(''); setEndDate(''); };
 
   const filteredInventory = recentInventory.filter(item => 
@@ -267,7 +289,6 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-center space-x-8 h-16">
             <h1 className="text-2xl font-black text-slate-900 tracking-tighter mr-6">CRAVE ABS</h1>
-            
             {(['pos', 'inventory', 'refund', 'reports'] as const).map((tab) => (
               <button 
                 key={tab}
@@ -310,67 +331,72 @@ export default function AdminDashboard() {
                 </div>
                 <input 
                   type="text" autoFocus 
-                  placeholder="Scan barcode to begin..." 
+                  placeholder="Scan barcode to add to cart..." 
                   className="w-full pl-12 pr-4 py-5 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-mono text-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all outline-none placeholder-slate-400 tracking-wider shadow-inner" 
                   value={barcodeInput} onChange={(e) => setBarcodeInput(e.target.value)} 
                 />
               </form>
 
-              {currentDress && (
+              {cart.length > 0 && (
                 <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                  <div className="grid grid-cols-2 gap-6 mb-8">
-                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Item Scanned</p>
-                      <p className="font-bold text-slate-900 text-lg line-clamp-1">{currentDress.name}</p>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Price</p>
-                      <p className="font-black text-slate-900 text-2xl">৳ {currentDress.price}</p>
-                    </div>
+                  <h3 className="text-sm font-bold mb-4 text-slate-700 uppercase tracking-wider">Shopping Cart</h3>
+                  
+                  {/* Cart Item List */}
+                  <div className="space-y-3 mb-6">
+                    {cart.map((item) => (
+                      <div key={item.id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <div>
+                          <p className="font-bold text-slate-900 text-sm">{item.name}</p>
+                          <p className="text-xs text-slate-500 mt-1">৳ {item.price} x {item.cartQty} (Stock: {item.quantity - item.cartQty} left)</p>
+                        </div>
+                        <div className="flex items-center gap-6">
+                          <p className="font-bold text-slate-900">৳ {item.price * item.cartQty}</p>
+                          <button 
+                            onClick={() => removeFromCart(item.id)}
+                            className="text-red-500 text-xs font-bold hover:underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                   
-                  <div className="flex items-center justify-between mb-6 px-2">
-                    <p className="text-sm font-semibold text-slate-500">Stock Availability:</p>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${currentDress.quantity > 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                      {currentDress.quantity} items remaining
-                    </span>
+                  {/* Total Calculation */}
+                  <div className="flex justify-between items-center border-t border-slate-200 pt-6 mb-6">
+                    <p className="text-lg font-bold text-slate-700">Total Price</p>
+                    <p className="text-3xl font-black text-slate-900">৳ {cartTotal}</p>
                   </div>
 
-                  {currentDress.quantity > 0 ? (
-                    <div className="pt-6 border-t border-slate-200">
-                      <h3 className="text-sm font-bold mb-3 text-slate-700 uppercase tracking-wider">Select Payment Method</h3>
-                      <div className="flex flex-wrap gap-3 mb-6">
-                        {['cash', 'bkash', 'nagad', 'upay', 'rocket'].map((method) => (
-                          <button 
-                            key={method} 
-                            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold uppercase tracking-wider transition-all duration-200 border ${
-                              paymentMethod === method 
-                                ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-105' 
-                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                            }`} 
-                            onClick={() => setPaymentMethod(method as any)}
-                          >
-                            {method}
-                          </button>
-                        ))}
+                  <div className="pt-2">
+                    <h3 className="text-sm font-bold mb-3 text-slate-700 uppercase tracking-wider">Select Payment Method</h3>
+                    <div className="flex flex-wrap gap-3 mb-6">
+                      {['cash', 'bkash', 'nagad', 'upay', 'rocket'].map((method) => (
+                        <button 
+                          key={method} 
+                          className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold uppercase tracking-wider transition-all duration-200 border ${
+                            paymentMethod === method 
+                              ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-105' 
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                          }`} 
+                          onClick={() => setPaymentMethod(method as any)}
+                        >
+                          {method}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {paymentMethod !== 'cash' && (
+                      <div className="mb-6 animate-in slide-in-from-top-2 duration-200">
+                        <input type="text" placeholder="Enter Mobile Banking TrxID" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 outline-none text-slate-900 font-mono text-sm" value={trxId} onChange={(e) => setTrxId(e.target.value)} />
                       </div>
-                      
-                      {paymentMethod !== 'cash' && (
-                        <div className="mb-6 animate-in slide-in-from-top-2 duration-200">
-                          <input type="text" placeholder="Enter Mobile Banking TrxID" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 outline-none text-slate-900 font-mono text-sm" value={trxId} onChange={(e) => setTrxId(e.target.value)} />
-                        </div>
-                      )}
-                      
-                      <button onClick={handleCheckout} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-emerald-700 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 flex items-center justify-center gap-2">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                        Complete Sale & Print
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-100 text-center font-bold">
-                      Cannot process sale. This item bundle is completely sold out.
-                    </div>
-                  )}
+                    )}
+                    
+                    <button onClick={handleCheckout} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-emerald-700 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 flex items-center justify-center gap-2">
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                      Complete Sale & Print
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -433,7 +459,7 @@ export default function AdminDashboard() {
                       Save to Database
                     </button>
                   </form>
-                </div>
+              </div>
               </div>
 
               {/* Right Column: List */}
@@ -648,8 +674,8 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* RECEIPT PRINT LAYOUT (Kept strictly clean for the thermal printer) */}
-      {currentDress && activeTab === 'pos' && (
+      {/* RECEIPT PRINT LAYOUT */}
+      {cart.length > 0 && activeTab === 'pos' && (
         <div className="hidden print:block w-[80mm] text-black font-mono text-sm p-2 mx-auto">
           <div className="text-center font-bold text-xl mb-1 tracking-widest">CRAVE ABS</div>
           <div className="text-center text-xs mb-4 uppercase">Khulna, Bangladesh</div>
@@ -659,18 +685,24 @@ export default function AdminDashboard() {
             <span>Time: {new Date().toLocaleTimeString()}</span>
           </div>
           <div className="border-b border-dashed border-black my-2"></div>
+          
           <div className="my-2">
-            <div className="font-bold text-base leading-tight">{currentDress.name}</div>
-            <div className="text-xs text-gray-600 mt-1">CAT: {currentDress.category}</div>
-            <div className="flex justify-between font-bold mt-2">
-              <span>1x Item</span>
-              <span>Tk {currentDress.price}</span>
-            </div>
+            {cart.map((item, index) => (
+              <div key={index} className="mb-2">
+                <div className="font-bold text-base leading-tight">{item.name}</div>
+                <div className="text-xs text-gray-600 mt-1">CAT: {item.category}</div>
+                <div className="flex justify-between font-bold mt-1">
+                  <span>{item.cartQty}x Item</span>
+                  <span>Tk {item.price * item.cartQty}</span>
+                </div>
+              </div>
+            ))}
           </div>
+
           <div className="border-b border-dashed border-black my-2"></div>
           <div className="flex justify-between font-black text-lg uppercase">
             <span>Total:</span>
-            <span>Tk {currentDress.price}</span>
+            <span>Tk {cartTotal}</span>
           </div>
           <div className="text-xs mt-2 uppercase">Paid via: <span className="font-bold">{paymentMethod}</span></div>
           {paymentMethod !== 'cash' && <div className="text-xs font-mono mt-1">TrxID: {trxId}</div>}
