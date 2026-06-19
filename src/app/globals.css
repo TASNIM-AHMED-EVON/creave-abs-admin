@@ -1,26 +1,115 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* --------------------------------------
+   Base Layout Adjustments
+   -------------------------------------- */
+html {
+  scroll-behavior: smooth;
+  /* Prevents annoying horizontal scroll bounces on trackpads */
+  overscroll-behavior-x: none; 
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Matches your Next.js zinc-50 background perfectly */
+  background-color: #fafafa; 
+  color: #18181b; 
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Text Highlight (Enterprise Indigo) */
+::selection {
+  background-color: #e0e7ff; /* indigo-100 */
+  color: #3730a3; /* indigo-800 */
+}
+
+/* --------------------------------------
+   Custom Sleek Scrollbars
+   -------------------------------------- */
+/* Makes the chunky default browser scrollbars thin and modern */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #d4d4d8; /* zinc-300 */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #a1a1aa; /* zinc-400 */
+}
+
+/* Firefox scrollbar support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d4d4d8 transparent;
+}
+
+/* --------------------------------------
+   Thermal Printer Strict Optimizations
+   -------------------------------------- */
+@media print {
+  @page {
+    /* Sets exact width for a standard 80mm thermal receipt printer */
+    size: 80mm auto; 
+    /* Removes the browser's default headers and footers (dates, URLs) */
+    margin: 0; 
+  }
+
+  body, html {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    width: 80mm !important;
+  }
+
+  /* Force black and white printing for crisp thermal text */
+  * {
+    color: #000 !important;
+    text-shadow: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* Prevent page breaks inside the receipt */
+  .receipt-block {
+    page-break-inside: avoid;
+  }
+}
+
+/* --------------------------------------
+   Custom Micro-Animations
+   -------------------------------------- */
+/* A highly subtle fade animation for elements entering the screen */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in-up 0.3s ease-out forwards;
+}
+
+/* Subtle pulse for the "System Online" indicator */
+@keyframes subtle-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-subtle-pulse {
+  animation: subtle-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
