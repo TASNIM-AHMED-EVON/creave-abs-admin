@@ -2,6 +2,86 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
+// ---------------------------------------------------------------------------
+// Icons — a single consistent line-icon set (1.5px stroke), drawn locally so
+// the project doesn't need an extra dependency.
+// ---------------------------------------------------------------------------
+const IconScan = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2M4 17v2a1 1 0 001 1h2m12-14V5a1 1 0 00-1-1h-2m3 14v2a1 1 0 01-1 1h-2M7 9v6m3-6v6m4-6v6m3-6v6" />
+  </svg>
+);
+const IconArchive = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 6.75v11.5a1 1 0 001 1h14.5a1 1 0 001-1V6.75M3.75 6.75L5.5 3.75h13l1.75 3M10 11h4" />
+  </svg>
+);
+const IconReturn = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l-4-4 4-4m-4 4h10a5 5 0 015 5v1" />
+  </svg>
+);
+const IconChart = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 19V10m6 9V5m6 14v-7m6 7H3" />
+  </svg>
+);
+const IconLogout = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15.5 17.5l4-4m0 0l-4-4m4 4h-11m4 5.5v.5a2 2 0 01-2 2H6a2 2 0 01-2-2v-12a2 2 0 012-2h4.5a2 2 0 012 2v.5" />
+  </svg>
+);
+const IconSearch = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.2-5.2m1.7-5.3a7 7 0 11-14 0 7 7 0 0114 0z" />
+  </svg>
+);
+const IconPlus = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m-7-7h14" />
+  </svg>
+);
+const IconCrate = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M20 13.5V19a2 2 0 01-2 2H6a2 2 0 01-2-2v-5.5M3 9.5L7 4h10l4 5.5M3 9.5h18M3 9.5L4 13h16l1-3.5" />
+  </svg>
+);
+const IconClock = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+const IconCard = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2.75 8.5h18.5M4.5 5.5h15a1.75 1.75 0 011.75 1.75v9.5A1.75 1.75 0 0119.5 18.5h-15a1.75 1.75 0 01-1.75-1.75v-9.5A1.75 1.75 0 014.5 5.5zM6 14.5h2.5" />
+  </svg>
+);
+const IconUndo = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+  </svg>
+);
+const IconBag = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 8h12l1 12.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 015 20.5L6 8zM8.5 8V6a3.5 3.5 0 117 0v2" />
+  </svg>
+);
+const IconReceipt = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 3.5h12v17l-2.25-1.5L13.5 20.5l-2.25-1.5L9 20.5l-2.25-1.5L6 20.5v-17z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 8h6M9 11.5h6M9 15h4" />
+  </svg>
+);
+
+const NAV_ITEMS = [
+  { id: 'pos', label: 'POS Terminal', icon: IconScan },
+  { id: 'inventory', label: 'Stock & Bundles', icon: IconArchive },
+  { id: 'refund', label: 'Refunds', icon: IconReturn },
+  { id: 'reports', label: 'Reports', icon: IconChart },
+] as const;
+
+const PAYMENT_METHODS = ['cash', 'bkash', 'nagad', 'upay', 'rocket', 'bank/card'] as const;
+
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
@@ -19,7 +99,7 @@ export default function AdminDashboard() {
   const [invName, setInvName] = useState('');
   const [invCategory, setInvCategory] = useState('');
   const [invPrice, setInvPrice] = useState('');
-  const [invQuantity, setInvQuantity] = useState('1'); 
+  const [invQuantity, setInvQuantity] = useState('1');
   const [invMessage, setInvMessage] = useState({ type: '', text: '' });
   const [recentInventory, setRecentInventory] = useState<any[]>([]);
   const [stockSearchQuery, setStockSearchQuery] = useState('');
@@ -71,10 +151,10 @@ export default function AdminDashboard() {
         if (sale.status === 'completed') {
           const amount = Number(sale.amount_paid);
           total += amount;
-          
+
           // Decode Bank/Card bypass for reporting
           const displayMethod = sale.transaction_id === 'BANK/CARD-SALE' ? 'bank/card' : sale.payment_method;
-          
+
           if (methods[displayMethod] !== undefined) methods[displayMethod] += amount;
         }
       });
@@ -156,7 +236,7 @@ export default function AdminDashboard() {
     setCart(cart.map(item => {
       if (item.id === id) {
         const newQty = increment ? item.cartQty + 1 : item.cartQty - 1;
-        if (newQty <= 0) return item; 
+        if (newQty <= 0) return item;
         if (newQty > item.quantity) {
           setPosMessage({ type: 'error', text: `Cannot exceed available physical stock (${item.quantity} available).` });
           return item;
@@ -178,8 +258,8 @@ export default function AdminDashboard() {
     cart.forEach(item => {
       for(let i = 0; i < item.cartQty; i++) {
         const dbPaymentMethod = paymentMethod === 'bank/card' ? 'cash' : paymentMethod;
-        const dbTrxId = paymentMethod === 'bank/card' 
-          ? 'BANK/CARD-SALE' 
+        const dbTrxId = paymentMethod === 'bank/card'
+          ? 'BANK/CARD-SALE'
           : (paymentMethod === 'cash' ? 'DIRECT-SALE' : trxId);
 
         salesData.push({
@@ -204,9 +284,9 @@ export default function AdminDashboard() {
       const newQuantity = item.quantity - item.cartQty;
       await supabase
         .from('dresses')
-        .update({ 
+        .update({
           quantity: newQuantity,
-          status: newQuantity === 0 ? 'sold' : 'available' 
+          status: newQuantity === 0 ? 'sold' : 'available'
         })
         .eq('id', item.id);
     }
@@ -289,37 +369,45 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (activeTab === 'reports' && isAuthenticated) fetchSalesData();
   }, [activeTab, fetchSalesData, isAuthenticated]);
-  
+
   const clearDateFilters = () => { setStartDate(''); setEndDate(''); };
 
-  const filteredInventory = recentInventory.filter(item => 
-    item.name.toLowerCase().includes(stockSearchQuery.toLowerCase()) || 
+  const filteredInventory = recentInventory.filter(item =>
+    item.name.toLowerCase().includes(stockSearchQuery.toLowerCase()) ||
     item.barcode.toLowerCase().includes(stockSearchQuery.toLowerCase())
   );
+
+  const activeLabel = NAV_ITEMS.find(n => n.id === activeTab)?.label ?? '';
 
   // --- LOGIN SCREEN ---
   if (!isAuthenticated) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="bg-white p-10 rounded-3xl shadow-xl border border-slate-100 w-[400px] transition-all transform hover:shadow-2xl">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">CRAVE ABS</h2>
-            <p className="text-slate-500 mt-2 text-sm font-medium">Secure Admin Portal</p>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <input 
-                type="password" 
-                placeholder="Enter Admin Password" 
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all outline-none text-slate-900 text-center font-medium placeholder-slate-400" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-              />
+      <div className="flex min-h-screen items-center justify-center bg-paper px-4">
+        <div className="w-full max-w-[400px]">
+          <div className="barcode-stripe h-6 w-28 mx-auto mb-8 opacity-70" />
+          <div className="bg-canvas px-10 pt-10 pb-9 border border-thread shadow-sm">
+            <div className="text-center mb-8">
+              <h1 className="font-display text-3xl text-ink tracking-tight">CRAVE <em className="not-italic text-brass">ABS</em></h1>
+              <p className="text-muted mt-2 text-xs font-mono uppercase tracking-[0.2em]">Admin Console</p>
+              <div className="stitch mt-6" />
             </div>
-            <button type="submit" className="w-full bg-slate-900 text-white font-bold py-3 px-4 rounded-xl hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 shadow-md">
-              Access System
-            </button>
-          </form>
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div>
+                <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Admin Password</label>
+                <input
+                  type="password"
+                  placeholder="••••••••••"
+                  className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass transition-colors outline-none text-ink font-mono text-center"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              <button type="submit" className="w-full bg-ink text-paper font-bold text-sm uppercase tracking-wider py-3.5 hover:bg-brass-dark transition-colors">
+                Access System
+              </button>
+            </form>
+          </div>
+          <p className="text-center text-[11px] text-muted mt-6 font-mono uppercase tracking-widest">Mymensingh · Bangladesh</p>
         </div>
       </div>
     );
@@ -327,8 +415,8 @@ export default function AdminDashboard() {
 
   // --- MAIN DASHBOARD ---
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 print:bg-white">
-      
+    <div className="min-h-screen bg-paper text-ink font-sans print:bg-white">
+
       <style jsx global>{`
         @media print {
           @page { margin: 0; }
@@ -336,419 +424,442 @@ export default function AdminDashboard() {
         }
       `}</style>
 
-      {/* Top Navigation Bar */}
-      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm print:hidden">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <h1 className="text-2xl font-black text-slate-900 tracking-tighter mr-6">CRAVE ABS</h1>
-              {(['pos', 'inventory', 'refund', 'reports'] as const).map((tab) => (
-                <button 
-                  key={tab}
-                  onClick={() => setActiveTab(tab)} 
-                  className={`relative px-1 py-5 text-sm font-bold uppercase tracking-wider transition-colors duration-200 ${
-                    activeTab === tab 
-                      ? tab === 'refund' ? 'text-red-600' : 'text-slate-900'
-                      : 'text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  {tab === 'pos' ? 'Terminal (POS)' : tab === 'inventory' ? 'Stock & Bundles' : tab === 'refund' ? 'Refunds' : 'Reports'}
-                  {activeTab === tab && (
-                    <div className={`absolute bottom-0 left-0 right-0 h-1 rounded-t-full ${tab === 'refund' ? 'bg-red-600' : 'bg-slate-900'}`} />
-                  )}
-                </button>
-              ))}
-            </div>
-            
-            {/* Quick Session Logout */}
-            <button 
+      <div className="lg:flex">
+
+        {/* ---- Sidebar (desktop) ---- */}
+        <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 bg-canvas border-r border-thread print:hidden">
+          <div className="px-7 pt-8 pb-6">
+            <h1 className="font-display text-2xl text-ink tracking-tight leading-none">CRAVE <em className="not-italic text-brass">ABS</em></h1>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted mt-2">Admin Console</p>
+          </div>
+          <div className="stitch mx-7" />
+
+          <nav className="flex-1 px-4 py-6 space-y-1">
+            {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold transition-colors border-l-2 ${
+                  activeTab === id
+                    ? id === 'refund'
+                      ? 'border-oxblood text-oxblood bg-oxblood-light/60'
+                      : 'border-brass text-ink bg-brass-light/50'
+                    : 'border-transparent text-muted hover:text-ink hover:bg-paper-dim'
+                }`}
+              >
+                <Icon className="w-[18px] h-[18px] shrink-0" />
+                {label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="stitch mx-7 mb-4" />
+          <div className="px-4 pb-7">
+            <button
               onClick={handleLogout}
-              className="text-xs font-bold uppercase tracking-wider text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg border border-red-200/60 transition-all cursor-pointer"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-oxblood hover:bg-oxblood-light/60 transition-colors"
             >
-              Logout
+              <IconLogout className="w-[18px] h-[18px]" />
+              Log Out
             </button>
           </div>
+        </aside>
+
+        {/* ---- Top bar (mobile / tablet) ---- */}
+        <div className="lg:hidden sticky top-0 z-50 bg-canvas border-b border-thread print:hidden">
+          <div className="flex items-center justify-between px-5 h-16">
+            <h1 className="font-display text-xl text-ink tracking-tight">CRAVE <em className="not-italic text-brass">ABS</em></h1>
+            <button onClick={handleLogout} className="text-[11px] font-bold uppercase tracking-wider text-oxblood">
+              Log Out
+            </button>
+          </div>
+          <div className="flex overflow-x-auto px-2 pb-2 gap-1">
+            {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
+                  activeTab === id
+                    ? id === 'refund' ? 'text-oxblood bg-oxblood-light/60' : 'text-ink bg-brass-light/50'
+                    : 'text-muted'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-      </nav>
 
-      {/* Main Content Container */}
-      <div className="max-w-7xl mx-auto mt-8 px-6 pb-12 print:p-0 print:mt-0">
-        
-        {/* TAB 1: POS TERMINAL */}
-        {activeTab === 'pos' && (
-          <div className="max-w-3xl mx-auto print:hidden">
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 transition-all">
-              <h2 className="text-2xl font-bold mb-6 text-slate-800">Checkout Counter</h2>
-              
-              {posMessage.text && (
-                <div className={`p-4 mb-6 rounded-xl text-sm font-semibold border ${posMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
-                  {posMessage.text}
-                </div>
-              )}
+        {/* ---- Main content ---- */}
+        <div className="lg:pl-64 flex-1 print:pl-0">
+          <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 sm:py-10 pb-16 print:p-0">
 
-              <form onSubmit={handleBarcodeSubmit} className="mb-8 relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <svg className="h-6 w-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
-                </div>
-                <input 
-                  type="text" autoFocus 
-                  placeholder="Scan barcode to add to cart..." 
-                  className="w-full pl-12 pr-4 py-5 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-mono text-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all outline-none placeholder-slate-400 tracking-wider shadow-inner" 
-                  value={barcodeInput} onChange={(e) => setBarcodeInput(e.target.value)} 
-                />
-              </form>
+            <div className="hidden lg:flex items-baseline justify-between mb-8 print:hidden">
+              <h2 className="font-display text-2xl text-ink">{activeLabel}</h2>
+              <p className="text-xs font-mono text-muted uppercase tracking-wider">
+                {new Date().toLocaleDateString('en-BD', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
 
-              {cart.length > 0 && (
-                <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                  <h3 className="text-sm font-bold mb-4 text-slate-700 uppercase tracking-wider">Shopping Cart</h3>
-                  
-                  <div className="space-y-3 mb-6">
-                    {cart.map((item) => (
-                      <div key={item.id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                        <div className="flex-1">
-                          <p className="font-bold text-slate-900 text-sm">{item.name}</p>
-                          <p className="text-xs text-slate-500 mt-1">Base: ৳ {item.price} (Stock: {item.quantity} available)</p>
-                        </div>
-                        
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
-                            <button 
-                              type="button"
-                              onClick={() => updateCartItemQuantity(item.id, false)}
-                              className="w-7 h-7 bg-white rounded-md text-slate-700 font-bold hover:bg-slate-50 transition-colors flex items-center justify-center border border-slate-200/60 shadow-sm"
-                            >
-                              -
-                            </button>
-                            <span className="px-3 font-mono font-bold text-sm text-slate-900">{item.cartQty}</span>
-                            <button 
-                              type="button"
-                              onClick={() => updateCartItemQuantity(item.id, true)}
-                              className="w-7 h-7 bg-white rounded-md text-slate-700 font-bold hover:bg-slate-50 transition-colors flex items-center justify-center border border-slate-200/60 shadow-sm"
-                            >
-                              +
+            {/* TAB 1: POS TERMINAL */}
+            {activeTab === 'pos' && (
+              <div className="max-w-2xl print:hidden">
+                <div className="bg-canvas border border-thread">
+                  <div className="px-7 pt-7">
+                    {posMessage.text && (
+                      <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${posMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
+                        {posMessage.text}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleBarcodeSubmit} className="mb-7 relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted">
+                        <IconScan className="h-5 w-5" />
+                      </div>
+                      <input
+                        type="text" autoFocus
+                        placeholder="Scan barcode to add to cart..."
+                        className="w-full pl-12 pr-4 py-4 bg-paper border border-thread text-lg font-mono text-ink focus:bg-canvas focus:border-brass transition-colors outline-none placeholder-muted tracking-wider"
+                        value={barcodeInput} onChange={(e) => setBarcodeInput(e.target.value)}
+                      />
+                    </form>
+                  </div>
+
+                  {cart.length === 0 ? (
+                    <div className="px-7 pb-12 pt-2 text-center">
+                      <IconBag className="w-9 h-9 mx-auto text-thread-dark mb-3" />
+                      <p className="text-sm text-muted">Cart is empty — scan an item to begin a sale.</p>
+                    </div>
+                  ) : (
+                    <div className="px-7 pb-7">
+                      <p className="text-[11px] font-bold text-muted uppercase tracking-widest mb-3">Current Sale</p>
+
+                      <div className="border border-thread divide-y divide-dashed divide-thread-dark mb-6">
+                        {cart.map((item) => (
+                          <div key={item.id} className="flex justify-between items-center gap-4 p-4 bg-paper-dim/40">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                              <p className="text-xs text-muted mt-0.5 font-mono">৳{item.price} · {item.quantity} in stock</p>
+                            </div>
+
+                            <div className="flex items-center bg-canvas border border-thread">
+                              <button type="button" onClick={() => updateCartItemQuantity(item.id, false)} className="w-7 h-8 text-ink font-bold hover:bg-paper-dim transition-colors">-</button>
+                              <span className="px-3 font-mono font-bold text-sm text-ink">{item.cartQty}</span>
+                              <button type="button" onClick={() => updateCartItemQuantity(item.id, true)} className="w-7 h-8 text-ink font-bold hover:bg-paper-dim transition-colors">+</button>
+                            </div>
+
+                            <p className="font-mono font-bold text-ink text-sm min-w-[64px] text-right">৳{item.price * item.cartQty}</p>
+
+                            <button onClick={() => removeFromCart(item.id)} className="text-oxblood text-xs font-bold hover:underline shrink-0">
+                              Remove
                             </button>
                           </div>
-                          
-                          <div className="text-right min-w-[80px]">
-                            <p className="font-black text-slate-900">৳ {item.price * item.cartQty}</p>
-                          </div>
+                        ))}
+                      </div>
 
-                          <button 
-                            onClick={() => removeFromCart(item.id)}
-                            className="text-red-500 text-xs font-bold hover:underline ml-2"
+                      <div className="flex justify-between items-baseline mb-6">
+                        <p className="text-sm font-bold text-muted uppercase tracking-wider">Total Due</p>
+                        <p className="font-mono text-3xl font-bold text-ink">৳{cartTotal}</p>
+                      </div>
+
+                      <p className="text-[11px] font-bold text-muted uppercase tracking-widest mb-3">Payment Method</p>
+                      <div className="grid grid-cols-3 gap-2 mb-6">
+                        {PAYMENT_METHODS.map((method) => (
+                          <button
+                            key={method}
+                            className={`py-2.5 text-[11px] font-bold uppercase tracking-wider border transition-colors ${
+                              paymentMethod === method
+                                ? 'bg-ink text-paper border-ink'
+                                : 'bg-canvas text-ink border-thread hover:border-thread-dark'
+                            }`}
+                            onClick={() => setPaymentMethod(method as any)}
                           >
-                            Remove
+                            {method}
+                          </button>
+                        ))}
+                      </div>
+
+                      {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && (
+                        <div className="mb-6">
+                          <input type="text" placeholder="Mobile banking TrxID" className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={trxId} onChange={(e) => setTrxId(e.target.value)} />
+                        </div>
+                      )}
+
+                      <button onClick={handleCheckout} className="w-full bg-moss text-white py-4 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors flex items-center justify-center gap-2">
+                        <IconReceipt className="w-5 h-5" />
+                        Complete Sale & Print
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: INVENTORY */}
+            {activeTab === 'inventory' && (
+               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 print:hidden">
+                  <div className="lg:col-span-5">
+                    <div className="bg-canvas p-7 border border-thread">
+                      <h3 className="text-base font-bold mb-6 text-ink flex items-center gap-2">
+                        <IconPlus className="w-4 h-4 text-brass" />
+                        Register New Stock
+                      </h3>
+
+                      {invMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${invMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{invMessage.text}</div>}
+
+                      <form onSubmit={handleAddInventory} className="space-y-5">
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Barcode Tag</label>
+                          <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Scan or type..." value={invBarcode} onChange={(e) => setInvBarcode(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Item Title</label>
+                          <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="e.g., Premium Cotton Panjabi" value={invName} onChange={(e) => setInvName(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Category</label>
+                          <div className="relative">
+                            <select required className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink appearance-none transition-colors cursor-pointer" value={invCategory} onChange={(e) => setInvCategory(e.target.value)}>
+                              <option value="" disabled>Select a category...</option>
+                              <option value="Panjabi">Panjabi</option>
+                              <option value="Shirt">Shirt</option>
+                              <option value="T-Shirt">T-Shirt</option>
+                              <option value="Pant">Pant</option>
+                              <option value="0-5">0-5 Years</option>
+                              <option value="small baby dress">Small Baby Dress</option>
+                              <option value="medium dress">Medium Dress</option>
+                              <option value="maximum dress">Maximum Dress</option>
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted">
+                              <svg className="fill-current h-3.5 w-3.5" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Unit Price (৳)</label>
+                            <input required type="number" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="1500" value={invPrice} onChange={(e) => setInvPrice(e.target.value)} />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Bundle Qty</label>
+                            <input required type="number" min="1" className="w-full px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="Pieces" value={invQuantity} onChange={(e) => setInvQuantity(e.target.value)} />
+                          </div>
+                        </div>
+                        <button type="submit" className="w-full mt-2 bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                          Save to Database
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-7">
+                    <div className="bg-canvas border border-thread h-full flex flex-col">
+                      <div className="flex items-center justify-between px-7 pt-7 mb-5">
+                        <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                          <IconCrate className="w-4 h-4 text-brass" />
+                          Active Stock Database
+                        </h3>
+                        <span className="text-muted text-xs font-mono font-bold">{recentInventory.length} ITEMS</span>
+                      </div>
+
+                      <div className="relative px-7 mb-5">
+                        <div className="absolute inset-y-0 left-7 pl-3 flex items-center pointer-events-none text-muted">
+                          <IconSearch className="h-4 w-4" />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Search by title or barcode..."
+                          className="w-full pl-10 pr-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                          value={stockSearchQuery}
+                          onChange={(e) => setStockSearchQuery(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="stitch mx-7 mb-1" />
+
+                      <div className="flex-1 overflow-y-auto px-7 py-2 divide-y divide-thread max-h-[560px]">
+                        {filteredInventory.length === 0 ? (
+                          <div className="text-center py-12 text-muted">
+                            <IconArchive className="mx-auto h-9 w-9 mb-3 text-thread-dark" />
+                            <p className="text-sm font-medium">No items found matching your search.</p>
+                          </div>
+                        ) : (
+                          filteredInventory.map(item => (
+                            <div key={item.id} className="py-4 flex justify-between items-center gap-4">
+                              <div className="min-w-0">
+                                <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-muted font-mono">{item.barcode}</span>
+                                  <span className="text-xs text-thread-dark">·</span>
+                                  <span className="text-xs text-muted">{item.category}</span>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
+                                <p className="font-mono font-bold text-ink text-sm">৳{item.price}</p>
+                                <span className={`text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide ${item.quantity > 0 ? 'bg-moss-light text-moss' : 'bg-oxblood-light text-oxblood'}`}>
+                                  {item.quantity} in stock
+                                </span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <div className="pb-7" />
+                    </div>
+                  </div>
+               </div>
+            )}
+
+            {/* TAB 3: REFUND */}
+            {activeTab === 'refund' && (
+              <div className="max-w-3xl print:hidden">
+                <div className="bg-canvas p-8 border border-oxblood/25">
+                  <div className="text-center mb-8">
+                    <div className="w-12 h-12 bg-oxblood-light flex items-center justify-center mx-auto mb-4">
+                      <IconUndo className="w-6 h-6 text-oxblood" />
+                    </div>
+                    <h3 className="text-xl font-display text-ink">Refund & Returns Center</h3>
+                    <p className="text-muted mt-2 text-sm">Scan an item to pull up its completed sales history.</p>
+                  </div>
+
+                  {refundMessage.text && <div className={`px-4 py-3 mb-6 text-sm font-semibold border text-center ${refundMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{refundMessage.text}</div>}
+
+                  <form onSubmit={handleRefundSearch} className="mb-9 max-w-xl mx-auto flex gap-2">
+                    <input type="text" autoFocus placeholder="Scan barcode..." className="flex-1 px-5 py-3.5 bg-paper border border-thread focus:bg-canvas focus:border-oxblood outline-none text-ink font-mono transition-colors text-lg" value={refundBarcode} onChange={(e) => setRefundBarcode(e.target.value)} />
+                    <button type="submit" className="bg-oxblood text-white px-7 font-bold text-sm uppercase tracking-wider hover:bg-oxblood/90 transition-colors">Search</button>
+                  </form>
+
+                  <div className="divide-y divide-dashed divide-thread-dark max-w-2xl mx-auto">
+                    {refundItemSales.map((sale) => (
+                      <div key={sale.id} className="py-5 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                        <div>
+                          <h4 className="font-bold text-ink text-base">{sale.dresses.name}</h4>
+                          <div className="flex flex-col gap-1 mt-2">
+                            <p className="text-xs text-muted flex items-center gap-1.5">
+                              <IconClock className="w-3.5 h-3.5" />
+                              Sold: {new Date(sale.sold_at).toLocaleString('en-BD')}
+                            </p>
+                            <p className="text-xs text-muted flex items-center gap-1.5 font-mono">
+                              <IconCard className="w-3.5 h-3.5" />
+                              <span className="uppercase font-bold text-ink">
+                                 {sale.transaction_id === 'BANK/CARD-SALE' ? 'BANK/CARD' : sale.payment_method}
+                              </span>
+                              {(sale.transaction_id !== 'CASH-SALE' && sale.transaction_id !== 'DIRECT-SALE' && sale.transaction_id !== 'BANK/CARD-SALE') && ` | Trx: ${sale.transaction_id}`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3">
+                          <p className="font-mono text-lg font-bold text-ink">৳{sale.amount_paid}</p>
+                          <button onClick={() => processRefund(sale)} className="bg-oxblood-light text-oxblood px-4 py-2 text-xs font-bold uppercase tracking-wide hover:bg-oxblood hover:text-white transition-colors border border-oxblood/20 flex items-center gap-2">
+                            <IconUndo className="w-3.5 h-3.5" />
+                            Approve Refund
                           </button>
                         </div>
                       </div>
                     ))}
                   </div>
-                  
-                  <div className="flex justify-between items-center border-t border-slate-200 pt-6 mb-6">
-                    <p className="text-lg font-bold text-slate-700">Total Price</p>
-                    <p className="text-3xl font-black text-slate-900">৳ {cartTotal}</p>
-                  </div>
-
-                  <div className="pt-2">
-                    <h3 className="text-sm font-bold mb-3 text-slate-700 uppercase tracking-wider">Select Payment Method</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-                      {['cash', 'bkash', 'nagad', 'upay', 'rocket', 'bank/card'].map((method) => (
-                        <button 
-                          key={method} 
-                          className={`py-3 px-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 border text-center ${
-                            paymentMethod === method 
-                              ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-105' 
-                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                          }`} 
-                          onClick={() => setPaymentMethod(method as any)}
-                        >
-                          {method}
-                        </button>
-                      ))}
-                    </div>
-                    
-                    {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && (
-                      <div className="mb-6 animate-in slide-in-from-top-2 duration-200">
-                        <input type="text" placeholder="Enter Mobile Banking TrxID" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 outline-none text-slate-900 font-mono text-sm" value={trxId} onChange={(e) => setTrxId(e.target.value)} />
-                      </div>
-                    )}
-                    
-                    <button onClick={handleCheckout} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-emerald-700 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 flex items-center justify-center gap-2">
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                      Complete Sale & Print
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: INVENTORY */}
-        {activeTab === 'inventory' && (
-           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:hidden">
-              <div className="lg:col-span-5 space-y-6">
-                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                  <h2 className="text-xl font-bold mb-6 text-slate-900 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                    Register New Stock
-                  </h2>
-                  
-                  {invMessage.text && <div className={`p-4 mb-6 rounded-xl text-sm font-semibold border ${invMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>{invMessage.text}</div>}
-                  
-                  <form onSubmit={handleAddInventory} className="space-y-5">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Barcode Tag</label>
-                      <input required type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 outline-none text-slate-900 font-mono transition-all" placeholder="Scan or type..." value={invBarcode} onChange={(e) => setInvBarcode(e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Item Title</label>
-                      <input required type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 outline-none text-slate-900 transition-all" placeholder="e.g., Premium Cotton Panjabi" value={invName} onChange={(e) => setInvName(e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Category</label>
-                      <div className="relative">
-                        <select required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 outline-none text-slate-900 appearance-none transition-all cursor-pointer" value={invCategory} onChange={(e) => setInvCategory(e.target.value)}>
-                          <option value="" disabled>Select a category...</option>
-                          <option value="Panjabi">Panjabi</option>
-                          <option value="Shirt">Shirt</option>
-                          <option value="T-Shirt">T-Shirt</option>
-                          <option value="Pant">Pant</option>
-                          <option value="0-5">0-5 Years</option>
-                          <option value="small baby dress">Small Baby Dress</option>
-                          <option value="medium dress">Medium Dress</option>
-                          <option value="maximum dress">Maximum Dress</option>
-                        </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                          <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Unit Price (৳)</label>
-                        <input required type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 outline-none text-slate-900 font-bold transition-all" placeholder="1500" value={invPrice} onChange={(e) => setInvPrice(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Bundle Qty</label>
-                        <input required type="number" min="1" className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none text-blue-700 font-bold transition-all" placeholder="Pieces" value={invQuantity} onChange={(e) => setInvQuantity(e.target.value)} />
-                      </div>
-                    </div>
-                    <button type="submit" className="w-full mt-4 bg-slate-900 text-white py-3.5 rounded-xl font-bold hover:bg-slate-800 shadow-md hover:shadow-lg transition-all duration-200">
-                      Save to Database
-                    </button>
-                  </form>
                 </div>
               </div>
+            )}
 
-              <div className="lg:col-span-7">
-                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 h-full flex flex-col">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                      <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
-                      Active Stock Database
-                    </h2>
-                    <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">{recentInventory.length} Items</span>
+            {/* TAB 4: REPORTS */}
+            {activeTab === 'reports' && (
+              <div className="space-y-6 print:hidden">
+                <div className="bg-canvas p-5 border border-thread flex flex-wrap items-end gap-5">
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Filter Start Date</label>
+                    <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                   </div>
-                  
-                  <div className="relative mb-6">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Filter End Date</label>
+                    <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                  </div>
+                  <button onClick={clearDateFilters} className="px-5 py-2.5 border border-thread text-ink hover:border-thread-dark font-bold text-xs uppercase tracking-wider transition-colors bg-canvas whitespace-nowrap">
+                    Clear Filters
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-ink p-8 text-paper relative overflow-hidden">
+                    <div className="barcode-stripe absolute top-0 right-0 h-full w-24 opacity-[0.06]" style={{ filter: 'invert(1)' }} />
+                    <p className="text-xs font-bold uppercase tracking-wider text-thread mb-2">Net Revenue {startDate ? '(Filtered Period)' : '(All Time)'}</p>
+                    <p className="font-mono text-4xl sm:text-5xl font-bold tracking-tight">৳{totalRevenue.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-canvas p-8 border border-thread flex flex-col justify-center">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Total Successful Sales</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="font-mono text-4xl sm:text-5xl font-bold text-ink">{salesRecord.filter(s => s.status === 'completed').length}</p>
+                      <p className="text-base font-bold text-muted">Items</p>
                     </div>
-                    <input 
-                      type="text" 
-                      placeholder="Search by title or barcode..." 
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 outline-none text-slate-900 transition-all text-sm"
-                      value={stockSearchQuery}
-                      onChange={(e) => setStockSearchQuery(e.target.value)}
-                    />
                   </div>
+                </div>
 
-                  <div className="flex-1 overflow-y-auto pr-2 space-y-3 max-h-[600px] custom-scrollbar">
-                    {filteredInventory.length === 0 ? (
-                      <div className="text-center py-12 text-slate-400">
-                        <svg className="mx-auto h-12 w-12 mb-3 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
-                        <p className="text-sm font-medium">No items found matching your search.</p>
+                <div className="bg-canvas p-7 border border-thread">
+                  <h3 className="text-base font-bold mb-6 text-ink flex items-center gap-2">
+                    <IconChart className="w-4 h-4 text-brass" />
+                    Revenue by Payment Method
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                    {Object.entries(revenueByMethod).map(([method, amount]) => (
+                      <div key={method} className="bg-paper-dim p-4 border border-thread text-center">
+                        <p className="uppercase text-[10px] font-bold text-muted tracking-wider mb-1.5 whitespace-nowrap">{method}</p>
+                        <p className="font-mono text-sm font-bold text-ink">৳{amount.toLocaleString()}</p>
                       </div>
-                    ) : (
-                      filteredInventory.map(item => (
-                        <div key={item.id} className="p-4 border border-slate-100 rounded-2xl flex justify-between items-center bg-white hover:border-slate-300 hover:shadow-sm transition-all duration-200 group">
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-slate-100 transition-colors">
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
-                            </div>
-                            <div>
-                              <p className="font-bold text-slate-900">{item.name}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded">{item.barcode}</span>
-                                <span className="text-xs text-slate-400">• {item.category}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right flex flex-col items-end gap-2">
-                            <p className="font-black text-slate-900">৳ {item.price}</p>
-                            <span className={`text-xs px-2.5 py-1 rounded-full font-bold shadow-sm ${item.quantity > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
-                              {item.quantity} In Stock
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-           </div>
-        )}
-
-        {/* TAB 3: REFUND */}
-        {activeTab === 'refund' && (
-          <div className="max-w-4xl mx-auto print:hidden">
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-red-100">
-              <div className="text-center mb-8">
-                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100">
-                  <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" /></svg>
-                </div>
-                <h2 className="text-2xl font-black text-slate-900">Refund & Returns Center</h2>
-                <p className="text-slate-500 mt-2 text-sm">Scan an item to pull up its completed sales history.</p>
-              </div>
-
-              {refundMessage.text && <div className={`p-4 mb-6 rounded-xl text-sm font-semibold border text-center ${refundMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>{refundMessage.text}</div>}
-              
-              <form onSubmit={handleRefundSearch} className="mb-10 max-w-2xl mx-auto flex gap-3">
-                <input type="text" autoFocus placeholder="Scan barcode..." className="flex-1 px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-red-500 outline-none text-slate-900 font-mono transition-all text-lg" value={refundBarcode} onChange={(e) => setRefundBarcode(e.target.value)} />
-                <button type="submit" className="bg-red-600 text-white px-8 rounded-xl font-bold hover:bg-red-700 transition-all shadow-sm">Search</button>
-              </form>
-
-              <div className="space-y-4 max-w-3xl mx-auto">
-                {refundItemSales.map((sale) => (
-                  <div key={sale.id} className="p-5 border border-slate-200 rounded-2xl bg-white flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 hover:border-red-200 transition-colors">
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-lg">{sale.dresses.name}</h4>
-                      <div className="flex flex-col gap-1 mt-2">
-                        <p className="text-xs text-slate-500 flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          Sold: {new Date(sale.sold_at).toLocaleString('en-BD')}
-                        </p>
-                        <p className="text-xs text-slate-500 flex items-center gap-1 font-mono">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-                          <span className="uppercase font-bold text-slate-700">
-                             {sale.transaction_id === 'BANK/CARD-SALE' ? 'BANK/CARD' : sale.payment_method}
-                          </span> 
-                          {(sale.transaction_id !== 'CASH-SALE' && sale.transaction_id !== 'DIRECT-SALE' && sale.transaction_id !== 'BANK/CARD-SALE') && ` | Trx: ${sale.transaction_id}`}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3 border-t sm:border-t-0 pt-4 sm:pt-0 border-slate-100">
-                      <p className="text-xl font-black text-slate-900">৳ {sale.amount_paid}</p>
-                      <button onClick={() => processRefund(sale)} className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-600 hover:text-white transition-colors border border-red-100 hover:border-red-600 flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                        Approve Refund
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: REPORTS */}
-        {activeTab === 'reports' && (
-          <div className="space-y-8 print:hidden">
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-wrap items-end gap-6">
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Filter Start Date</label>
-                <input type="date" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 outline-none text-slate-700 font-medium transition-all" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Filter End Date</label>
-                <input type="date" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-slate-900 outline-none text-slate-700 font-medium transition-all" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-              </div>
-              <button onClick={clearDateFilters} className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-bold text-sm transition-colors bg-white shadow-sm whitespace-nowrap">
-                Clear Filters
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-3xl shadow-md text-white relative overflow-hidden">
-                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl"></div>
-                <p className="text-sm font-bold uppercase tracking-wider text-slate-300 mb-2">Net Revenue {startDate ? '(Filtered Period)' : '(All Time)'}</p>
-                <p className="text-5xl font-black tracking-tight">৳ {totalRevenue.toLocaleString()}</p>
-              </div>
-              <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center">
-                <p className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-2">Total Successful Sales</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-5xl font-black text-slate-900">{salesRecord.filter(s => s.status === 'completed').length}</p>
-                  <p className="text-lg font-bold text-slate-400">Items</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-              <h2 className="text-lg font-bold mb-6 text-slate-900 flex items-center gap-2">
-                <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
-                Revenue by Payment Method
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
-                {Object.entries(revenueByMethod).map(([method, amount]) => (
-                  <div key={method} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-center hover:border-slate-300 transition-colors">
-                    <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100">
-                      <span className="text-xs font-black text-slate-600 uppercase">{method.charAt(0)}</span>
-                    </div>
-                    <p className="uppercase text-[10px] font-bold text-slate-400 tracking-wider mb-1 whitespace-nowrap">{method}</p>
-                    <p className="text-base font-bold text-slate-900">৳ {amount.toLocaleString()}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-              <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-                <h2 className="text-lg font-bold text-slate-900">Master Transaction Ledger</h2>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-white text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
-                      <th className="p-5 font-bold">Date & Time</th>
-                      <th className="p-5 font-bold">Item Details</th>
-                      <th className="p-5 font-bold">Method</th>
-                      <th className="p-5 font-bold">Status</th>
-                      <th className="p-5 font-bold text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {salesRecord.length === 0 && (
-                      <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-medium">No transactions found for this period.</td></tr>
-                    )}
-                    {salesRecord.map((sale) => (
-                      <tr key={sale.id} className={`transition-colors ${sale.status === 'refunded' ? 'bg-slate-50 opacity-60' : 'hover:bg-slate-50'}`}>
-                        <td className="p-5 text-sm text-slate-600 whitespace-nowrap">{new Date(sale.sold_at).toLocaleString('en-BD')}</td>
-                        <td className="p-5">
-                          <p className={`text-sm font-bold ${sale.status === 'refunded' ? 'line-through text-slate-400' : 'text-slate-900'}`}>{sale.dresses?.name}</p>
-                          <span className="text-xs font-mono text-slate-400">{sale.dresses?.barcode}</span>
-                        </td>
-                        <td className="p-5">
-                          <span className="text-xs font-bold uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                            {sale.transaction_id === 'BANK/CARD-SALE' ? 'BANK/CARD' : sale.payment_method}
-                          </span>
-                        </td>
-                        <td className="p-5">
-                          <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${sale.status === 'refunded' ? 'bg-slate-200 text-slate-500' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
-                            {sale.status}
-                          </span>
-                        </td>
-                        <td className={`p-5 text-right text-sm font-bold whitespace-nowrap ${sale.status === 'refunded' ? 'line-through text-slate-400' : 'text-slate-900'}`}>
-                          ৳ {sale.amount_paid}
-                        </td>
-                      </tr>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
+
+                <div className="bg-canvas border border-thread overflow-hidden">
+                  <div className="p-6 border-b border-thread">
+                    <h3 className="text-base font-bold text-ink">Master Transaction Ledger</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread">
+                          <th className="p-4 font-bold">Date & Time</th>
+                          <th className="p-4 font-bold">Item Details</th>
+                          <th className="p-4 font-bold">Method</th>
+                          <th className="p-4 font-bold">Status</th>
+                          <th className="p-4 font-bold text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-thread">
+                        {salesRecord.length === 0 && (
+                          <tr><td colSpan={5} className="p-8 text-center text-muted font-medium">No transactions found for this period.</td></tr>
+                        )}
+                        {salesRecord.map((sale) => (
+                          <tr key={sale.id} className={sale.status === 'refunded' ? 'opacity-50' : ''}>
+                            <td className="p-4 text-sm text-muted whitespace-nowrap font-mono">{new Date(sale.sold_at).toLocaleString('en-BD')}</td>
+                            <td className="p-4">
+                              <p className={`text-sm font-bold ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
+                              <span className="text-xs font-mono text-muted">{sale.dresses?.barcode}</span>
+                            </td>
+                            <td className="p-4">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-ink bg-paper-dim px-2 py-1">
+                                {sale.transaction_id === 'BANK/CARD-SALE' ? 'BANK/CARD' : sale.payment_method}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${sale.status === 'refunded' ? 'bg-paper-dim text-muted' : 'bg-moss-light text-moss'}`}>
+                                {sale.status}
+                              </span>
+                            </td>
+                            <td className={`p-4 text-right text-sm font-mono font-bold whitespace-nowrap ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>
+                              ৳{sale.amount_paid}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
+
           </div>
-        )}
+        </div>
       </div>
 
       {/* RECEIPT PRINT LAYOUT */}
@@ -762,7 +873,7 @@ export default function AdminDashboard() {
             <span>Time: {new Date().toLocaleTimeString()}</span>
           </div>
           <div className="border-b border-dashed border-black my-2"></div>
-          
+
           <div className="my-2">
             {cart.map((item, index) => (
               <div key={index} className="mb-2">

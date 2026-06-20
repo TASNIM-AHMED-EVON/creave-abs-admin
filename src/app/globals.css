@@ -1,26 +1,136 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+  CRAVE ABS design tokens
+  -----------------------
+  Palette is built around the shop floor, not generic SaaS gray:
+  warm paper stock, ink for type, brass for the brand accent (think
+  garment hardware — buttons, buckles, tags), oxblood for refunds/danger,
+  moss for confirmed/success states.
+*/
 
 :root {
+  --background: #faf7f1;
+  --foreground: #1c1a17;
+
+  --color-canvas: #ffffff;
+  --color-paper: #faf7f1;
+  --color-paper-dim: #f3eee4;
+  --color-ink: #1c1a17;
+  --color-muted: #837a6e;
+
+  --color-thread: #e4dac8;
+  --color-thread-dark: #c9bb9e;
+
+  --color-brass: #a8763b;
+  --color-brass-dark: #87602e;
+  --color-brass-light: #f1e3c9;
+
+  --color-oxblood: #7a2e2a;
+  --color-oxblood-light: #f6e7e3;
+
+  --color-moss: #3f6b4f;
+  --color-moss-light: #e6ede3;
+}
+
+@theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-space-mono);
+
+  --color-canvas: var(--color-canvas);
+  --color-paper: var(--color-paper);
+  --color-paper-dim: var(--color-paper-dim);
+  --color-ink: var(--color-ink);
+  --color-muted: var(--color-muted);
+
+  --color-thread: var(--color-thread);
+  --color-thread-dark: var(--color-thread-dark);
+
+  --color-brass: var(--color-brass);
+  --color-brass-dark: var(--color-brass-dark);
+  --color-brass-light: var(--color-brass-light);
+
+  --color-oxblood: var(--color-oxblood);
+  --color-oxblood-light: var(--color-oxblood-light);
+
+  --color-moss: var(--color-moss);
+  --color-moss-light: var(--color-moss-light);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Signature motif: a stitched seam, used as the one recurring structural
+   device — section dividers, card tops, the wordmark underline. */
+.stitch {
+  background-image: linear-gradient(
+    to right,
+    var(--color-thread-dark) 0,
+    var(--color-thread-dark) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  background-size: 12px 1.5px;
+  background-repeat: repeat-x;
+  background-position: left center;
+  height: 1.5px;
+}
+
+.stitch-v {
+  background-image: linear-gradient(
+    to bottom,
+    var(--color-thread-dark) 0,
+    var(--color-thread-dark) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  background-size: 1.5px 12px;
+  background-repeat: repeat-y;
+  background-position: center top;
+  width: 1.5px;
+}
+
+/* Secondary motif: a thin barcode stripe, used sparingly as a brand mark
+   on the login screen and sidebar header. */
+.barcode-stripe {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--color-ink) 0px,
+    var(--color-ink) 1.5px,
+    transparent 1.5px,
+    transparent 4px,
+    var(--color-ink) 4px,
+    var(--color-ink) 6px,
+    transparent 6px,
+    transparent 8.5px,
+    var(--color-ink) 8.5px,
+    var(--color-ink) 9.5px,
+    transparent 9.5px,
+    transparent 13px
+  );
+}
+
+::selection {
+  background: var(--color-brass-light);
+  color: var(--color-ink);
+}
+
+/* Quiet, deliberate focus ring rather than the browser default */
+:focus-visible {
+  outline: 2px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
