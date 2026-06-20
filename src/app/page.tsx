@@ -773,12 +773,14 @@ export default function AdminDashboard() {
                   <span>Tk {item.price * item.cartQty}</span>
                 </div>
               </div>
-            ))}
+            ))
+            }
           </div>
 
           <div className="border-b border-dashed border-black my-2"></div>
           <div className="flex justify-between font-black text-lg uppercase">
             <span>Total:</span>
+
             <span>Tk {cartTotal}</span>
           </div>
           <div className="text-xs mt-2 uppercase">Paid via: <span className="font-bold">{paymentMethod}</span></div>
@@ -788,6 +790,7 @@ export default function AdminDashboard() {
           <div className="text-center text-[10px] mt-1">No refunds without receipt.</div>
         </div>
       )}
+
     </div>
   );
 }
