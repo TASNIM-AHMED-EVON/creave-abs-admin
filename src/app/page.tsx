@@ -1322,7 +1322,8 @@ export default function AdminDashboard() {
           <div className="text-center text-xs font-bold mt-2">THANK YOU FOR SHOPPING!</div>
           <div className="text-center text-[10px] mt-1">No refunds without receipt.</div>
         </div>
-      )}
+      )
+      }
 
     </div>
   );
