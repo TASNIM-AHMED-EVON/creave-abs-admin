@@ -72,8 +72,34 @@ const IconReceipt = (p: React.SVGProps<SVGSVGElement>) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M9 8h6M9 11.5h6M9 15h4" />
   </svg>
 );
+const IconHome = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 11.5L12 4l8.5 7.5M5.5 10v9a1 1 0 001 1H10v-6h4v6h3.5a1 1 0 001-1v-9" />
+  </svg>
+);
+const IconAlertTriangle = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.5v4m0 3.5h.01M10.6 4.3L2.9 17.8a1.2 1.2 0 001.04 1.8h16.12a1.2 1.2 0 001.04-1.8L13.4 4.3a1.2 1.2 0 00-2.08 0z" />
+  </svg>
+);
+const IconTrendingUp = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16l6.5-6.5 4 4L21 6m0 0h-5.5M21 6v5.5" />
+  </svg>
+);
+const IconPencil = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.12 2.12 0 013 3L7.5 18.5 3 20l1.5-4.5L16.5 3.5z" />
+  </svg>
+);
+const IconDownload = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.5v11m0 0l-4-4m4 4l4-4M4.5 19.5h15" />
+  </svg>
+);
 
 const NAV_ITEMS = [
+  { id: 'overview', label: 'Overview', icon: IconHome },
   { id: 'pos', label: 'POS Terminal', icon: IconScan },
   { id: 'inventory', label: 'Stock & Bundles', icon: IconArchive },
   { id: 'refund', label: 'Refunds', icon: IconReturn },
@@ -82,10 +108,14 @@ const NAV_ITEMS = [
 
 const PAYMENT_METHODS = ['cash', 'bkash', 'nagad', 'upay', 'rocket', 'bank/card'] as const;
 
+// Items at or below this remaining quantity surface as "Low Stock" on the
+// Overview tab and in the inventory list.
+const LOW_STOCK_THRESHOLD = 3;
+
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'pos' | 'inventory' | 'refund' | 'reports'>('pos');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pos' | 'inventory' | 'refund' | 'reports'>('overview');
 
   // POS State
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -115,6 +145,17 @@ export default function AdminDashboard() {
   const [revenueByMethod, setRevenueByMethod] = useState<Record<string, number>>({});
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Overview State
+  const [todayRevenue, setTodayRevenue] = useState(0);
+  const [todayItemsSold, setTodayItemsSold] = useState(0);
+  const [topSellers, setTopSellers] = useState<any[]>([]);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+
+  // Inventory: archive visibility + inline edit
+  const [showArchived, setShowArchived] = useState(false);
+  const [editingId, setEditingId] = useState<any>(null);
+  const [editDraft, setEditDraft] = useState({ name: '', category: '', price: '', quantity: '' });
 
   // --- INVENTORY MEMOIZED FETCH ---
   const fetchRecentInventory = useCallback(async () => {
@@ -163,6 +204,60 @@ export default function AdminDashboard() {
     }
   }, [startDate, endDate]);
 
+  // --- OVERVIEW MEMOIZED FETCH ---
+  // Independent of the Reports date filters so the dashboard always shows
+  // today's real numbers and an all-time leaderboard.
+  const fetchOverviewData = useCallback(async () => {
+    setOverviewLoading(true);
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const { data: todayData } = await supabase
+      .from('sales')
+      .select('amount_paid, status')
+      .gte('sold_at', startOfDay.toISOString())
+      .lte('sold_at', endOfDay.toISOString());
+
+    if (todayData) {
+      const completedToday = todayData.filter((s: any) => s.status === 'completed');
+      setTodayRevenue(completedToday.reduce((sum: number, s: any) => sum + Number(s.amount_paid), 0));
+      setTodayItemsSold(completedToday.length);
+    }
+
+    // Tally units sold per item across the most recent completed sales to
+    // surface a top-sellers leaderboard without needing a SQL view.
+    const { data: recentSales } = await supabase
+      .from('sales')
+      .select('dress_id, amount_paid, status, dresses ( name, barcode )')
+      .eq('status', 'completed')
+      .order('sold_at', { ascending: false })
+      .limit(500);
+
+    if (recentSales) {
+      const tally: Record<string, { name: string; barcode: string; unitsSold: number; revenue: number }> = {};
+      recentSales.forEach((sale: any) => {
+        const key = String(sale.dress_id);
+        if (!tally[key]) {
+          tally[key] = {
+            name: sale.dresses?.name ?? 'Unknown Item',
+            barcode: sale.dresses?.barcode ?? '',
+            unitsSold: 0,
+            revenue: 0,
+          };
+        }
+        tally[key].unitsSold += 1;
+        tally[key].revenue += Number(sale.amount_paid);
+      });
+      const ranked = Object.values(tally).sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 5);
+      setTopSellers(ranked);
+    }
+
+    setOverviewLoading(false);
+  }, []);
+
   // --- 24-HOUR AUTO LOGIN SESSION CHECK ---
   useEffect(() => {
     const savedSessionTime = localStorage.getItem('crave_abs_session_start');
@@ -175,11 +270,12 @@ export default function AdminDashboard() {
         setIsAuthenticated(true);
         fetchRecentInventory();
         fetchSalesData();
+        fetchOverviewData();
       } else {
         localStorage.removeItem('crave_abs_session_start');
       }
     }
-  }, [fetchRecentInventory, fetchSalesData]);
+  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData]);
 
   // Auth Submit Handler
   const handleLogin = (e: React.FormEvent) => {
@@ -189,6 +285,7 @@ export default function AdminDashboard() {
       setIsAuthenticated(true);
       fetchRecentInventory();
       fetchSalesData();
+      fetchOverviewData();
     } else {
       alert("Incorrect Admin Password");
     }
@@ -329,6 +426,73 @@ export default function AdminDashboard() {
     }
   };
 
+  // --- INVENTORY EDIT / ARCHIVE FUNCTIONS ---
+  // Barcode is left out of the editable fields since it's the lookup key
+  // used at the POS counter and in refund search.
+  const startEditInventory = (item: any) => {
+    setEditingId(item.id);
+    setEditDraft({
+      name: item.name,
+      category: item.category,
+      price: String(item.price),
+      quantity: String(item.quantity),
+    });
+  };
+
+  const cancelEditInventory = () => {
+    setEditingId(null);
+  };
+
+  const saveEditInventory = async (id: any) => {
+    const qty = parseInt(editDraft.quantity);
+    const price = parseFloat(editDraft.price);
+    const { error } = await supabase
+      .from('dresses')
+      .update({
+        name: editDraft.name,
+        category: editDraft.category,
+        price,
+        quantity: qty,
+        status: qty > 0 ? 'available' : 'sold',
+      })
+      .eq('id', id);
+
+    if (error) {
+      alert('Failed to save changes. Please try again.');
+    } else {
+      setEditingId(null);
+      fetchRecentInventory();
+    }
+  };
+
+  // Archiving (rather than deleting) protects sales history: the sales
+  // table references dress_id with ON DELETE CASCADE, so a hard delete
+  // would silently wipe that item's transaction record from your reports.
+  const archiveInventoryItem = async (item: any) => {
+    if (!window.confirm(`Archive "${item.name}"? It will be hidden from the POS and active stock list, but its sales history stays intact. You can restore it anytime.`)) return;
+    const { error } = await supabase
+      .from('dresses')
+      .update({ status: 'archived', quantity: 0 })
+      .eq('id', item.id);
+    if (error) {
+      alert('Failed to archive item.');
+    } else {
+      fetchRecentInventory();
+    }
+  };
+
+  const restoreInventoryItem = async (item: any) => {
+    const { error } = await supabase
+      .from('dresses')
+      .update({ status: 'available' })
+      .eq('id', item.id);
+    if (error) {
+      alert('Failed to restore item.');
+    } else {
+      fetchRecentInventory();
+    }
+  };
+
   // --- REFUND FUNCTIONS ---
   const handleRefundSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -370,12 +534,47 @@ export default function AdminDashboard() {
     if (activeTab === 'reports' && isAuthenticated) fetchSalesData();
   }, [activeTab, fetchSalesData, isAuthenticated]);
 
+  useEffect(() => {
+    if (activeTab === 'overview' && isAuthenticated) fetchOverviewData();
+  }, [activeTab, fetchOverviewData, isAuthenticated]);
+
   const clearDateFilters = () => { setStartDate(''); setEndDate(''); };
 
-  const filteredInventory = recentInventory.filter(item =>
-    item.name.toLowerCase().includes(stockSearchQuery.toLowerCase()) ||
-    item.barcode.toLowerCase().includes(stockSearchQuery.toLowerCase())
-  );
+  const filteredInventory = recentInventory.filter(item => {
+    const matchesSearch =
+      item.name.toLowerCase().includes(stockSearchQuery.toLowerCase()) ||
+      item.barcode.toLowerCase().includes(stockSearchQuery.toLowerCase());
+    const matchesArchiveView = showArchived ? true : item.status !== 'archived';
+    return matchesSearch && matchesArchiveView;
+  });
+
+  const activeStock = recentInventory.filter(item => item.status !== 'archived');
+  const lowStockItems = activeStock
+    .filter(item => item.quantity > 0 && item.quantity <= LOW_STOCK_THRESHOLD)
+    .sort((a, b) => a.quantity - b.quantity);
+  const outOfStockItems = activeStock.filter(item => item.quantity === 0);
+
+  const exportLedgerCSV = () => {
+    const headers = ['Date', 'Item', 'Barcode', 'Method', 'Status', 'Amount (BDT)'];
+    const rows = salesRecord.map(sale => [
+      new Date(sale.sold_at).toLocaleString('en-BD'),
+      sale.dresses?.name ?? '',
+      sale.dresses?.barcode ?? '',
+      sale.transaction_id === 'BANK/CARD-SALE' ? 'bank/card' : sale.payment_method,
+      sale.status,
+      sale.amount_paid,
+    ]);
+    const csv = [headers, ...rows]
+      .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `crave-abs-ledger-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const activeLabel = NAV_ITEMS.find(n => n.id === activeTab)?.label ?? '';
 
@@ -448,7 +647,12 @@ export default function AdminDashboard() {
                 }`}
               >
                 <Icon className="w-[18px] h-[18px] shrink-0" />
-                {label}
+                <span className="flex-1 text-left">{label}</span>
+                {id === 'inventory' && lowStockItems.length > 0 && (
+                  <span className="text-[10px] font-mono font-bold bg-oxblood text-white w-5 h-5 rounded-full flex items-center justify-center shrink-0">
+                    {lowStockItems.length}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -501,6 +705,125 @@ export default function AdminDashboard() {
                 {new Date().toLocaleDateString('en-BD', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             </div>
+
+            {/* TAB 0: OVERVIEW */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6 print:hidden">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div className="bg-ink p-7 text-paper relative overflow-hidden">
+                    <div className="barcode-stripe absolute top-0 right-0 h-full w-20 opacity-[0.06]" style={{ filter: 'invert(1)' }} />
+                    <p className="text-xs font-bold uppercase tracking-wider text-thread mb-2">Today&rsquo;s Revenue</p>
+                    <p className="font-mono text-3xl sm:text-4xl font-bold tracking-tight">৳{todayRevenue.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-canvas p-7 border border-thread">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Items Sold Today</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="font-mono text-3xl sm:text-4xl font-bold text-ink">{todayItemsSold}</p>
+                      <p className="text-sm font-bold text-muted">pieces</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('inventory')}
+                    className={`text-left p-7 border transition-colors ${lowStockItems.length > 0 ? 'bg-oxblood-light/50 border-oxblood/30 hover:bg-oxblood-light' : 'bg-canvas border-thread hover:border-thread-dark'}`}
+                  >
+                    <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${lowStockItems.length > 0 ? 'text-oxblood' : 'text-muted'}`}>Low Stock Alerts</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className={`font-mono text-3xl sm:text-4xl font-bold ${lowStockItems.length > 0 ? 'text-oxblood' : 'text-ink'}`}>{lowStockItems.length}</p>
+                      <p className="text-sm font-bold text-muted">{outOfStockItems.length} out of stock</p>
+                    </div>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-canvas border border-thread">
+                    <div className="flex items-center justify-between px-7 pt-6 pb-5">
+                      <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                        <IconAlertTriangle className="w-4 h-4 text-oxblood" />
+                        Needs Restocking
+                      </h3>
+                      <button onClick={() => setActiveTab('inventory')} className="text-xs font-bold text-brass hover:text-brass-dark uppercase tracking-wide">Manage Stock</button>
+                    </div>
+                    <div className="stitch mx-7 mb-1" />
+                    {lowStockItems.length === 0 ? (
+                      <p className="px-7 py-8 text-sm text-muted text-center">All active items are comfortably stocked.</p>
+                    ) : (
+                      <div className="px-7 divide-y divide-thread">
+                        {lowStockItems.slice(0, 6).map(item => (
+                          <div key={item.id} className="py-3.5 flex justify-between items-center gap-3">
+                            <div className="min-w-0">
+                              <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                              <p className="text-xs text-muted font-mono">{item.barcode}</p>
+                            </div>
+                            <span className="text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide bg-oxblood-light text-oxblood shrink-0">
+                              {item.quantity} left
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="pb-6" />
+                  </div>
+
+                  <div className="bg-canvas border border-thread">
+                    <div className="px-7 pt-6 pb-5">
+                      <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                        <IconTrendingUp className="w-4 h-4 text-brass" />
+                        Top Sellers (All Time)
+                      </h3>
+                    </div>
+                    <div className="stitch mx-7 mb-1" />
+                    {overviewLoading ? (
+                      <p className="px-7 py-8 text-sm text-muted text-center">Loading…</p>
+                    ) : topSellers.length === 0 ? (
+                      <p className="px-7 py-8 text-sm text-muted text-center">No completed sales yet.</p>
+                    ) : (
+                      <div className="px-7 divide-y divide-thread">
+                        {topSellers.map((item, i) => (
+                          <div key={item.barcode + i} className="py-3.5 flex justify-between items-center gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="font-mono text-xs font-bold text-thread-dark w-4 shrink-0">{String(i + 1).padStart(2, '0')}</span>
+                              <div className="min-w-0">
+                                <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                                <p className="text-xs text-muted font-mono">{item.unitsSold} sold</p>
+                              </div>
+                            </div>
+                            <p className="font-mono text-sm font-bold text-ink shrink-0">৳{item.revenue.toLocaleString()}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="pb-6" />
+                  </div>
+                </div>
+
+                <div className="bg-canvas border border-thread">
+                  <div className="flex items-center justify-between px-7 pt-6 pb-5">
+                    <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                      <IconClock className="w-4 h-4 text-brass" />
+                      Recent Activity
+                    </h3>
+                    <button onClick={() => setActiveTab('reports')} className="text-xs font-bold text-brass hover:text-brass-dark uppercase tracking-wide">Full Ledger</button>
+                  </div>
+                  <div className="stitch mx-7 mb-1" />
+                  {salesRecord.length === 0 ? (
+                    <p className="px-7 py-8 text-sm text-muted text-center">No transactions recorded yet.</p>
+                  ) : (
+                    <div className="px-7 divide-y divide-thread">
+                      {salesRecord.slice(0, 6).map(sale => (
+                        <div key={sale.id} className="py-3.5 flex justify-between items-center gap-3">
+                          <div className="min-w-0">
+                            <p className={`font-bold text-sm truncate ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
+                            <p className="text-xs text-muted font-mono">{new Date(sale.sold_at).toLocaleString('en-BD')}</p>
+                          </div>
+                          <p className={`font-mono text-sm font-bold shrink-0 ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>৳{sale.amount_paid}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="pb-6" />
+                </div>
+              </div>
+            )}
 
             {/* TAB 1: POS TERMINAL */}
             {activeTab === 'pos' && (
@@ -663,7 +986,7 @@ export default function AdminDashboard() {
                         <span className="text-muted text-xs font-mono font-bold">{recentInventory.length} ITEMS</span>
                       </div>
 
-                      <div className="relative px-7 mb-5">
+                      <div className="relative px-7 mb-4">
                         <div className="absolute inset-y-0 left-7 pl-3 flex items-center pointer-events-none text-muted">
                           <IconSearch className="h-4 w-4" />
                         </div>
@@ -676,6 +999,16 @@ export default function AdminDashboard() {
                         />
                       </div>
 
+                      <label className="flex items-center gap-2 px-7 mb-5 text-[11px] font-bold text-muted uppercase tracking-wide cursor-pointer select-none w-fit">
+                        <input
+                          type="checkbox"
+                          checked={showArchived}
+                          onChange={(e) => setShowArchived(e.target.checked)}
+                          className="accent-brass w-3.5 h-3.5"
+                        />
+                        Show archived items
+                      </label>
+
                       <div className="stitch mx-7 mb-1" />
 
                       <div className="flex-1 overflow-y-auto px-7 py-2 divide-y divide-thread max-h-[560px]">
@@ -685,24 +1018,105 @@ export default function AdminDashboard() {
                             <p className="text-sm font-medium">No items found matching your search.</p>
                           </div>
                         ) : (
-                          filteredInventory.map(item => (
-                            <div key={item.id} className="py-4 flex justify-between items-center gap-4">
-                              <div className="min-w-0">
-                                <p className="font-bold text-ink text-sm truncate">{item.name}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-xs text-muted font-mono">{item.barcode}</span>
-                                  <span className="text-xs text-thread-dark">·</span>
-                                  <span className="text-xs text-muted">{item.category}</span>
-                                </div>
+                          filteredInventory.map(item => {
+                            const isEditing = editingId === item.id;
+                            const isArchived = item.status === 'archived';
+                            const isLow = !isArchived && item.quantity > 0 && item.quantity <= LOW_STOCK_THRESHOLD;
+
+                            return (
+                              <div key={item.id} className={`py-4 ${isArchived ? 'opacity-50' : ''}`}>
+                                {isEditing ? (
+                                  <div className="space-y-2.5">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <input
+                                        value={editDraft.name}
+                                        onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
+                                        placeholder="Item title"
+                                        className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                                      />
+                                      <select
+                                        value={editDraft.category}
+                                        onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })}
+                                        className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                                      >
+                                        <option value="Panjabi">Panjabi</option>
+                                        <option value="Shirt">Shirt</option>
+                                        <option value="T-Shirt">T-Shirt</option>
+                                        <option value="Pant">Pant</option>
+                                        <option value="0-5">0-5 Years</option>
+                                        <option value="small baby dress">Small Baby Dress</option>
+                                        <option value="medium dress">Medium Dress</option>
+                                        <option value="maximum dress">Maximum Dress</option>
+                                      </select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <input
+                                        type="number"
+                                        value={editDraft.price}
+                                        onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })}
+                                        placeholder="Price"
+                                        className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink font-mono transition-colors"
+                                      />
+                                      <input
+                                        type="number"
+                                        value={editDraft.quantity}
+                                        onChange={(e) => setEditDraft({ ...editDraft, quantity: e.target.value })}
+                                        placeholder="Quantity"
+                                        className="px-3 py-2 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-sm text-ink font-mono font-bold transition-colors"
+                                      />
+                                    </div>
+                                    <div className="flex gap-2 pt-0.5">
+                                      <button onClick={() => saveEditInventory(item.id)} className="flex-1 bg-ink text-paper text-[11px] font-bold uppercase tracking-wide py-2 hover:bg-brass-dark transition-colors">
+                                        Save Changes
+                                      </button>
+                                      <button onClick={cancelEditInventory} className="flex-1 border border-thread text-ink text-[11px] font-bold uppercase tracking-wide py-2 hover:border-thread-dark transition-colors">
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex justify-between items-center gap-3">
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <span className="text-xs text-muted font-mono">{item.barcode}</span>
+                                        <span className="text-xs text-thread-dark">·</span>
+                                        <span className="text-xs text-muted">{item.category}</span>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                      <div className="text-right">
+                                        <p className="font-mono font-bold text-ink text-sm">৳{item.price}</p>
+                                        <span className={`text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide ${
+                                          isArchived ? 'bg-paper-dim text-muted'
+                                          : isLow || item.quantity === 0 ? 'bg-oxblood-light text-oxblood'
+                                          : 'bg-moss-light text-moss'
+                                        }`}>
+                                          {isArchived ? 'archived' : `${item.quantity} in stock`}
+                                        </span>
+                                      </div>
+                                      <div className="flex gap-1">
+                                        {isArchived ? (
+                                          <button onClick={() => restoreInventoryItem(item)} title="Restore item" className="w-7 h-7 flex items-center justify-center border border-thread text-moss hover:border-moss transition-colors">
+                                            <IconUndo className="w-3.5 h-3.5" />
+                                          </button>
+                                        ) : (
+                                          <>
+                                            <button onClick={() => startEditInventory(item)} title="Edit item" className="w-7 h-7 flex items-center justify-center border border-thread text-ink hover:border-brass hover:text-brass transition-colors">
+                                              <IconPencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button onClick={() => archiveInventoryItem(item)} title="Archive item" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
+                                              <IconArchive className="w-3.5 h-3.5" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                              <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
-                                <p className="font-mono font-bold text-ink text-sm">৳{item.price}</p>
-                                <span className={`text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide ${item.quantity > 0 ? 'bg-moss-light text-moss' : 'bg-oxblood-light text-oxblood'}`}>
-                                  {item.quantity} in stock
-                                </span>
-                              </div>
-                            </div>
-                          ))
+                            );
+                          })
                         )}
                       </div>
                       <div className="pb-7" />
@@ -777,6 +1191,14 @@ export default function AdminDashboard() {
                   </div>
                   <button onClick={clearDateFilters} className="px-5 py-2.5 border border-thread text-ink hover:border-thread-dark font-bold text-xs uppercase tracking-wider transition-colors bg-canvas whitespace-nowrap">
                     Clear Filters
+                  </button>
+                  <button
+                    onClick={exportLedgerCSV}
+                    disabled={salesRecord.length === 0}
+                    className="px-5 py-2.5 bg-ink text-paper hover:bg-brass-dark font-bold text-xs uppercase tracking-wider transition-colors whitespace-nowrap flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <IconDownload className="w-3.5 h-3.5" />
+                    Export CSV
                   </button>
                 </div>
 
