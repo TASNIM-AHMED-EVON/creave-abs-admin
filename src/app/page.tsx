@@ -97,13 +97,84 @@ const IconDownload = (p: React.SVGProps<SVGSVGElement>) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.5v11m0 0l-4-4m4 4l4-4M4.5 19.5h15" />
   </svg>
 );
+const IconChevronDown = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+  </svg>
+);
+const IconTag = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M11.5 3.5h-5L3 7v5l9.5 9.5a1.5 1.5 0 002 0L20 16a1.5 1.5 0 000-2L11.5 4.5" />
+    <circle cx="7.5" cy="7.5" r="1.25" />
+  </svg>
+);
+const IconRuler = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 15.5l5-5 11 11-5 5-11-11z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 11.5l2 2M12.5 8.5l2 2M15.5 5.5l2 2" />
+  </svg>
+);
+const IconLayers = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.5l9 5-9 5-9-5 9-5zM3 13.5l9 5 9-5M3 18l9 5 9-5" />
+  </svg>
+);
+const IconBookmark = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 3.5h12v17l-6-4-6 4v-17z" />
+  </svg>
+);
+const IconClipboard = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 3.5h6a1 1 0 011 1V6h-8V4.5a1 1 0 011-1z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 5h10a1.5 1.5 0 011.5 1.5v13A1.5 1.5 0 0117 21H7a1.5 1.5 0 01-1.5-1.5v-13A1.5 1.5 0 017 5zM9 11h6m-6 4h6" />
+  </svg>
+);
+const IconFileText = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 3.5h7l4 4V20a1 1 0 01-1 1H7a1 1 0 01-1-1V4.5a1 1 0 011-1z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M14 3.5V8h4M9 12.5h6m-6 4h6" />
+  </svg>
+);
+const IconTruck = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 6.5h11v10h-11zM13.5 10.5h4l3 3v3h-7z" />
+    <circle cx="6.5" cy="18" r="1.6" />
+    <circle cx="17" cy="18" r="1.6" />
+  </svg>
+);
+const IconTrash = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 7h15M9.5 7V5a1.5 1.5 0 011.5-1.5h2A1.5 1.5 0 0114.5 5v2m-8 0l.75 12.25A1.5 1.5 0 008.74 20.5h6.52a1.5 1.5 0 001.49-1.25L17.5 7" />
+  </svg>
+);
 
-const NAV_ITEMS = [
-  { id: 'overview', label: 'Overview', icon: IconHome },
-  { id: 'pos', label: 'POS Terminal', icon: IconScan },
-  { id: 'inventory', label: 'Stock & Bundles', icon: IconArchive },
-  { id: 'refund', label: 'Refunds', icon: IconReturn },
-  { id: 'reports', label: 'Reports', icon: IconChart },
+const NAV_GROUPS = [
+  { kind: 'single', id: 'overview', tab: 'overview', label: 'Overview', icon: IconHome },
+  { kind: 'single', id: 'pos', tab: 'pos', label: 'POS Terminal', icon: IconScan },
+  {
+    kind: 'group', id: 'products', label: 'Products', icon: IconArchive,
+    children: [
+      { tab: 'products-list', label: 'List Products' },
+      { tab: 'products-add', label: 'Add Product' },
+      { tab: 'products-price', label: 'Update Price' },
+      { tab: 'products-units', label: 'Units' },
+      { tab: 'products-categories', label: 'Categories' },
+      { tab: 'products-brands', label: 'Brands' },
+    ],
+  },
+  {
+    kind: 'group', id: 'purchases', label: 'Purchases', icon: IconTruck,
+    children: [
+      { tab: 'purchases-requisition', label: 'Purchase Requisition' },
+      { tab: 'purchases-order', label: 'Purchase Order' },
+      { tab: 'purchases-list', label: 'List Purchases' },
+      { tab: 'purchases-add', label: 'Add Purchase' },
+      { tab: 'purchases-return', label: 'List Purchase Return' },
+    ],
+  },
+  { kind: 'single', id: 'refund', tab: 'refund', label: 'Refunds', icon: IconReturn },
+  { kind: 'single', id: 'reports', tab: 'reports', label: 'Reports', icon: IconChart },
 ] as const;
 
 const PAYMENT_METHODS = ['cash', 'bkash', 'nagad', 'upay', 'rocket', 'bank/card'] as const;
@@ -112,10 +183,15 @@ const PAYMENT_METHODS = ['cash', 'bkash', 'nagad', 'upay', 'rocket', 'bank/card'
 // Overview tab and in the inventory list.
 const LOW_STOCK_THRESHOLD = 3;
 
+// Used to seed the Category dropdown if the `categories` table is empty
+// (e.g. before the SQL migration has been run, or freshly run with no rows).
+const FALLBACK_CATEGORIES = ['Panjabi', 'Shirt', 'T-Shirt', 'Pant', '0-5 Years', 'Small Baby Dress', 'Medium Dress', 'Maximum Dress'];
+
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'pos' | 'inventory' | 'refund' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
   // POS State
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -128,6 +204,8 @@ export default function AdminDashboard() {
   const [invBarcode, setInvBarcode] = useState('');
   const [invName, setInvName] = useState('');
   const [invCategory, setInvCategory] = useState('');
+  const [invBrand, setInvBrand] = useState('');
+  const [invUnit, setInvUnit] = useState('Piece');
   const [invPrice, setInvPrice] = useState('');
   const [invQuantity, setInvQuantity] = useState('1');
   const [invMessage, setInvMessage] = useState({ type: '', text: '' });
@@ -155,7 +233,60 @@ export default function AdminDashboard() {
   // Inventory: archive visibility + inline edit
   const [showArchived, setShowArchived] = useState(false);
   const [editingId, setEditingId] = useState<any>(null);
-  const [editDraft, setEditDraft] = useState({ name: '', category: '', price: '', quantity: '' });
+  const [editDraft, setEditDraft] = useState({ name: '', category: '', brand: '', unit: '', price: '', quantity: '' });
+
+  // Products reference data: Categories / Units / Brands
+  const [categories, setCategories] = useState<any[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
+  const [brands, setBrands] = useState<any[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newUnitName, setNewUnitName] = useState('');
+  const [newUnitCode, setNewUnitCode] = useState('');
+  const [newBrandName, setNewBrandName] = useState('');
+
+  // Update Price (focused quick-edit list)
+  const [priceSearchQuery, setPriceSearchQuery] = useState('');
+  const [priceDraftId, setPriceDraftId] = useState<any>(null);
+  const [priceDraftValue, setPriceDraftValue] = useState('');
+
+  // Purchase Requisition
+  const [reqDescription, setReqDescription] = useState('');
+  const [reqQuantity, setReqQuantity] = useState('1');
+  const [reqSupplier, setReqSupplier] = useState('');
+  const [reqNotes, setReqNotes] = useState('');
+  const [requisitions, setRequisitions] = useState<any[]>([]);
+  const [reqMessage, setReqMessage] = useState({ type: '', text: '' });
+
+  // Purchase Order
+  const [poSupplierName, setPoSupplierName] = useState('');
+  const [poSupplierPhone, setPoSupplierPhone] = useState('');
+  const [poExpectedDate, setPoExpectedDate] = useState('');
+  const [poNotes, setPoNotes] = useState('');
+  const [poLineItems, setPoLineItems] = useState<{ description: string; quantity: string; unitCost: string }[]>([
+    { description: '', quantity: '1', unitCost: '' },
+  ]);
+  const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
+  const [poMessage, setPoMessage] = useState({ type: '', text: '' });
+
+  // Add Purchase (the action that actually moves stock)
+  const [purchaseBarcode, setPurchaseBarcode] = useState('');
+  const [purchaseMatch, setPurchaseMatch] = useState<any>(null);
+  const [purchaseQuantity, setPurchaseQuantity] = useState('1');
+  const [purchaseUnitCost, setPurchaseUnitCost] = useState('');
+  const [purchaseSupplierName, setPurchaseSupplierName] = useState('');
+  const [purchaseSupplierPhone, setPurchaseSupplierPhone] = useState('');
+  const [purchasePaymentStatus, setPurchasePaymentStatus] = useState<'paid' | 'due' | 'partial'>('paid');
+  const [purchaseMessage, setPurchaseMessage] = useState({ type: '', text: '' });
+  const [purchasesList, setPurchasesList] = useState<any[]>([]);
+
+  // List Purchase Return
+  const [returnBarcode, setReturnBarcode] = useState('');
+  const [returnMatch, setReturnMatch] = useState<any>(null);
+  const [returnQuantity, setReturnQuantity] = useState('1');
+  const [returnReason, setReturnReason] = useState('');
+  const [returnSupplierName, setReturnSupplierName] = useState('');
+  const [returnMessage, setReturnMessage] = useState({ type: '', text: '' });
+  const [purchaseReturns, setPurchaseReturns] = useState<any[]>([]);
 
   // --- INVENTORY MEMOIZED FETCH ---
   const fetchRecentInventory = useCallback(async () => {
@@ -258,6 +389,46 @@ export default function AdminDashboard() {
     setOverviewLoading(false);
   }, []);
 
+  // --- PRODUCTS REFERENCE DATA ---
+  const fetchCategories = useCallback(async () => {
+    const { data } = await supabase.from('categories').select('*').order('name', { ascending: true });
+    if (data) setCategories(data);
+  }, []);
+
+  const fetchUnits = useCallback(async () => {
+    const { data } = await supabase.from('units').select('*').order('name', { ascending: true });
+    if (data) setUnits(data);
+  }, []);
+
+  const fetchBrands = useCallback(async () => {
+    const { data } = await supabase.from('brands').select('*').order('name', { ascending: true });
+    if (data) setBrands(data);
+  }, []);
+
+  // --- PURCHASES DATA ---
+  const fetchRequisitions = useCallback(async () => {
+    const { data } = await supabase.from('purchase_requisitions').select('*').order('created_at', { ascending: false });
+    if (data) setRequisitions(data);
+  }, []);
+
+  const fetchPurchaseOrders = useCallback(async () => {
+    const { data } = await supabase
+      .from('purchase_orders')
+      .select(`*, purchase_order_items ( id, item_description, quantity_ordered, unit_cost )`)
+      .order('created_at', { ascending: false });
+    if (data) setPurchaseOrders(data);
+  }, []);
+
+  const fetchPurchasesList = useCallback(async () => {
+    const { data } = await supabase.from('purchases').select('*').order('purchased_at', { ascending: false }).limit(500);
+    if (data) setPurchasesList(data);
+  }, []);
+
+  const fetchPurchaseReturns = useCallback(async () => {
+    const { data } = await supabase.from('purchase_returns').select('*').order('returned_at', { ascending: false }).limit(500);
+    if (data) setPurchaseReturns(data);
+  }, []);
+
   // --- 24-HOUR AUTO LOGIN SESSION CHECK ---
   useEffect(() => {
     const savedSessionTime = localStorage.getItem('crave_abs_session_start');
@@ -271,11 +442,14 @@ export default function AdminDashboard() {
         fetchRecentInventory();
         fetchSalesData();
         fetchOverviewData();
+        fetchCategories();
+        fetchUnits();
+        fetchBrands();
       } else {
         localStorage.removeItem('crave_abs_session_start');
       }
     }
-  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData]);
+  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands]);
 
   // Auth Submit Handler
   const handleLogin = (e: React.FormEvent) => {
@@ -286,6 +460,9 @@ export default function AdminDashboard() {
       fetchRecentInventory();
       fetchSalesData();
       fetchOverviewData();
+      fetchCategories();
+      fetchUnits();
+      fetchBrands();
     } else {
       alert("Incorrect Admin Password");
     }
@@ -411,6 +588,8 @@ export default function AdminDashboard() {
         barcode: invBarcode,
         name: invName,
         category: invCategory,
+        brand: invBrand || null,
+        unit: invUnit || 'Piece',
         price: parseFloat(invPrice),
         quantity: qty,
         status: qty > 0 ? 'available' : 'sold'
@@ -420,8 +599,8 @@ export default function AdminDashboard() {
       setInvMessage({ type: 'error', text: 'Failed to add item. Barcode might already exist.' });
     } else {
       setInvMessage({ type: 'success', text: `Successfully stocked ${qty} item(s)!` });
-      setInvBarcode(''); setInvName(''); setInvCategory('');
-      setInvPrice(''); setInvQuantity('1');
+      setInvBarcode(''); setInvName(''); setInvCategory(''); setInvBrand('');
+      setInvUnit('Piece'); setInvPrice(''); setInvQuantity('1');
       fetchRecentInventory();
     }
   };
@@ -434,6 +613,8 @@ export default function AdminDashboard() {
     setEditDraft({
       name: item.name,
       category: item.category,
+      brand: item.brand || '',
+      unit: item.unit || 'Piece',
       price: String(item.price),
       quantity: String(item.quantity),
     });
@@ -451,6 +632,8 @@ export default function AdminDashboard() {
       .update({
         name: editDraft.name,
         category: editDraft.category,
+        brand: editDraft.brand || null,
+        unit: editDraft.unit || 'Piece',
         price,
         quantity: qty,
         status: qty > 0 ? 'available' : 'sold',
@@ -491,6 +674,269 @@ export default function AdminDashboard() {
     } else {
       fetchRecentInventory();
     }
+  };
+
+  // --- UPDATE PRICE (focused quick-edit) ---
+  const saveQuickPrice = async (id: any) => {
+    const newPrice = parseFloat(priceDraftValue);
+    if (isNaN(newPrice) || newPrice < 0) {
+      alert('Enter a valid price.');
+      return;
+    }
+    const { error } = await supabase.from('dresses').update({ price: newPrice }).eq('id', id);
+    if (error) {
+      alert('Failed to update price.');
+    } else {
+      setPriceDraftId(null);
+      setPriceDraftValue('');
+      fetchRecentInventory();
+    }
+  };
+
+  // --- CATEGORIES CRUD ---
+  const addCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    const { error } = await supabase.from('categories').insert([{ name: newCategoryName.trim() }]);
+    if (error) {
+      alert('Failed to add category. It may already exist.');
+    } else {
+      setNewCategoryName('');
+      fetchCategories();
+    }
+  };
+
+  const deleteCategory = async (id: any, name: string) => {
+    if (!window.confirm(`Remove "${name}" from your category list? Existing products keep their value — it just won't be offered as a dropdown option anymore.`)) return;
+    const { error } = await supabase.from('categories').delete().eq('id', id);
+    if (!error) fetchCategories();
+  };
+
+  // --- UNITS CRUD ---
+  const addUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUnitName.trim()) return;
+    const { error } = await supabase.from('units').insert([{ name: newUnitName.trim(), short_code: newUnitCode.trim() || null }]);
+    if (error) {
+      alert('Failed to add unit. It may already exist.');
+    } else {
+      setNewUnitName(''); setNewUnitCode('');
+      fetchUnits();
+    }
+  };
+
+  const deleteUnit = async (id: any) => {
+    if (!window.confirm('Remove this unit?')) return;
+    const { error } = await supabase.from('units').delete().eq('id', id);
+    if (!error) fetchUnits();
+  };
+
+  // --- BRANDS CRUD ---
+  const addBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBrandName.trim()) return;
+    const { error } = await supabase.from('brands').insert([{ name: newBrandName.trim() }]);
+    if (error) {
+      alert('Failed to add brand. It may already exist.');
+    } else {
+      setNewBrandName('');
+      fetchBrands();
+    }
+  };
+
+  const deleteBrand = async (id: any) => {
+    if (!window.confirm('Remove this brand?')) return;
+    const { error } = await supabase.from('brands').delete().eq('id', id);
+    if (!error) fetchBrands();
+  };
+
+  // --- PURCHASE REQUISITION ---
+  const handleAddRequisition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReqMessage({ type: '', text: '' });
+    const qty = parseInt(reqQuantity);
+    const { error } = await supabase.from('purchase_requisitions').insert([{
+      item_description: reqDescription,
+      quantity_needed: qty,
+      preferred_supplier: reqSupplier || null,
+      notes: reqNotes || null,
+      status: 'pending',
+    }]);
+    if (error) {
+      setReqMessage({ type: 'error', text: 'Failed to save requisition.' });
+    } else {
+      setReqMessage({ type: 'success', text: 'Requisition logged.' });
+      setReqDescription(''); setReqQuantity('1'); setReqSupplier(''); setReqNotes('');
+      fetchRequisitions();
+    }
+  };
+
+  const updateRequisitionStatus = async (id: any, status: string) => {
+    const { error } = await supabase.from('purchase_requisitions').update({ status }).eq('id', id);
+    if (!error) fetchRequisitions();
+  };
+
+  // --- PURCHASE ORDER (with dynamic line items) ---
+  const addPoLineItem = () => {
+    setPoLineItems([...poLineItems, { description: '', quantity: '1', unitCost: '' }]);
+  };
+  const removePoLineItem = (index: number) => {
+    setPoLineItems(poLineItems.filter((_, i) => i !== index));
+  };
+  const updatePoLineItem = (index: number, field: 'description' | 'quantity' | 'unitCost', value: string) => {
+    setPoLineItems(poLineItems.map((li, i) => (i === index ? { ...li, [field]: value } : li)));
+  };
+
+  const handleCreatePurchaseOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPoMessage({ type: '', text: '' });
+    const validItems = poLineItems.filter(li => li.description.trim() && li.quantity && li.unitCost);
+    if (!poSupplierName || validItems.length === 0) {
+      setPoMessage({ type: 'error', text: 'Add a supplier and at least one line item.' });
+      return;
+    }
+
+    const { data: order, error } = await supabase
+      .from('purchase_orders')
+      .insert([{
+        supplier_name: poSupplierName,
+        supplier_phone: poSupplierPhone || null,
+        expected_date: poExpectedDate || null,
+        notes: poNotes || null,
+        status: 'ordered',
+      }])
+      .select()
+      .single();
+
+    if (error || !order) {
+      setPoMessage({ type: 'error', text: 'Failed to create purchase order.' });
+      return;
+    }
+
+    const itemsPayload = validItems.map(li => ({
+      purchase_order_id: order.id,
+      item_description: li.description,
+      quantity_ordered: parseInt(li.quantity),
+      unit_cost: parseFloat(li.unitCost),
+    }));
+    const { error: itemsError } = await supabase.from('purchase_order_items').insert(itemsPayload);
+
+    if (itemsError) {
+      setPoMessage({ type: 'error', text: 'Order created, but line items failed to save.' });
+    } else {
+      setPoMessage({ type: 'success', text: 'Purchase order created.' });
+      setPoSupplierName(''); setPoSupplierPhone(''); setPoExpectedDate(''); setPoNotes('');
+      setPoLineItems([{ description: '', quantity: '1', unitCost: '' }]);
+    }
+    fetchPurchaseOrders();
+  };
+
+  const updatePurchaseOrderStatus = async (id: any, status: string) => {
+    const { error } = await supabase.from('purchase_orders').update({ status }).eq('id', id);
+    if (!error) fetchPurchaseOrders();
+  };
+
+  // --- ADD PURCHASE (goods received — the action that moves stock) ---
+  const handlePurchaseBarcodeSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPurchaseMessage({ type: '', text: '' });
+    setPurchaseMatch(null);
+    if (!purchaseBarcode) return;
+    const { data, error } = await supabase.from('dresses').select('*').eq('barcode', purchaseBarcode).single();
+    if (error || !data) {
+      setPurchaseMessage({ type: 'error', text: 'No product with that barcode. Add it under Products first.' });
+    } else {
+      setPurchaseMatch(data);
+      setPurchaseUnitCost(String(data.price));
+    }
+  };
+
+  const handleRecordPurchase = async () => {
+    if (!purchaseMatch) return;
+    setPurchaseMessage({ type: '', text: '' });
+    const qty = parseInt(purchaseQuantity);
+    const unitCost = parseFloat(purchaseUnitCost);
+    if (!qty || qty <= 0 || isNaN(unitCost)) {
+      setPurchaseMessage({ type: 'error', text: 'Enter a valid quantity and unit cost.' });
+      return;
+    }
+
+    const { error: purchaseError } = await supabase.from('purchases').insert([{
+      dress_id: purchaseMatch.id,
+      item_name: purchaseMatch.name,
+      barcode: purchaseMatch.barcode,
+      quantity: qty,
+      unit_cost: unitCost,
+      total_cost: qty * unitCost,
+      supplier_name: purchaseSupplierName || null,
+      supplier_phone: purchaseSupplierPhone || null,
+      payment_status: purchasePaymentStatus,
+    }]);
+
+    if (purchaseError) {
+      setPurchaseMessage({ type: 'error', text: 'Failed to record purchase.' });
+      return;
+    }
+
+    const newQuantity = purchaseMatch.quantity + qty;
+    await supabase.from('dresses').update({ quantity: newQuantity, status: 'available' }).eq('id', purchaseMatch.id);
+
+    setPurchaseMessage({ type: 'success', text: `Stock updated — ${purchaseMatch.name} now has ${newQuantity} on hand.` });
+    setPurchaseBarcode(''); setPurchaseMatch(null); setPurchaseQuantity('1'); setPurchaseUnitCost('');
+    setPurchaseSupplierName(''); setPurchaseSupplierPhone('');
+    fetchRecentInventory();
+    fetchPurchasesList();
+  };
+
+  // --- LIST PURCHASE RETURN (stock going back to supplier) ---
+  const handleReturnBarcodeSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReturnMessage({ type: '', text: '' });
+    setReturnMatch(null);
+    if (!returnBarcode) return;
+    const { data, error } = await supabase.from('dresses').select('*').eq('barcode', returnBarcode).single();
+    if (error || !data) {
+      setReturnMessage({ type: 'error', text: 'No product found with that barcode.' });
+    } else {
+      setReturnMatch(data);
+    }
+  };
+
+  const handleRecordReturn = async () => {
+    if (!returnMatch) return;
+    setReturnMessage({ type: '', text: '' });
+    const qty = parseInt(returnQuantity);
+    if (!qty || qty <= 0) {
+      setReturnMessage({ type: 'error', text: 'Enter a valid quantity.' });
+      return;
+    }
+    if (qty > returnMatch.quantity) {
+      setReturnMessage({ type: 'error', text: `Cannot return more than the ${returnMatch.quantity} currently in stock.` });
+      return;
+    }
+
+    const { error: returnError } = await supabase.from('purchase_returns').insert([{
+      dress_id: returnMatch.id,
+      item_name: returnMatch.name,
+      barcode: returnMatch.barcode,
+      quantity: qty,
+      unit_cost: returnMatch.price,
+      reason: returnReason || null,
+      supplier_name: returnSupplierName || null,
+    }]);
+
+    if (returnError) {
+      setReturnMessage({ type: 'error', text: 'Failed to log return.' });
+      return;
+    }
+
+    const newQuantity = returnMatch.quantity - qty;
+    await supabase.from('dresses').update({ quantity: newQuantity, status: newQuantity === 0 ? 'sold' : 'available' }).eq('id', returnMatch.id);
+
+    setReturnMessage({ type: 'success', text: 'Return logged and stock adjusted.' });
+    setReturnBarcode(''); setReturnMatch(null); setReturnQuantity('1'); setReturnReason(''); setReturnSupplierName('');
+    fetchRecentInventory();
+    fetchPurchaseReturns();
   };
 
   // --- REFUND FUNCTIONS ---
@@ -538,6 +984,14 @@ export default function AdminDashboard() {
     if (activeTab === 'overview' && isAuthenticated) fetchOverviewData();
   }, [activeTab, fetchOverviewData, isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (activeTab === 'purchases-requisition') fetchRequisitions();
+    if (activeTab === 'purchases-order') fetchPurchaseOrders();
+    if (activeTab === 'purchases-list') fetchPurchasesList();
+    if (activeTab === 'purchases-return') fetchPurchaseReturns();
+  }, [activeTab, isAuthenticated, fetchRequisitions, fetchPurchaseOrders, fetchPurchasesList, fetchPurchaseReturns]);
+
   const clearDateFilters = () => { setStartDate(''); setEndDate(''); };
 
   const filteredInventory = recentInventory.filter(item => {
@@ -547,6 +1001,12 @@ export default function AdminDashboard() {
     const matchesArchiveView = showArchived ? true : item.status !== 'archived';
     return matchesSearch && matchesArchiveView;
   });
+
+  const priceSearchResults = recentInventory.filter(item =>
+    item.status !== 'archived' &&
+    (item.name.toLowerCase().includes(priceSearchQuery.toLowerCase()) ||
+      item.barcode.toLowerCase().includes(priceSearchQuery.toLowerCase()))
+  );
 
   const activeStock = recentInventory.filter(item => item.status !== 'archived');
   const lowStockItems = activeStock
@@ -576,7 +1036,16 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(url);
   };
 
-  const activeLabel = NAV_ITEMS.find(n => n.id === activeTab)?.label ?? '';
+  // Flat lookup across single items and group children for the page header
+  // and for deciding which sidebar group should render expanded.
+  const flatNav = NAV_GROUPS.flatMap((g: any) => (g.kind === 'group' ? g.children.map((c: any) => ({ tab: c.tab, label: c.label, group: g.label })) : [{ tab: g.tab, label: g.label, group: null }]));
+  const activeNavEntry = flatNav.find(n => n.tab === activeTab);
+  const activeLabel = activeNavEntry ? (activeNavEntry.group ? `${activeNavEntry.group} — ${activeNavEntry.label}` : activeNavEntry.label) : '';
+
+  const goToTab = (tab: string, groupId: string | null = null) => {
+    setActiveTab(tab);
+    if (groupId) setExpandedGroup(groupId);
+  };
 
   // --- LOGIN SCREEN ---
   if (!isAuthenticated) {
@@ -633,28 +1102,67 @@ export default function AdminDashboard() {
           </div>
           <div className="stitch mx-7" />
 
-          <nav className="flex-1 px-4 py-6 space-y-1">
-            {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold transition-colors border-l-2 ${
-                  activeTab === id
-                    ? id === 'refund'
-                      ? 'border-oxblood text-oxblood bg-oxblood-light/60'
-                      : 'border-brass text-ink bg-brass-light/50'
-                    : 'border-transparent text-muted hover:text-ink hover:bg-paper-dim'
-                }`}
-              >
-                <Icon className="w-[18px] h-[18px] shrink-0" />
-                <span className="flex-1 text-left">{label}</span>
-                {id === 'inventory' && lowStockItems.length > 0 && (
-                  <span className="text-[10px] font-mono font-bold bg-oxblood text-white w-5 h-5 rounded-full flex items-center justify-center shrink-0">
-                    {lowStockItems.length}
-                  </span>
-                )}
-              </button>
-            ))}
+          <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+            {NAV_GROUPS.map((item: any) => {
+              if (item.kind === 'single') {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => goToTab(item.tab)}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold transition-colors border-l-2 ${
+                      activeTab === item.tab
+                        ? item.id === 'refund'
+                          ? 'border-oxblood text-oxblood bg-oxblood-light/60'
+                          : 'border-brass text-ink bg-brass-light/50'
+                        : 'border-transparent text-muted hover:text-ink hover:bg-paper-dim'
+                    }`}
+                  >
+                    <Icon className="w-[18px] h-[18px] shrink-0" />
+                    <span className="flex-1 text-left">{item.label}</span>
+                  </button>
+                );
+              }
+
+              const Icon = item.icon;
+              const isGroupActive = item.children.some((c: any) => c.tab === activeTab);
+              const isExpanded = expandedGroup === item.id || isGroupActive;
+
+              return (
+                <div key={item.id}>
+                  <button
+                    onClick={() => setExpandedGroup(isExpanded ? null : item.id)}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold transition-colors border-l-2 ${
+                      isGroupActive ? 'border-brass text-ink bg-brass-light/50' : 'border-transparent text-muted hover:text-ink hover:bg-paper-dim'
+                    }`}
+                  >
+                    <Icon className="w-[18px] h-[18px] shrink-0" />
+                    <span className="flex-1 text-left">{item.label}</span>
+                    {item.id === 'products' && lowStockItems.length > 0 && (
+                      <span className="text-[10px] font-mono font-bold bg-oxblood text-white w-5 h-5 rounded-full flex items-center justify-center shrink-0">
+                        {lowStockItems.length}
+                      </span>
+                    )}
+                    <IconChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isExpanded && (
+                    <div className="ml-[27px] border-l border-thread pl-3 my-1 space-y-0.5">
+                      {item.children.map((child: any) => (
+                        <button
+                          key={child.tab}
+                          onClick={() => goToTab(child.tab, item.id)}
+                          className={`w-full text-left px-3 py-2 text-[13px] font-semibold transition-colors ${
+                            activeTab === child.tab ? 'text-brass' : 'text-muted hover:text-ink'
+                          }`}
+                        >
+                          {child.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </nav>
 
           <div className="stitch mx-7 mb-4" />
@@ -678,21 +1186,46 @@ export default function AdminDashboard() {
             </button>
           </div>
           <div className="flex overflow-x-auto px-2 pb-2 gap-1">
-            {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
-                  activeTab === id
-                    ? id === 'refund' ? 'text-oxblood bg-oxblood-light/60' : 'text-ink bg-brass-light/50'
-                    : 'text-muted'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
-              </button>
-            ))}
+            {NAV_GROUPS.map((item: any) => {
+              const Icon = item.icon;
+              const isActive = item.kind === 'single' ? activeTab === item.tab : item.children.some((c: any) => c.tab === activeTab);
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => (item.kind === 'single' ? goToTab(item.tab) : goToTab(item.children[0].tab, item.id))}
+                  className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
+                    isActive
+                      ? item.id === 'refund' ? 'text-oxblood bg-oxblood-light/60' : 'text-ink bg-brass-light/50'
+                      : 'text-muted'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {item.label}
+                  {item.id === 'products' && lowStockItems.length > 0 && (
+                    <span className="text-[9px] font-mono font-bold bg-oxblood text-white w-4 h-4 rounded-full flex items-center justify-center">{lowStockItems.length}</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
+          {(activeTab.startsWith('products-') || activeTab.startsWith('purchases-')) && (
+            <div className="flex overflow-x-auto px-2 pb-2 gap-1 border-t border-thread pt-2">
+              {(activeTab.startsWith('products-')
+                ? NAV_GROUPS.find((g: any) => g.id === 'products') as any
+                : NAV_GROUPS.find((g: any) => g.id === 'purchases') as any
+              ).children.map((child: any) => (
+                <button
+                  key={child.tab}
+                  onClick={() => setActiveTab(child.tab)}
+                  className={`whitespace-nowrap px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide transition-colors ${
+                    activeTab === child.tab ? 'text-brass bg-brass-light/40' : 'text-muted'
+                  }`}
+                >
+                  {child.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ---- Main content ---- */}
@@ -723,7 +1256,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setActiveTab('inventory')}
+                    onClick={() => goToTab('products-list', 'products')}
                     className={`text-left p-7 border transition-colors ${lowStockItems.length > 0 ? 'bg-oxblood-light/50 border-oxblood/30 hover:bg-oxblood-light' : 'bg-canvas border-thread hover:border-thread-dark'}`}
                   >
                     <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${lowStockItems.length > 0 ? 'text-oxblood' : 'text-muted'}`}>Low Stock Alerts</p>
@@ -741,7 +1274,7 @@ export default function AdminDashboard() {
                         <IconAlertTriangle className="w-4 h-4 text-oxblood" />
                         Needs Restocking
                       </h3>
-                      <button onClick={() => setActiveTab('inventory')} className="text-xs font-bold text-brass hover:text-brass-dark uppercase tracking-wide">Manage Stock</button>
+                      <button onClick={() => goToTab('products-list', 'products')} className="text-xs font-bold text-brass hover:text-brass-dark uppercase tracking-wide">Manage Stock</button>
                     </div>
                     <div className="stitch mx-7 mb-1" />
                     {lowStockItems.length === 0 ? (
@@ -919,210 +1452,868 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* TAB 2: INVENTORY */}
-            {activeTab === 'inventory' && (
-               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 print:hidden">
-                  <div className="lg:col-span-5">
-                    <div className="bg-canvas p-7 border border-thread">
-                      <h3 className="text-base font-bold mb-6 text-ink flex items-center gap-2">
-                        <IconPlus className="w-4 h-4 text-brass" />
-                        Register New Stock
+            {/* PRODUCTS: LIST PRODUCTS */}
+            {activeTab === 'products-list' && (
+               <div className="print:hidden">
+                  <div className="bg-canvas border border-thread">
+                    <div className="flex items-center justify-between px-7 pt-7 mb-5 gap-4">
+                      <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                        <IconCrate className="w-4 h-4 text-brass" />
+                        Active Stock Database
                       </h3>
-
-                      {invMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${invMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{invMessage.text}</div>}
-
-                      <form onSubmit={handleAddInventory} className="space-y-5">
-                        <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Barcode Tag</label>
-                          <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Scan or type..." value={invBarcode} onChange={(e) => setInvBarcode(e.target.value)} />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Item Title</label>
-                          <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="e.g., Premium Cotton Panjabi" value={invName} onChange={(e) => setInvName(e.target.value)} />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Category</label>
-                          <div className="relative">
-                            <select required className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink appearance-none transition-colors cursor-pointer" value={invCategory} onChange={(e) => setInvCategory(e.target.value)}>
-                              <option value="" disabled>Select a category...</option>
-                              <option value="Panjabi">Panjabi</option>
-                              <option value="Shirt">Shirt</option>
-                              <option value="T-Shirt">T-Shirt</option>
-                              <option value="Pant">Pant</option>
-                              <option value="0-5">0-5 Years</option>
-                              <option value="small baby dress">Small Baby Dress</option>
-                              <option value="medium dress">Medium Dress</option>
-                              <option value="maximum dress">Maximum Dress</option>
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted">
-                              <svg className="fill-current h-3.5 w-3.5" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Unit Price (৳)</label>
-                            <input required type="number" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="1500" value={invPrice} onChange={(e) => setInvPrice(e.target.value)} />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Bundle Qty</label>
-                            <input required type="number" min="1" className="w-full px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="Pieces" value={invQuantity} onChange={(e) => setInvQuantity(e.target.value)} />
-                          </div>
-                        </div>
-                        <button type="submit" className="w-full mt-2 bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
-                          Save to Database
+                      <div className="flex items-center gap-4 shrink-0">
+                        <span className="text-muted text-xs font-mono font-bold hidden sm:inline">{recentInventory.length} ITEMS</span>
+                        <button onClick={() => goToTab('products-add', 'products')} className="bg-ink text-paper px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5">
+                          <IconPlus className="w-3.5 h-3.5" /> Add Product
                         </button>
-                      </form>
-                    </div>
-                  </div>
-
-                  <div className="lg:col-span-7">
-                    <div className="bg-canvas border border-thread h-full flex flex-col">
-                      <div className="flex items-center justify-between px-7 pt-7 mb-5">
-                        <h3 className="text-base font-bold text-ink flex items-center gap-2">
-                          <IconCrate className="w-4 h-4 text-brass" />
-                          Active Stock Database
-                        </h3>
-                        <span className="text-muted text-xs font-mono font-bold">{recentInventory.length} ITEMS</span>
                       </div>
+                    </div>
 
-                      <div className="relative px-7 mb-4">
-                        <div className="absolute inset-y-0 left-7 pl-3 flex items-center pointer-events-none text-muted">
-                          <IconSearch className="h-4 w-4" />
+                    <div className="relative px-7 mb-4">
+                      <div className="absolute inset-y-0 left-7 pl-3 flex items-center pointer-events-none text-muted">
+                        <IconSearch className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search by title or barcode..."
+                        className="w-full pl-10 pr-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                        value={stockSearchQuery}
+                        onChange={(e) => setStockSearchQuery(e.target.value)}
+                      />
+                    </div>
+
+                    <label className="flex items-center gap-2 px-7 mb-5 text-[11px] font-bold text-muted uppercase tracking-wide cursor-pointer select-none w-fit">
+                      <input
+                        type="checkbox"
+                        checked={showArchived}
+                        onChange={(e) => setShowArchived(e.target.checked)}
+                        className="accent-brass w-3.5 h-3.5"
+                      />
+                      Show archived items
+                    </label>
+
+                    <div className="stitch mx-7 mb-1" />
+
+                    <div className="px-7 py-2 divide-y divide-thread">
+                      {filteredInventory.length === 0 ? (
+                        <div className="text-center py-12 text-muted">
+                          <IconArchive className="mx-auto h-9 w-9 mb-3 text-thread-dark" />
+                          <p className="text-sm font-medium">No items found matching your search.</p>
                         </div>
-                        <input
-                          type="text"
-                          placeholder="Search by title or barcode..."
-                          className="w-full pl-10 pr-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
-                          value={stockSearchQuery}
-                          onChange={(e) => setStockSearchQuery(e.target.value)}
-                        />
-                      </div>
+                      ) : (
+                        filteredInventory.map(item => {
+                          const isEditing = editingId === item.id;
+                          const isArchived = item.status === 'archived';
+                          const isLow = !isArchived && item.quantity > 0 && item.quantity <= LOW_STOCK_THRESHOLD;
+                          const categoryOptions = categories.length > 0 ? categories.map((c: any) => c.name) : FALLBACK_CATEGORIES;
 
-                      <label className="flex items-center gap-2 px-7 mb-5 text-[11px] font-bold text-muted uppercase tracking-wide cursor-pointer select-none w-fit">
-                        <input
-                          type="checkbox"
-                          checked={showArchived}
-                          onChange={(e) => setShowArchived(e.target.checked)}
-                          className="accent-brass w-3.5 h-3.5"
-                        />
-                        Show archived items
-                      </label>
-
-                      <div className="stitch mx-7 mb-1" />
-
-                      <div className="flex-1 overflow-y-auto px-7 py-2 divide-y divide-thread max-h-[560px]">
-                        {filteredInventory.length === 0 ? (
-                          <div className="text-center py-12 text-muted">
-                            <IconArchive className="mx-auto h-9 w-9 mb-3 text-thread-dark" />
-                            <p className="text-sm font-medium">No items found matching your search.</p>
-                          </div>
-                        ) : (
-                          filteredInventory.map(item => {
-                            const isEditing = editingId === item.id;
-                            const isArchived = item.status === 'archived';
-                            const isLow = !isArchived && item.quantity > 0 && item.quantity <= LOW_STOCK_THRESHOLD;
-
-                            return (
-                              <div key={item.id} className={`py-4 ${isArchived ? 'opacity-50' : ''}`}>
-                                {isEditing ? (
-                                  <div className="space-y-2.5">
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <input
-                                        value={editDraft.name}
-                                        onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
-                                        placeholder="Item title"
-                                        className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
-                                      />
-                                      <select
-                                        value={editDraft.category}
-                                        onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })}
-                                        className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
-                                      >
-                                        <option value="Panjabi">Panjabi</option>
-                                        <option value="Shirt">Shirt</option>
-                                        <option value="T-Shirt">T-Shirt</option>
-                                        <option value="Pant">Pant</option>
-                                        <option value="0-5">0-5 Years</option>
-                                        <option value="small baby dress">Small Baby Dress</option>
-                                        <option value="medium dress">Medium Dress</option>
-                                        <option value="maximum dress">Maximum Dress</option>
-                                      </select>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <input
-                                        type="number"
-                                        value={editDraft.price}
-                                        onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })}
-                                        placeholder="Price"
-                                        className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink font-mono transition-colors"
-                                      />
-                                      <input
-                                        type="number"
-                                        value={editDraft.quantity}
-                                        onChange={(e) => setEditDraft({ ...editDraft, quantity: e.target.value })}
-                                        placeholder="Quantity"
-                                        className="px-3 py-2 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-sm text-ink font-mono font-bold transition-colors"
-                                      />
-                                    </div>
-                                    <div className="flex gap-2 pt-0.5">
-                                      <button onClick={() => saveEditInventory(item.id)} className="flex-1 bg-ink text-paper text-[11px] font-bold uppercase tracking-wide py-2 hover:bg-brass-dark transition-colors">
-                                        Save Changes
-                                      </button>
-                                      <button onClick={cancelEditInventory} className="flex-1 border border-thread text-ink text-[11px] font-bold uppercase tracking-wide py-2 hover:border-thread-dark transition-colors">
-                                        Cancel
-                                      </button>
+                          return (
+                            <div key={item.id} className={`py-4 ${isArchived ? 'opacity-50' : ''}`}>
+                              {isEditing ? (
+                                <div className="space-y-2.5 max-w-xl">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                      value={editDraft.name}
+                                      onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
+                                      placeholder="Item title"
+                                      className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                                    />
+                                    <select
+                                      value={editDraft.category}
+                                      onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })}
+                                      className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                                    >
+                                      {categoryOptions.map((name: string) => (
+                                        <option key={name} value={name}>{name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <select
+                                      value={editDraft.brand}
+                                      onChange={(e) => setEditDraft({ ...editDraft, brand: e.target.value })}
+                                      className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                                    >
+                                      <option value="">No brand</option>
+                                      {brands.map((b: any) => (
+                                        <option key={b.id} value={b.name}>{b.name}</option>
+                                      ))}
+                                    </select>
+                                    <select
+                                      value={editDraft.unit}
+                                      onChange={(e) => setEditDraft({ ...editDraft, unit: e.target.value })}
+                                      className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                                    >
+                                      <option value="Piece">Piece</option>
+                                      {units.filter((u: any) => u.name !== 'Piece').map((u: any) => (
+                                        <option key={u.id} value={u.name}>{u.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                      type="number"
+                                      value={editDraft.price}
+                                      onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })}
+                                      placeholder="Price"
+                                      className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink font-mono transition-colors"
+                                    />
+                                    <input
+                                      type="number"
+                                      value={editDraft.quantity}
+                                      onChange={(e) => setEditDraft({ ...editDraft, quantity: e.target.value })}
+                                      placeholder="Quantity"
+                                      className="px-3 py-2 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-sm text-ink font-mono font-bold transition-colors"
+                                    />
+                                  </div>
+                                  <div className="flex gap-2 pt-0.5">
+                                    <button onClick={() => saveEditInventory(item.id)} className="flex-1 bg-ink text-paper text-[11px] font-bold uppercase tracking-wide py-2 hover:bg-brass-dark transition-colors">
+                                      Save Changes
+                                    </button>
+                                    <button onClick={cancelEditInventory} className="flex-1 border border-thread text-ink text-[11px] font-bold uppercase tracking-wide py-2 hover:border-thread-dark transition-colors">
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                                  <div className="min-w-0">
+                                    <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                      <span className="text-xs text-muted font-mono">{item.barcode}</span>
+                                      <span className="text-xs text-thread-dark">·</span>
+                                      <span className="text-xs text-muted">{item.category}</span>
+                                      {item.brand && (<><span className="text-xs text-thread-dark">·</span><span className="text-xs text-muted">{item.brand}</span></>)}
+                                      <span className="text-xs text-thread-dark">·</span>
+                                      <span className="text-xs text-muted">{item.unit || 'Piece'}</span>
                                     </div>
                                   </div>
-                                ) : (
-                                  <div className="flex justify-between items-center gap-3">
-                                    <div className="min-w-0">
-                                      <p className="font-bold text-ink text-sm truncate">{item.name}</p>
-                                      <div className="flex items-center gap-2 mt-1">
-                                        <span className="text-xs text-muted font-mono">{item.barcode}</span>
-                                        <span className="text-xs text-thread-dark">·</span>
-                                        <span className="text-xs text-muted">{item.category}</span>
-                                      </div>
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    <div className="text-right">
+                                      <p className="font-mono font-bold text-ink text-sm">৳{item.price}</p>
+                                      <span className={`text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide ${
+                                        isArchived ? 'bg-paper-dim text-muted'
+                                        : isLow || item.quantity === 0 ? 'bg-oxblood-light text-oxblood'
+                                        : 'bg-moss-light text-moss'
+                                      }`}>
+                                        {isArchived ? 'archived' : `${item.quantity} in stock`}
+                                      </span>
                                     </div>
-                                    <div className="flex items-center gap-3 shrink-0">
-                                      <div className="text-right">
-                                        <p className="font-mono font-bold text-ink text-sm">৳{item.price}</p>
-                                        <span className={`text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide ${
-                                          isArchived ? 'bg-paper-dim text-muted'
-                                          : isLow || item.quantity === 0 ? 'bg-oxblood-light text-oxblood'
-                                          : 'bg-moss-light text-moss'
-                                        }`}>
-                                          {isArchived ? 'archived' : `${item.quantity} in stock`}
-                                        </span>
-                                      </div>
-                                      <div className="flex gap-1">
-                                        {isArchived ? (
-                                          <button onClick={() => restoreInventoryItem(item)} title="Restore item" className="w-7 h-7 flex items-center justify-center border border-thread text-moss hover:border-moss transition-colors">
-                                            <IconUndo className="w-3.5 h-3.5" />
+                                    <div className="flex gap-1">
+                                      {isArchived ? (
+                                        <button onClick={() => restoreInventoryItem(item)} title="Restore item" className="w-7 h-7 flex items-center justify-center border border-thread text-moss hover:border-moss transition-colors">
+                                          <IconUndo className="w-3.5 h-3.5" />
+                                        </button>
+                                      ) : (
+                                        <>
+                                          <button onClick={() => startEditInventory(item)} title="Edit item" className="w-7 h-7 flex items-center justify-center border border-thread text-ink hover:border-brass hover:text-brass transition-colors">
+                                            <IconPencil className="w-3.5 h-3.5" />
                                           </button>
-                                        ) : (
-                                          <>
-                                            <button onClick={() => startEditInventory(item)} title="Edit item" className="w-7 h-7 flex items-center justify-center border border-thread text-ink hover:border-brass hover:text-brass transition-colors">
-                                              <IconPencil className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button onClick={() => archiveInventoryItem(item)} title="Archive item" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
-                                              <IconArchive className="w-3.5 h-3.5" />
-                                            </button>
-                                          </>
-                                        )}
-                                      </div>
+                                          <button onClick={() => archiveInventoryItem(item)} title="Archive item" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
+                                            <IconArchive className="w-3.5 h-3.5" />
+                                          </button>
+                                        </>
+                                      )}
                                     </div>
                                   </div>
-                                )}
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                      <div className="pb-7" />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
+                    <div className="pb-7" />
                   </div>
                </div>
+            )}
+
+            {/* PRODUCTS: ADD PRODUCT */}
+            {activeTab === 'products-add' && (
+              <div className="max-w-xl print:hidden">
+                <div className="bg-canvas p-7 border border-thread">
+                  <h3 className="text-base font-bold mb-6 text-ink flex items-center gap-2">
+                    <IconPlus className="w-4 h-4 text-brass" />
+                    Add Product
+                  </h3>
+
+                  {invMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${invMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{invMessage.text}</div>}
+
+                  <form onSubmit={handleAddInventory} className="space-y-5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Barcode Tag</label>
+                      <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Scan or type..." value={invBarcode} onChange={(e) => setInvBarcode(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Item Title</label>
+                      <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="e.g., Premium Cotton Panjabi" value={invName} onChange={(e) => setInvName(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Category</label>
+                      <div className="relative">
+                        <select required className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink appearance-none transition-colors cursor-pointer" value={invCategory} onChange={(e) => setInvCategory(e.target.value)}>
+                          <option value="" disabled>Select a category...</option>
+                          {(categories.length > 0 ? categories.map((c: any) => c.name) : FALLBACK_CATEGORIES).map((name: string) => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted">
+                          <svg className="fill-current h-3.5 w-3.5" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                        </div>
+                      </div>
+                      {categories.length === 0 && (
+                        <p className="text-xs text-muted mt-2">
+                          Showing default categories. <button type="button" onClick={() => goToTab('products-categories', 'products')} className="text-brass font-bold hover:text-brass-dark">Manage your own list →</button>
+                        </p>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Brand</label>
+                        <select className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink appearance-none transition-colors cursor-pointer" value={invBrand} onChange={(e) => setInvBrand(e.target.value)}>
+                          <option value="">No brand</option>
+                          {brands.map((b: any) => (
+                            <option key={b.id} value={b.name}>{b.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Unit</label>
+                        <select className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink appearance-none transition-colors cursor-pointer" value={invUnit} onChange={(e) => setInvUnit(e.target.value)}>
+                          <option value="Piece">Piece</option>
+                          {units.filter((u: any) => u.name !== 'Piece').map((u: any) => (
+                            <option key={u.id} value={u.name}>{u.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Unit Price (৳)</label>
+                        <input required type="number" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="1500" value={invPrice} onChange={(e) => setInvPrice(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Bundle Qty</label>
+                        <input required type="number" min="1" className="w-full px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="Pieces" value={invQuantity} onChange={(e) => setInvQuantity(e.target.value)} />
+                      </div>
+                    </div>
+                    <button type="submit" className="w-full mt-2 bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                      Save to Database
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* PRODUCTS: UPDATE PRICE */}
+            {activeTab === 'products-price' && (
+              <div className="max-w-2xl print:hidden">
+                <div className="bg-canvas border border-thread">
+                  <div className="px-7 pt-7 pb-5">
+                    <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                      <IconTag className="w-4 h-4 text-brass" />
+                      Update Price
+                    </h3>
+                    <p className="text-sm text-muted mt-1">Search a product to adjust just its price, without opening the full editor.</p>
+                  </div>
+                  <div className="relative px-7 mb-5">
+                    <div className="absolute inset-y-0 left-7 pl-3 flex items-center pointer-events-none text-muted">
+                      <IconSearch className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search by title or barcode..."
+                      className="w-full pl-10 pr-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                      value={priceSearchQuery}
+                      onChange={(e) => setPriceSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  <div className="stitch mx-7 mb-1" />
+                  <div className="px-7 py-2 divide-y divide-thread max-h-[560px] overflow-y-auto">
+                    {priceSearchQuery === '' ? (
+                      <p className="text-center py-12 text-sm text-muted">Start typing to find a product.</p>
+                    ) : priceSearchResults.length === 0 ? (
+                      <p className="text-center py-12 text-sm text-muted">No matching products.</p>
+                    ) : (
+                      priceSearchResults.map(item => {
+                        const isEditing = priceDraftId === item.id;
+                        return (
+                          <div key={item.id} className="py-4 flex items-center justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                              <p className="text-xs text-muted font-mono mt-0.5">{item.barcode}</p>
+                            </div>
+                            {isEditing ? (
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="font-mono text-muted text-sm">৳</span>
+                                <input
+                                  type="number"
+                                  autoFocus
+                                  value={priceDraftValue}
+                                  onChange={(e) => setPriceDraftValue(e.target.value)}
+                                  className="w-24 px-2 py-1.5 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-sm text-ink font-mono font-bold text-right transition-colors"
+                                />
+                                <button onClick={() => saveQuickPrice(item.id)} className="bg-ink text-paper px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide hover:bg-brass-dark transition-colors">Save</button>
+                                <button onClick={() => { setPriceDraftId(null); setPriceDraftValue(''); }} className="border border-thread text-ink px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide hover:border-thread-dark transition-colors">Cancel</button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => { setPriceDraftId(item.id); setPriceDraftValue(String(item.price)); }}
+                                className="flex items-center gap-2 font-mono font-bold text-ink text-base shrink-0 hover:text-brass transition-colors"
+                              >
+                                ৳{item.price}
+                                <IconPencil className="w-3.5 h-3.5 text-muted" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  <div className="pb-7" />
+                </div>
+              </div>
+            )}
+
+            {/* PRODUCTS: CATEGORIES */}
+            {activeTab === 'products-categories' && (
+              <div className="max-w-xl print:hidden">
+                <div className="bg-canvas border border-thread">
+                  <div className="px-7 pt-7 pb-5">
+                    <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                      <IconTag className="w-4 h-4 text-brass" />
+                      Categories
+                    </h3>
+                    <p className="text-sm text-muted mt-1">Manage the category list offered when adding or editing a product.</p>
+                  </div>
+                  <form onSubmit={addCategory} className="px-7 mb-5 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="New category name..."
+                      className="flex-1 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                    />
+                    <button type="submit" className="bg-ink text-paper px-5 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5">
+                      <IconPlus className="w-3.5 h-3.5" /> Add
+                    </button>
+                  </form>
+                  <div className="stitch mx-7 mb-1" />
+                  <div className="px-7 py-2 divide-y divide-thread">
+                    {categories.length === 0 ? (
+                      <p className="text-center py-12 text-sm text-muted">No categories yet — built-in defaults are used until you add your own.</p>
+                    ) : (
+                      categories.map((c: any) => (
+                        <div key={c.id} className="py-3 flex items-center justify-between">
+                          <span className="font-semibold text-ink text-sm">{c.name}</span>
+                          <button onClick={() => deleteCategory(c.id, c.name)} title="Remove" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
+                            <IconTrash className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="pb-7" />
+                </div>
+              </div>
+            )}
+
+            {/* PRODUCTS: UNITS */}
+            {activeTab === 'products-units' && (
+              <div className="max-w-xl print:hidden">
+                <div className="bg-canvas border border-thread">
+                  <div className="px-7 pt-7 pb-5">
+                    <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                      <IconRuler className="w-4 h-4 text-brass" />
+                      Units
+                    </h3>
+                    <p className="text-sm text-muted mt-1">Units of measurement offered on the product form (Piece, Set, Yard, etc).</p>
+                  </div>
+                  <form onSubmit={addUnit} className="px-7 mb-5 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Unit name, e.g. Set"
+                      className="flex-1 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                      value={newUnitName}
+                      onChange={(e) => setNewUnitName(e.target.value)}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Code, e.g. set"
+                      className="w-28 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                      value={newUnitCode}
+                      onChange={(e) => setNewUnitCode(e.target.value)}
+                    />
+                    <button type="submit" className="bg-ink text-paper px-5 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5 shrink-0">
+                      <IconPlus className="w-3.5 h-3.5" /> Add
+                    </button>
+                  </form>
+                  <div className="stitch mx-7 mb-1" />
+                  <div className="px-7 py-2 divide-y divide-thread">
+                    {units.length === 0 ? (
+                      <p className="text-center py-12 text-sm text-muted">No units yet.</p>
+                    ) : (
+                      units.map((u: any) => (
+                        <div key={u.id} className="py-3 flex items-center justify-between">
+                          <span className="font-semibold text-ink text-sm">{u.name}{u.short_code ? <span className="text-muted font-mono text-xs ml-2">({u.short_code})</span> : null}</span>
+                          <button onClick={() => deleteUnit(u.id)} title="Remove" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
+                            <IconTrash className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="pb-7" />
+                </div>
+              </div>
+            )}
+
+            {/* PRODUCTS: BRANDS */}
+            {activeTab === 'products-brands' && (
+              <div className="max-w-xl print:hidden">
+                <div className="bg-canvas border border-thread">
+                  <div className="px-7 pt-7 pb-5">
+                    <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                      <IconBookmark className="w-4 h-4 text-brass" />
+                      Brands
+                    </h3>
+                    <p className="text-sm text-muted mt-1">Brand list offered on the product form. Leave a product's brand blank if it doesn't apply.</p>
+                  </div>
+                  <form onSubmit={addBrand} className="px-7 mb-5 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="New brand name..."
+                      className="flex-1 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                      value={newBrandName}
+                      onChange={(e) => setNewBrandName(e.target.value)}
+                    />
+                    <button type="submit" className="bg-ink text-paper px-5 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5">
+                      <IconPlus className="w-3.5 h-3.5" /> Add
+                    </button>
+                  </form>
+                  <div className="stitch mx-7 mb-1" />
+                  <div className="px-7 py-2 divide-y divide-thread">
+                    {brands.length === 0 ? (
+                      <p className="text-center py-12 text-sm text-muted">No brands yet.</p>
+                    ) : (
+                      brands.map((b: any) => (
+                        <div key={b.id} className="py-3 flex items-center justify-between">
+                          <span className="font-semibold text-ink text-sm">{b.name}</span>
+                          <button onClick={() => deleteBrand(b.id)} title="Remove" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
+                            <IconTrash className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="pb-7" />
+                </div>
+              </div>
+            )}
+
+            {/* PURCHASES: REQUISITION */}
+            {activeTab === 'purchases-requisition' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 print:hidden">
+                <div className="lg:col-span-5">
+                  <div className="bg-canvas p-7 border border-thread">
+                    <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                      <IconClipboard className="w-4 h-4 text-brass" />
+                      New Requisition
+                    </h3>
+                    <p className="text-sm text-muted mb-6">Log what you need to reorder before placing an actual order.</p>
+                    {reqMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${reqMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{reqMessage.text}</div>}
+                    <form onSubmit={handleAddRequisition} className="space-y-5">
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Item Needed</label>
+                        <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="e.g., Cotton Panjabi - Medium" value={reqDescription} onChange={(e) => setReqDescription(e.target.value)} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Quantity Needed</label>
+                          <input required type="number" min="1" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" value={reqQuantity} onChange={(e) => setReqQuantity(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Preferred Supplier</label>
+                          <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="Optional" value={reqSupplier} onChange={(e) => setReqSupplier(e.target.value)} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Notes</label>
+                        <textarea rows={2} className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors resize-none" placeholder="Optional" value={reqNotes} onChange={(e) => setReqNotes(e.target.value)} />
+                      </div>
+                      <button type="submit" className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                        Log Requisition
+                      </button>
+                    </form>
+                  </div>
+                </div>
+                <div className="lg:col-span-7">
+                  <div className="bg-canvas border border-thread h-full flex flex-col">
+                    <div className="flex items-center justify-between px-7 pt-7 mb-5">
+                      <h3 className="text-base font-bold text-ink">Requisition List</h3>
+                      <span className="text-muted text-xs font-mono font-bold">{requisitions.length} LOGGED</span>
+                    </div>
+                    <div className="stitch mx-7 mb-1" />
+                    <div className="px-7 py-2 divide-y divide-thread overflow-y-auto max-h-[560px]">
+                      {requisitions.length === 0 ? (
+                        <p className="text-center py-12 text-sm text-muted">No requisitions logged yet.</p>
+                      ) : (
+                        requisitions.map((r: any) => (
+                          <div key={r.id} className="py-4 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-bold text-ink text-sm truncate">{r.item_description}</p>
+                              <p className="text-xs text-muted mt-0.5">
+                                {r.quantity_needed} needed{r.preferred_supplier ? ` · ${r.preferred_supplier}` : ''}
+                              </p>
+                            </div>
+                            <select
+                              value={r.status}
+                              onChange={(e) => updateRequisitionStatus(r.id, e.target.value)}
+                              className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 border-0 outline-none cursor-pointer shrink-0 ${
+                                r.status === 'fulfilled' ? 'bg-moss-light text-moss'
+                                : r.status === 'ordered' ? 'bg-brass-light text-brass-dark'
+                                : 'bg-paper-dim text-muted'
+                              }`}
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="ordered">Ordered</option>
+                              <option value="fulfilled">Fulfilled</option>
+                            </select>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div className="pb-7" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PURCHASES: PURCHASE ORDER */}
+            {activeTab === 'purchases-order' && (
+              <div className="space-y-6 print:hidden">
+                <div className="bg-canvas p-7 border border-thread">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconFileText className="w-4 h-4 text-brass" />
+                    New Purchase Order
+                  </h3>
+                  <p className="text-sm text-muted mb-6">Place an order with a supplier. Stock updates later, once it's received under Add Purchase.</p>
+                  {poMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${poMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{poMessage.text}</div>}
+                  <form onSubmit={handleCreatePurchaseOrder} className="space-y-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Supplier Name</label>
+                        <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={poSupplierName} onChange={(e) => setPoSupplierName(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Supplier Phone</label>
+                        <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Optional" value={poSupplierPhone} onChange={(e) => setPoSupplierPhone(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Expected Date</label>
+                        <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={poExpectedDate} onChange={(e) => setPoExpectedDate(e.target.value)} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Line Items</label>
+                      <div className="space-y-2">
+                        {poLineItems.map((li, i) => (
+                          <div key={i} className="flex gap-2 items-center">
+                            <input
+                              type="text"
+                              placeholder="Item description"
+                              className="flex-1 px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                              value={li.description}
+                              onChange={(e) => updatePoLineItem(i, 'description', e.target.value)}
+                            />
+                            <input
+                              type="number"
+                              placeholder="Qty"
+                              className="w-20 px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink font-mono transition-colors"
+                              value={li.quantity}
+                              onChange={(e) => updatePoLineItem(i, 'quantity', e.target.value)}
+                            />
+                            <input
+                              type="number"
+                              placeholder="Unit Cost"
+                              className="w-28 px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink font-mono transition-colors"
+                              value={li.unitCost}
+                              onChange={(e) => updatePoLineItem(i, 'unitCost', e.target.value)}
+                            />
+                            <button type="button" onClick={() => removePoLineItem(i)} disabled={poLineItems.length === 1} className="w-9 h-9 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0">
+                              <IconTrash className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={addPoLineItem} className="mt-3 text-xs font-bold text-brass hover:text-brass-dark uppercase tracking-wide flex items-center gap-1.5">
+                        <IconPlus className="w-3.5 h-3.5" /> Add Line Item
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Notes</label>
+                      <textarea rows={2} className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors resize-none" placeholder="Optional" value={poNotes} onChange={(e) => setPoNotes(e.target.value)} />
+                    </div>
+
+                    <button type="submit" className="bg-ink text-paper px-7 py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                      Create Purchase Order
+                    </button>
+                  </form>
+                </div>
+
+                <div className="bg-canvas border border-thread">
+                  <div className="flex items-center justify-between px-7 pt-7 mb-5">
+                    <h3 className="text-base font-bold text-ink">Purchase Orders</h3>
+                    <span className="text-muted text-xs font-mono font-bold">{purchaseOrders.length} ORDERS</span>
+                  </div>
+                  <div className="stitch mx-7 mb-1" />
+                  <div className="px-7 py-2 divide-y divide-thread">
+                    {purchaseOrders.length === 0 ? (
+                      <p className="text-center py-12 text-sm text-muted">No purchase orders yet.</p>
+                    ) : (
+                      purchaseOrders.map((po: any) => (
+                        <div key={po.id} className="py-4">
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <div className="min-w-0">
+                              <p className="font-bold text-ink text-sm">{po.supplier_name}</p>
+                              <p className="text-xs text-muted font-mono mt-0.5">
+                                {new Date(po.created_at).toLocaleDateString('en-BD')}{po.expected_date ? ` · expected ${new Date(po.expected_date).toLocaleDateString('en-BD')}` : ''}
+                              </p>
+                            </div>
+                            <select
+                              value={po.status}
+                              onChange={(e) => updatePurchaseOrderStatus(po.id, e.target.value)}
+                              className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 border-0 outline-none cursor-pointer shrink-0 ${
+                                po.status === 'received' ? 'bg-moss-light text-moss'
+                                : po.status === 'cancelled' ? 'bg-oxblood-light text-oxblood'
+                                : 'bg-brass-light text-brass-dark'
+                              }`}
+                            >
+                              <option value="ordered">Ordered</option>
+                              <option value="received">Received</option>
+                              <option value="cancelled">Cancelled</option>
+                            </select>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(po.purchase_order_items || []).map((it: any) => (
+                              <span key={it.id} className="text-[11px] bg-paper-dim text-ink px-2 py-1 font-mono">
+                                {it.item_description} ×{it.quantity_ordered} @৳{it.unit_cost}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="pb-7" />
+                </div>
+              </div>
+            )}
+
+            {/* PURCHASES: LIST PURCHASES */}
+            {activeTab === 'purchases-list' && (
+              <div className="print:hidden">
+                <div className="bg-canvas border border-thread overflow-hidden">
+                  <div className="flex items-center justify-between p-7 pb-5">
+                    <h3 className="text-base font-bold text-ink">Purchase History</h3>
+                    <button onClick={() => goToTab('purchases-add', 'purchases')} className="bg-ink text-paper px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5">
+                      <IconPlus className="w-3.5 h-3.5" /> Add Purchase
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread">
+                          <th className="p-4 font-bold">Date</th>
+                          <th className="p-4 font-bold">Item</th>
+                          <th className="p-4 font-bold">Supplier</th>
+                          <th className="p-4 font-bold text-right">Qty</th>
+                          <th className="p-4 font-bold text-right">Unit Cost</th>
+                          <th className="p-4 font-bold text-right">Total</th>
+                          <th className="p-4 font-bold">Payment</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-thread">
+                        {purchasesList.length === 0 && (
+                          <tr><td colSpan={7} className="p-8 text-center text-muted font-medium">No purchases recorded yet.</td></tr>
+                        )}
+                        {purchasesList.map((p: any) => (
+                          <tr key={p.id}>
+                            <td className="p-4 text-sm text-muted whitespace-nowrap font-mono">{new Date(p.purchased_at).toLocaleString('en-BD')}</td>
+                            <td className="p-4">
+                              <p className="text-sm font-bold text-ink">{p.item_name}</p>
+                              <span className="text-xs font-mono text-muted">{p.barcode}</span>
+                            </td>
+                            <td className="p-4 text-sm text-muted">{p.supplier_name || '—'}</td>
+                            <td className="p-4 text-sm font-mono text-right text-ink">{p.quantity}</td>
+                            <td className="p-4 text-sm font-mono text-right text-ink">৳{p.unit_cost}</td>
+                            <td className="p-4 text-sm font-mono font-bold text-right text-ink">৳{p.total_cost}</td>
+                            <td className="p-4">
+                              <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${
+                                p.payment_status === 'paid' ? 'bg-moss-light text-moss'
+                                : p.payment_status === 'due' ? 'bg-oxblood-light text-oxblood'
+                                : 'bg-brass-light text-brass-dark'
+                              }`}>
+                                {p.payment_status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PURCHASES: ADD PURCHASE (the action that moves stock) */}
+            {activeTab === 'purchases-add' && (
+              <div className="max-w-2xl print:hidden">
+                <div className="bg-canvas p-7 border border-thread">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconTruck className="w-4 h-4 text-brass" />
+                    Add Purchase (Goods Received)
+                  </h3>
+                  <p className="text-sm text-muted mb-6">Recording a purchase here adds stock directly to that product's quantity.</p>
+
+                  {purchaseMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${purchaseMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{purchaseMessage.text}</div>}
+
+                  <form onSubmit={handlePurchaseBarcodeSearch} className="flex gap-2 mb-6">
+                    <input type="text" placeholder="Scan or type product barcode..." className="flex-1 px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" value={purchaseBarcode} onChange={(e) => setPurchaseBarcode(e.target.value)} />
+                    <button type="submit" className="bg-ink text-paper px-6 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">Find</button>
+                  </form>
+
+                  {purchaseMatch && (
+                    <div className="space-y-5">
+                      <div className="bg-paper-dim p-4 border border-thread flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-ink text-sm">{purchaseMatch.name}</p>
+                          <p className="text-xs text-muted font-mono mt-0.5">{purchaseMatch.barcode} · currently {purchaseMatch.quantity} in stock</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Quantity Received</label>
+                          <input type="number" min="1" className="w-full px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-ink font-mono font-bold transition-colors" value={purchaseQuantity} onChange={(e) => setPurchaseQuantity(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Unit Cost (৳)</label>
+                          <input type="number" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" value={purchaseUnitCost} onChange={(e) => setPurchaseUnitCost(e.target.value)} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Supplier Name</label>
+                          <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="Optional" value={purchaseSupplierName} onChange={(e) => setPurchaseSupplierName(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Supplier Phone</label>
+                          <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Optional" value={purchaseSupplierPhone} onChange={(e) => setPurchaseSupplierPhone(e.target.value)} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Payment Status</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(['paid', 'due', 'partial'] as const).map((s) => (
+                            <button key={s} type="button" onClick={() => setPurchasePaymentStatus(s)} className={`py-2.5 text-[11px] font-bold uppercase tracking-wider border transition-colors ${purchasePaymentStatus === s ? 'bg-ink text-paper border-ink' : 'bg-canvas text-ink border-thread hover:border-thread-dark'}`}>
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <button onClick={handleRecordPurchase} className="w-full bg-moss text-white py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors">
+                        Record Purchase & Update Stock
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* PURCHASES: LIST PURCHASE RETURN */}
+            {activeTab === 'purchases-return' && (
+              <div className="space-y-6 print:hidden">
+                <div className="bg-canvas p-7 border border-oxblood/20">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconUndo className="w-4 h-4 text-oxblood" />
+                    Return to Supplier
+                  </h3>
+                  <p className="text-sm text-muted mb-6">Sending stock back to a supplier removes it from your active inventory.</p>
+
+                  {returnMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${returnMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{returnMessage.text}</div>}
+
+                  <form onSubmit={handleReturnBarcodeSearch} className="flex gap-2 mb-6">
+                    <input type="text" placeholder="Scan or type product barcode..." className="flex-1 px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-oxblood outline-none text-ink font-mono transition-colors" value={returnBarcode} onChange={(e) => setReturnBarcode(e.target.value)} />
+                    <button type="submit" className="bg-oxblood text-white px-6 font-bold text-sm uppercase tracking-wider hover:bg-oxblood/90 transition-colors">Find</button>
+                  </form>
+
+                  {returnMatch && (
+                    <div className="space-y-5">
+                      <div className="bg-paper-dim p-4 border border-thread flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-ink text-sm">{returnMatch.name}</p>
+                          <p className="text-xs text-muted font-mono mt-0.5">{returnMatch.barcode} · currently {returnMatch.quantity} in stock</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Quantity to Return</label>
+                          <input type="number" min="1" max={returnMatch.quantity} className="w-full px-4 py-2.5 bg-oxblood-light/40 border border-oxblood/30 focus:border-oxblood outline-none text-ink font-mono font-bold transition-colors" value={returnQuantity} onChange={(e) => setReturnQuantity(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Supplier Name</label>
+                          <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="Optional" value={returnSupplierName} onChange={(e) => setReturnSupplierName(e.target.value)} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Reason</label>
+                        <textarea rows={2} className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors resize-none" placeholder="e.g., defective stitching, wrong size shipped" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
+                      </div>
+                      <button onClick={handleRecordReturn} className="w-full bg-oxblood text-white py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-oxblood/90 transition-colors">
+                        Log Return & Adjust Stock
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-canvas border border-thread overflow-hidden">
+                  <div className="p-7 pb-5">
+                    <h3 className="text-base font-bold text-ink">Return History</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread">
+                          <th className="p-4 font-bold">Date</th>
+                          <th className="p-4 font-bold">Item</th>
+                          <th className="p-4 font-bold">Supplier</th>
+                          <th className="p-4 font-bold text-right">Qty</th>
+                          <th className="p-4 font-bold">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-thread">
+                        {purchaseReturns.length === 0 && (
+                          <tr><td colSpan={5} className="p-8 text-center text-muted font-medium">No returns logged yet.</td></tr>
+                        )}
+                        {purchaseReturns.map((r: any) => (
+                          <tr key={r.id}>
+                            <td className="p-4 text-sm text-muted whitespace-nowrap font-mono">{new Date(r.returned_at).toLocaleString('en-BD')}</td>
+                            <td className="p-4">
+                              <p className="text-sm font-bold text-ink">{r.item_name}</p>
+                              <span className="text-xs font-mono text-muted">{r.barcode}</span>
+                            </td>
+                            <td className="p-4 text-sm text-muted">{r.supplier_name || '—'}</td>
+                            <td className="p-4 text-sm font-mono text-right text-ink">{r.quantity}</td>
+                            <td className="p-4 text-sm text-muted">{r.reason || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* TAB 3: REFUND */}
@@ -1322,8 +2513,7 @@ export default function AdminDashboard() {
           <div className="text-center text-xs font-bold mt-2">THANK YOU FOR SHOPPING!</div>
           <div className="text-center text-[10px] mt-1">No refunds without receipt.</div>
         </div>
-      )
-      }
+      )}
 
     </div>
   );
