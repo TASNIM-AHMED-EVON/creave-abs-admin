@@ -36,16 +36,89 @@ export default function AdminDashboard() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  // Auth Handler
+  // --- INVENTORY MEMOIZED FETCH ---
+  const fetchRecentInventory = useCallback(async () => {
+    const { data } = await supabase
+      .from('dresses')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1000);
+    if (data) setRecentInventory(data);
+  }, []);
+
+  // --- REPORTS MEMOIZED FETCH ---
+  const fetchSalesData = useCallback(async () => {
+    let query = supabase.from('sales').select(`*, dresses ( name, barcode )`).order('sold_at', { ascending: false });
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      query = query.gte('sold_at', start.toISOString());
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query = query.lte('sold_at', end.toISOString());
+    }
+
+    const { data } = await query;
+    if (data) {
+      setSalesRecord(data);
+      let total = 0;
+      const methods: Record<string, number> = { cash: 0, bkash: 0, nagad: 0, upay: 0, rocket: 0, 'bank/card': 0 };
+
+      data.forEach(sale => {
+        if (sale.status === 'completed') {
+          const amount = Number(sale.amount_paid);
+          total += amount;
+          
+          // Decode Bank/Card bypass for reporting
+          const displayMethod = sale.transaction_id === 'BANK/CARD-SALE' ? 'bank/card' : sale.payment_method;
+          
+          if (methods[displayMethod] !== undefined) methods[displayMethod] += amount;
+        }
+      });
+      setTotalRevenue(total);
+      setRevenueByMethod(methods);
+    }
+  }, [startDate, endDate]);
+
+  // --- 24-HOUR AUTO LOGIN SESSION CHECK ---
+  useEffect(() => {
+    const savedSessionTime = localStorage.getItem('crave_abs_session_start');
+    if (savedSessionTime) {
+      const loginTimestamp = parseInt(savedSessionTime, 10);
+      const continuousDuration = Date.now() - loginTimestamp;
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+
+      if (continuousDuration < twentyFourHours) {
+        setIsAuthenticated(true);
+        fetchRecentInventory();
+        fetchSalesData();
+      } else {
+        localStorage.removeItem('crave_abs_session_start');
+      }
+    }
+  }, [fetchRecentInventory, fetchSalesData]);
+
+  // Auth Submit Handler
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === "CRAVE_ABS_2026") {
+      localStorage.setItem('crave_abs_session_start', Date.now().toString());
       setIsAuthenticated(true);
       fetchRecentInventory();
       fetchSalesData();
     } else {
       alert("Incorrect Admin Password");
     }
+  };
+
+  // Logout Handler
+  const handleLogout = () => {
+    localStorage.removeItem('crave_abs_session_start');
+    setIsAuthenticated(false);
+    setPassword('');
   };
 
   // --- POS FUNCTIONS ---
@@ -104,8 +177,6 @@ export default function AdminDashboard() {
     const salesData: any[] = [];
     cart.forEach(item => {
       for(let i = 0; i < item.cartQty; i++) {
-        
-        // FIX: Bypass database rejection by routing 'bank/card' as 'cash' but flagging the TrxID.
         const dbPaymentMethod = paymentMethod === 'bank/card' ? 'cash' : paymentMethod;
         const dbTrxId = paymentMethod === 'bank/card' 
           ? 'BANK/CARD-SALE' 
@@ -153,16 +224,7 @@ export default function AdminDashboard() {
 
   const cartTotal = cart.reduce((total, item) => total + (item.price * item.cartQty), 0);
 
-  // --- INVENTORY FUNCTIONS ---
-  const fetchRecentInventory = async () => {
-    const { data } = await supabase
-      .from('dresses')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1000);
-    if (data) setRecentInventory(data);
-  };
-
+  // --- INVENTORY ADD FUNCTIONS ---
   const handleAddInventory = async (e: React.FormEvent) => {
     e.preventDefault();
     setInvMessage({ type: '', text: '' });
@@ -224,46 +286,9 @@ export default function AdminDashboard() {
     fetchSalesData();
   };
 
-  // --- REPORTS FUNCTIONS ---
-  const fetchSalesData = useCallback(async () => {
-    let query = supabase.from('sales').select(`*, dresses ( name, barcode )`).order('sold_at', { ascending: false });
-
-    if (startDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      query = query.gte('sold_at', start.toISOString());
-    }
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      query = query.lte('sold_at', end.toISOString());
-    }
-
-    const { data } = await query;
-    if (data) {
-      setSalesRecord(data);
-      let total = 0;
-      const methods: Record<string, number> = { cash: 0, bkash: 0, nagad: 0, upay: 0, rocket: 0, 'bank/card': 0 };
-
-      data.forEach(sale => {
-        if (sale.status === 'completed') {
-          const amount = Number(sale.amount_paid);
-          total += amount;
-          
-          // FIX: Decode the trick so reports accurately show "bank/card"
-          const displayMethod = sale.transaction_id === 'BANK/CARD-SALE' ? 'bank/card' : sale.payment_method;
-          
-          if (methods[displayMethod] !== undefined) methods[displayMethod] += amount;
-        }
-      });
-      setTotalRevenue(total);
-      setRevenueByMethod(methods);
-    }
-  }, [startDate, endDate]);
-
   useEffect(() => {
-    if (activeTab === 'reports') fetchSalesData();
-  }, [activeTab, fetchSalesData]);
+    if (activeTab === 'reports' && isAuthenticated) fetchSalesData();
+  }, [activeTab, fetchSalesData, isAuthenticated]);
   
   const clearDateFilters = () => { setStartDate(''); setEndDate(''); };
 
@@ -304,7 +329,6 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 print:bg-white">
       
-      {/* Global CSS style tag to wipe the native browser headers/footers (Vercel URL details) during prints */}
       <style jsx global>{`
         @media print {
           @page { margin: 0; }
@@ -315,24 +339,34 @@ export default function AdminDashboard() {
       {/* Top Navigation Bar */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm print:hidden">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center space-x-8 h-16">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tighter mr-6">CRAVE ABS</h1>
-            {(['pos', 'inventory', 'refund', 'reports'] as const).map((tab) => (
-              <button 
-                key={tab}
-                onClick={() => setActiveTab(tab)} 
-                className={`relative px-1 py-5 text-sm font-bold uppercase tracking-wider transition-colors duration-200 ${
-                  activeTab === tab 
-                    ? tab === 'refund' ? 'text-red-600' : 'text-slate-900'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                {tab === 'pos' ? 'Terminal (POS)' : tab === 'inventory' ? 'Stock & Bundles' : tab === 'refund' ? 'Refunds' : 'Reports'}
-                {activeTab === tab && (
-                  <div className={`absolute bottom-0 left-0 right-0 h-1 rounded-t-full ${tab === 'refund' ? 'bg-red-600' : 'bg-slate-900'}`} />
-                )}
-              </button>
-            ))}
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-8">
+              <h1 className="text-2xl font-black text-slate-900 tracking-tighter mr-6">CRAVE ABS</h1>
+              {(['pos', 'inventory', 'refund', 'reports'] as const).map((tab) => (
+                <button 
+                  key={tab}
+                  onClick={() => setActiveTab(tab)} 
+                  className={`relative px-1 py-5 text-sm font-bold uppercase tracking-wider transition-colors duration-200 ${
+                    activeTab === tab 
+                      ? tab === 'refund' ? 'text-red-600' : 'text-slate-900'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  {tab === 'pos' ? 'Terminal (POS)' : tab === 'inventory' ? 'Stock & Bundles' : tab === 'refund' ? 'Refunds' : 'Reports'}
+                  {activeTab === tab && (
+                    <div className={`absolute bottom-0 left-0 right-0 h-1 rounded-t-full ${tab === 'refund' ? 'bg-red-600' : 'bg-slate-900'}`} />
+                  )}
+                </button>
+              ))}
+            </div>
+            
+            {/* Quick Session Logout */}
+            <button 
+              onClick={handleLogout}
+              className="text-xs font-bold uppercase tracking-wider text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg border border-red-200/60 transition-all cursor-pointer"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </nav>
@@ -368,7 +402,6 @@ export default function AdminDashboard() {
                 <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-300">
                   <h3 className="text-sm font-bold mb-4 text-slate-700 uppercase tracking-wider">Shopping Cart</h3>
                   
-                  {/* Cart Item List */}
                   <div className="space-y-3 mb-6">
                     {cart.map((item) => (
                       <div key={item.id} className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -411,7 +444,6 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                   
-                  {/* Total Calculation */}
                   <div className="flex justify-between items-center border-t border-slate-200 pt-6 mb-6">
                     <p className="text-lg font-bold text-slate-700">Total Price</p>
                     <p className="text-3xl font-black text-slate-900">৳ {cartTotal}</p>
@@ -455,7 +487,6 @@ export default function AdminDashboard() {
         {/* TAB 2: INVENTORY */}
         {activeTab === 'inventory' && (
            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:hidden">
-              
               <div className="lg:col-span-5 space-y-6">
                 <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
                   <h2 className="text-xl font-bold mb-6 text-slate-900 flex items-center gap-2">
@@ -624,8 +655,6 @@ export default function AdminDashboard() {
         {/* TAB 4: REPORTS */}
         {activeTab === 'reports' && (
           <div className="space-y-8 print:hidden">
-            
-            {/* Filter Bar */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-wrap items-end gap-6">
               <div className="flex-1 min-w-[200px]">
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Filter Start Date</label>
@@ -640,7 +669,6 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-3xl shadow-md text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl"></div>
@@ -656,7 +684,6 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Revenue Breakdown */}
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
               <h2 className="text-lg font-bold mb-6 text-slate-900 flex items-center gap-2">
                 <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
@@ -675,7 +702,6 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Ledger Table */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
               <div className="p-6 border-b border-slate-100 bg-slate-50/50">
                 <h2 className="text-lg font-bold text-slate-900">Master Transaction Ledger</h2>
@@ -703,7 +729,6 @@ export default function AdminDashboard() {
                           <span className="text-xs font-mono text-slate-400">{sale.dresses?.barcode}</span>
                         </td>
                         <td className="p-5">
-                          {/* FIX: Ensure Ledger properly labels Bank/Card sales */}
                           <span className="text-xs font-bold uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-1 rounded">
                             {sale.transaction_id === 'BANK/CARD-SALE' ? 'BANK/CARD' : sale.payment_method}
                           </span>
