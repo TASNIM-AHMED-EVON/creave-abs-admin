@@ -233,6 +233,8 @@ export default function AdminDashboard() {
   const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad' | 'upay' | 'rocket' | 'cash' | 'bank/card'>('cash');
   const [trxId, setTrxId] = useState('');
   const [posMessage, setPosMessage] = useState({ type: '', text: '' });
+  const [discountAmount, setDiscountAmount] = useState('0');
+  const [selectedTaxRateId, setSelectedTaxRateId] = useState<string>('');
 
   // Inventory State
   const [invBarcode, setInvBarcode] = useState('');
@@ -540,11 +542,12 @@ export default function AdminDashboard() {
         fetchUnits();
         fetchBrands();
         fetchBusinessSettings();
+        fetchTaxRates();
       } else {
         localStorage.removeItem('crave_abs_session_start');
       }
     }
-  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings]);
+  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings, fetchTaxRates]);
 
   // Auth Submit Handler
   const handleLogin = (e: React.FormEvent) => {
@@ -559,6 +562,7 @@ export default function AdminDashboard() {
       fetchUnits();
       fetchBrands();
       fetchBusinessSettings();
+      fetchTaxRates();
     } else {
       alert("Incorrect Admin Password");
     }
@@ -624,22 +628,47 @@ export default function AdminDashboard() {
   const handleCheckout = async () => {
     if (cart.length === 0) return;
 
-    const salesData: any[] = [];
-    cart.forEach(item => {
-      for(let i = 0; i < item.cartQty; i++) {
-        const dbPaymentMethod = paymentMethod === 'bank/card' ? 'cash' : paymentMethod;
-        const dbTrxId = paymentMethod === 'bank/card'
-          ? 'BANK/CARD-SALE'
-          : (paymentMethod === 'cash' ? 'DIRECT-SALE' : trxId);
+    const subtotal = cart.reduce((total, item) => total + item.price * item.cartQty, 0);
+    const discount = Math.min(Math.max(parseFloat(discountAmount) || 0, 0), subtotal);
+    const subtotalAfterDiscount = subtotal - discount;
+    const activeTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
+    const taxTotal = activeTaxRate ? Math.round(subtotalAfterDiscount * (Number(activeTaxRate.rate_percent) / 100)) : 0;
 
-        salesData.push({
-          dress_id: item.id,
-          payment_method: dbPaymentMethod,
-          transaction_id: dbTrxId,
-          amount_paid: item.price,
-          status: 'completed'
-        });
-      }
+    // Flatten the cart to one entry per physical unit (matches how each row
+    // in `sales` represents a single sold piece), then spread the discount
+    // and tax proportionally across those units so amount_paid always
+    // reflects what was actually collected — which keeps every revenue
+    // total elsewhere (Reports, Overview, All Sales) correct automatically,
+    // since they all just sum amount_paid.
+    const units: any[] = [];
+    cart.forEach(item => {
+      for (let i = 0; i < item.cartQty; i++) units.push(item);
+    });
+
+    let remainingDiscount = discount;
+    let remainingTax = taxTotal;
+
+    const dbPaymentMethod = paymentMethod === 'bank/card' ? 'cash' : paymentMethod;
+    const dbTrxId = paymentMethod === 'bank/card'
+      ? 'BANK/CARD-SALE'
+      : (paymentMethod === 'cash' ? 'DIRECT-SALE' : trxId);
+
+    const salesData = units.map((item, idx) => {
+      const isLast = idx === units.length - 1;
+      const rowDiscount = isLast ? remainingDiscount : (subtotal > 0 ? Math.round((item.price / subtotal) * discount) : 0);
+      if (!isLast) remainingDiscount -= rowDiscount;
+      const rowTax = isLast ? remainingTax : (subtotal > 0 ? Math.round((item.price / subtotal) * taxTotal) : 0);
+      if (!isLast) remainingTax -= rowTax;
+
+      return {
+        dress_id: item.id,
+        payment_method: dbPaymentMethod,
+        transaction_id: dbTrxId,
+        amount_paid: item.price - rowDiscount + rowTax,
+        discount_amount: rowDiscount,
+        tax_amount: rowTax,
+        status: 'completed',
+      };
     });
 
     const { error: saleError } = await supabase.from('sales').insert(salesData);
@@ -667,12 +696,20 @@ export default function AdminDashboard() {
       window.print();
       setCart([]);
       setTrxId('');
+      setDiscountAmount('0');
+      setSelectedTaxRateId('');
       fetchRecentInventory();
       fetchSalesData();
+      fetchOverviewData();
     }, 500);
   };
 
-  const cartTotal = cart.reduce((total, item) => total + (item.price * item.cartQty), 0);
+  const cartSubtotal = cart.reduce((total, item) => total + (item.price * item.cartQty), 0);
+  const cartDiscountValue = Math.min(Math.max(parseFloat(discountAmount) || 0, 0), cartSubtotal);
+  const cartSubtotalAfterDiscount = cartSubtotal - cartDiscountValue;
+  const cartActiveTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
+  const cartTaxValue = cartActiveTaxRate ? Math.round(cartSubtotalAfterDiscount * (Number(cartActiveTaxRate.rate_percent) / 100)) : 0;
+  const cartTotal = cartSubtotalAfterDiscount + cartTaxValue;
 
   // --- INVENTORY ADD FUNCTIONS ---
   const handleAddInventory = async (e: React.FormEvent) => {
@@ -1628,6 +1665,43 @@ export default function AdminDashboard() {
                             </button>
                           </div>
                         ))}
+                      </div>
+
+                      <div className="space-y-2.5 mb-6 pb-6 border-b border-thread">
+                        <div className="flex justify-between items-center text-sm">
+                          <p className="font-semibold text-muted">Subtotal</p>
+                          <p className="font-mono font-semibold text-ink">৳{cartSubtotal}</p>
+                        </div>
+                        <div className="flex justify-between items-center gap-3">
+                          <label className="font-semibold text-muted text-sm shrink-0">Discount (৳)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max={cartSubtotal}
+                            className="w-28 px-3 py-1.5 bg-brass-light/30 border border-brass/30 focus:border-brass focus:bg-canvas outline-none text-ink font-mono font-bold text-right transition-colors"
+                            value={discountAmount}
+                            onChange={(e) => setDiscountAmount(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex justify-between items-center gap-3">
+                          <label className="font-semibold text-muted text-sm shrink-0">Tax</label>
+                          <select
+                            value={selectedTaxRateId}
+                            onChange={(e) => setSelectedTaxRateId(e.target.value)}
+                            className="px-3 py-1.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink text-sm transition-colors cursor-pointer"
+                          >
+                            <option value="">No Tax</option>
+                            {taxRates.map((t: any) => (
+                              <option key={t.id} value={t.id}>{t.name} ({t.rate_percent}%)</option>
+                            ))}
+                          </select>
+                        </div>
+                        {cartTaxValue > 0 && (
+                          <div className="flex justify-between items-center text-sm">
+                            <p className="font-semibold text-muted">Tax Amount</p>
+                            <p className="font-mono font-semibold text-ink">৳{cartTaxValue}</p>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex justify-between items-baseline mb-6">
@@ -3080,7 +3154,7 @@ export default function AdminDashboard() {
                       <IconFileText className="w-4 h-4 text-brass" />
                       Tax Rates
                     </h3>
-                    <p className="text-sm text-muted mt-1">Keep a record of the tax rates you work with. This list isn't applied to the POS total automatically yet — let me know if you'd like that wired in next.</p>
+                    <p className="text-sm text-muted mt-1">Rates defined here appear as a selectable Tax option on the POS screen, applied to the subtotal after any discount.</p>
                   </div>
                   <form onSubmit={addTaxRate} className="px-7 mb-5 flex gap-2">
                     <input
@@ -3156,6 +3230,24 @@ export default function AdminDashboard() {
           </div>
 
           <div className="border-b border-dashed border-black my-2"></div>
+          {(cartDiscountValue > 0 || cartTaxValue > 0) && (
+            <div className="flex justify-between text-xs">
+              <span>Subtotal:</span>
+              <span>Tk {cartSubtotal}</span>
+            </div>
+          )}
+          {cartDiscountValue > 0 && (
+            <div className="flex justify-between text-xs">
+              <span>Discount:</span>
+              <span>- Tk {cartDiscountValue}</span>
+            </div>
+          )}
+          {cartTaxValue > 0 && (
+            <div className="flex justify-between text-xs">
+              <span>Tax{cartActiveTaxRate ? ` (${cartActiveTaxRate.name} ${cartActiveTaxRate.rate_percent}%)` : ''}:</span>
+              <span>+ Tk {cartTaxValue}</span>
+            </div>
+          )}
           <div className="flex justify-between font-black text-lg uppercase">
             <span>Total:</span>
 
