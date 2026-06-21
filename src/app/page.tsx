@@ -223,6 +223,7 @@ const FALLBACK_CATEGORIES = ['Panjabi', 'Shirt', 'T-Shirt', 'Pant', '0-5 Years',
 
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [username, setUsername] = useState('CraveABS');
   const [password, setPassword] = useState('');
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
@@ -552,7 +553,7 @@ export default function AdminDashboard() {
   // Auth Submit Handler
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === "CRAVE_ABS_2026") {
+    if (username === "CraveABS" && password === "CRAVE_ABS_2026") {
       localStorage.setItem('crave_abs_session_start', Date.now().toString());
       setIsAuthenticated(true);
       fetchRecentInventory();
@@ -564,7 +565,7 @@ export default function AdminDashboard() {
       fetchBusinessSettings();
       fetchTaxRates();
     } else {
-      alert("Incorrect Admin Password");
+      alert("Incorrect username or password");
     }
   };
 
@@ -572,6 +573,7 @@ export default function AdminDashboard() {
   const handleLogout = () => {
     localStorage.removeItem('crave_abs_session_start');
     setIsAuthenticated(false);
+    setUsername('CraveABS');
     setPassword('');
   };
 
@@ -1324,6 +1326,18 @@ export default function AdminDashboard() {
               <div className="stitch mt-6" />
             </div>
             <form onSubmit={handleLogin} className="space-y-5">
+              <div>
+                <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Username</label>
+                <input
+                  type="text"
+                  placeholder="Username"
+                  className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass transition-colors outline-none text-ink font-mono text-center"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+              </div>
               <div>
                 <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Admin Password</label>
                 <input
