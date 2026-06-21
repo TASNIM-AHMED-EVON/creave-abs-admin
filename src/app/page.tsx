@@ -148,10 +148,36 @@ const IconTrash = (p: React.SVGProps<SVGSVGElement>) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 7h15M9.5 7V5a1.5 1.5 0 011.5-1.5h2A1.5 1.5 0 0114.5 5v2m-8 0l.75 12.25A1.5 1.5 0 008.74 20.5h6.52a1.5 1.5 0 001.49-1.25L17.5 7" />
   </svg>
 );
+const IconSettingsGear = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <circle cx="12" cy="12" r="3" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19.4 13.5a7.6 7.6 0 000-3l2-1.5-2-3.5-2.4.6a7.7 7.7 0 00-2.6-1.5L14 2h-4l-.4 2.6a7.7 7.7 0 00-2.6 1.5l-2.4-.6-2 3.5 2 1.5a7.6 7.6 0 000 3l-2 1.5 2 3.5 2.4-.6a7.7 7.7 0 002.6 1.5L10 22h4l.4-2.6a7.7 7.7 0 002.6-1.5l2.4.6 2-3.5z" />
+  </svg>
+);
+const IconCalendar = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 4.5h13a1 1 0 011 1V19a1 1 0 01-1 1h-13a1 1 0 01-1-1V5.5a1 1 0 011-1zM8 3v3M16 3v3M4.5 9.5h15" />
+  </svg>
+);
+const IconList = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />
+  </svg>
+);
 
 const NAV_GROUPS = [
   { kind: 'single', id: 'overview', tab: 'overview', label: 'Overview', icon: IconHome },
-  { kind: 'single', id: 'pos', tab: 'pos', label: 'POS Terminal', icon: IconScan },
+  {
+    kind: 'group', id: 'sell', label: 'Sell', icon: IconScan,
+    children: [
+      { tab: 'sell-order', label: 'Sales Order' },
+      { tab: 'sell-all', label: 'All Sales' },
+      { tab: 'sell-add', label: 'Add Sale' },
+      { tab: 'sell-list-pos', label: 'List POS' },
+      { tab: 'pos', label: 'POS' },
+      { tab: 'refund', label: 'List Sell Return' },
+    ],
+  },
   {
     kind: 'group', id: 'products', label: 'Products', icon: IconArchive,
     children: [
@@ -173,7 +199,15 @@ const NAV_GROUPS = [
       { tab: 'purchases-return', label: 'List Purchase Return' },
     ],
   },
-  { kind: 'single', id: 'refund', tab: 'refund', label: 'Refunds', icon: IconReturn },
+  {
+    kind: 'group', id: 'settings', label: 'Settings', icon: IconSettingsGear,
+    children: [
+      { tab: 'settings-business', label: 'Business Settings' },
+      { tab: 'settings-invoice', label: 'Invoice Settings' },
+      { tab: 'settings-barcode', label: 'Barcode Settings' },
+      { tab: 'settings-tax', label: 'Tax Rates' },
+    ],
+  },
   { kind: 'single', id: 'reports', tab: 'reports', label: 'Reports', icon: IconChart },
 ] as const;
 
@@ -287,6 +321,43 @@ export default function AdminDashboard() {
   const [returnSupplierName, setReturnSupplierName] = useState('');
   const [returnMessage, setReturnMessage] = useState({ type: '', text: '' });
   const [purchaseReturns, setPurchaseReturns] = useState<any[]>([]);
+
+  // Sales Order (customer pre-orders, fulfilled later)
+  const [soCustomerName, setSoCustomerName] = useState('');
+  const [soCustomerPhone, setSoCustomerPhone] = useState('');
+  const [soItemDescription, setSoItemDescription] = useState('');
+  const [soQuantity, setSoQuantity] = useState('1');
+  const [soUnitPrice, setSoUnitPrice] = useState('');
+  const [soExpectedDate, setSoExpectedDate] = useState('');
+  const [soNotes, setSoNotes] = useState('');
+  const [salesOrders, setSalesOrders] = useState<any[]>([]);
+  const [soMessage, setSoMessage] = useState({ type: '', text: '' });
+
+  // All Sales (searchable read-only ledger, separate from the Reports view)
+  const [allSalesSearchQuery, setAllSalesSearchQuery] = useState('');
+
+  // Add Sale (search-based single-item quick sale, no scanner needed)
+  const [addSaleSearchQuery, setAddSaleSearchQuery] = useState('');
+  const [addSaleSelectedItem, setAddSaleSelectedItem] = useState<any>(null);
+  const [addSalePaymentMethod, setAddSalePaymentMethod] = useState<'bkash' | 'nagad' | 'upay' | 'rocket' | 'cash' | 'bank/card'>('cash');
+  const [addSaleTrxId, setAddSaleTrxId] = useState('');
+  const [addSaleMessage, setAddSaleMessage] = useState({ type: '', text: '' });
+
+  // Settings — one shared row of business config
+  const [businessSettings, setBusinessSettings] = useState({
+    business_name: 'CRAVE ABS',
+    address: 'Mymensingh, Bangladesh',
+    phone: '',
+    receipt_footer_line1: 'THANK YOU FOR SHOPPING!',
+    receipt_footer_line2: 'No refunds without receipt.',
+    barcode_prefix: 'CRV',
+  });
+  const [settingsSaved, setSettingsSaved] = useState<string>('');
+
+  // Tax Rates (reference list — not yet applied automatically at checkout)
+  const [taxRates, setTaxRates] = useState<any[]>([]);
+  const [newTaxName, setNewTaxName] = useState('');
+  const [newTaxRate, setNewTaxRate] = useState('');
 
   // --- INVENTORY MEMOIZED FETCH ---
   const fetchRecentInventory = useCallback(async () => {
@@ -429,6 +500,29 @@ export default function AdminDashboard() {
     if (data) setPurchaseReturns(data);
   }, []);
 
+  // --- SALES ORDERS ---
+  const fetchSalesOrders = useCallback(async () => {
+    const { data } = await supabase.from('sales_orders').select('*').order('created_at', { ascending: false });
+    if (data) setSalesOrders(data);
+  }, []);
+
+  // --- SETTINGS ---
+  const fetchBusinessSettings = useCallback(async () => {
+    const { data } = await supabase.from('business_settings').select('*').eq('id', 1).single();
+    if (data) setBusinessSettings(data);
+  }, []);
+
+  const fetchTaxRates = useCallback(async () => {
+    const { data } = await supabase.from('tax_rates').select('*').order('name', { ascending: true });
+    if (data) setTaxRates(data);
+  }, []);
+
+  // Business name/address are shown on the login screen too, before any
+  // session check runs, so fetch them unconditionally on first mount.
+  useEffect(() => {
+    fetchBusinessSettings();
+  }, [fetchBusinessSettings]);
+
   // --- 24-HOUR AUTO LOGIN SESSION CHECK ---
   useEffect(() => {
     const savedSessionTime = localStorage.getItem('crave_abs_session_start');
@@ -445,11 +539,12 @@ export default function AdminDashboard() {
         fetchCategories();
         fetchUnits();
         fetchBrands();
+        fetchBusinessSettings();
       } else {
         localStorage.removeItem('crave_abs_session_start');
       }
     }
-  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands]);
+  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings]);
 
   // Auth Submit Handler
   const handleLogin = (e: React.FormEvent) => {
@@ -463,6 +558,7 @@ export default function AdminDashboard() {
       fetchCategories();
       fetchUnits();
       fetchBrands();
+      fetchBusinessSettings();
     } else {
       alert("Incorrect Admin Password");
     }
@@ -939,6 +1035,109 @@ export default function AdminDashboard() {
     fetchPurchaseReturns();
   };
 
+  // --- SALES ORDER (customer pre-order, fulfilled later — no stock effect) ---
+  const handleAddSalesOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSoMessage({ type: '', text: '' });
+    const { error } = await supabase.from('sales_orders').insert([{
+      customer_name: soCustomerName,
+      customer_phone: soCustomerPhone || null,
+      item_description: soItemDescription,
+      quantity: parseInt(soQuantity),
+      unit_price: soUnitPrice ? parseFloat(soUnitPrice) : null,
+      expected_date: soExpectedDate || null,
+      notes: soNotes || null,
+      status: 'pending',
+    }]);
+    if (error) {
+      setSoMessage({ type: 'error', text: 'Failed to save sales order.' });
+    } else {
+      setSoMessage({ type: 'success', text: 'Sales order logged.' });
+      setSoCustomerName(''); setSoCustomerPhone(''); setSoItemDescription('');
+      setSoQuantity('1'); setSoUnitPrice(''); setSoExpectedDate(''); setSoNotes('');
+      fetchSalesOrders();
+    }
+  };
+
+  const updateSalesOrderStatus = async (id: any, status: string) => {
+    const { error } = await supabase.from('sales_orders').update({ status }).eq('id', id);
+    if (!error) fetchSalesOrders();
+  };
+
+  // --- ADD SALE (search-based single-item quick sale — no barcode scanner needed) ---
+  const selectAddSaleItem = (item: any) => {
+    setAddSaleSelectedItem(item);
+    setAddSaleSearchQuery('');
+  };
+
+  const handleCompleteAddSale = async () => {
+    if (!addSaleSelectedItem) return;
+    setAddSaleMessage({ type: '', text: '' });
+
+    const dbPaymentMethod = addSalePaymentMethod === 'bank/card' ? 'cash' : addSalePaymentMethod;
+    const dbTrxId = addSalePaymentMethod === 'bank/card'
+      ? 'BANK/CARD-SALE'
+      : (addSalePaymentMethod === 'cash' ? 'DIRECT-SALE' : addSaleTrxId);
+
+    const { error: saleError } = await supabase.from('sales').insert([{
+      dress_id: addSaleSelectedItem.id,
+      payment_method: dbPaymentMethod,
+      transaction_id: dbTrxId,
+      amount_paid: addSaleSelectedItem.price,
+      status: 'completed',
+    }]);
+
+    if (saleError) {
+      setAddSaleMessage({ type: 'error', text: 'Sale failed. Please try again.' });
+      return;
+    }
+
+    const newQuantity = addSaleSelectedItem.quantity - 1;
+    await supabase.from('dresses').update({
+      quantity: newQuantity,
+      status: newQuantity === 0 ? 'sold' : 'available',
+    }).eq('id', addSaleSelectedItem.id);
+
+    setAddSaleMessage({ type: 'success', text: `Sale recorded for ${addSaleSelectedItem.name}.` });
+    setAddSaleSelectedItem(null);
+    setAddSaleTrxId('');
+    fetchRecentInventory();
+    fetchSalesData();
+    fetchOverviewData();
+  };
+
+  // --- SETTINGS ---
+  const saveBusinessSettings = async (updates: Partial<typeof businessSettings>, savedLabel: string) => {
+    const merged = { ...businessSettings, ...updates };
+    setBusinessSettings(merged);
+    const { error } = await supabase.from('business_settings').update(updates).eq('id', 1);
+    if (!error) {
+      setSettingsSaved(savedLabel);
+      setTimeout(() => setSettingsSaved(''), 2500);
+    } else {
+      alert('Failed to save settings. Make sure the business_settings table exists (run migration_003).');
+    }
+  };
+
+  // --- TAX RATES CRUD (reference list — not yet applied automatically at checkout) ---
+  const addTaxRate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaxName.trim() || !newTaxRate) return;
+    const { error } = await supabase.from('tax_rates').insert([{ name: newTaxName.trim(), rate_percent: parseFloat(newTaxRate) }]);
+    if (error) {
+      alert('Failed to add tax rate.');
+    } else {
+      setNewTaxName(''); setNewTaxRate('');
+      fetchTaxRates();
+    }
+  };
+
+  const deleteTaxRate = async (id: any) => {
+    if (!window.confirm('Remove this tax rate?')) return;
+    const { error } = await supabase.from('tax_rates').delete().eq('id', id);
+    if (!error) fetchTaxRates();
+  };
+
   // --- REFUND FUNCTIONS ---
   const handleRefundSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -992,6 +1191,13 @@ export default function AdminDashboard() {
     if (activeTab === 'purchases-return') fetchPurchaseReturns();
   }, [activeTab, isAuthenticated, fetchRequisitions, fetchPurchaseOrders, fetchPurchasesList, fetchPurchaseReturns]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (activeTab === 'sell-order') fetchSalesOrders();
+    if (activeTab === 'sell-all') fetchSalesData();
+    if (activeTab === 'settings-tax') fetchTaxRates();
+  }, [activeTab, isAuthenticated, fetchSalesOrders, fetchSalesData, fetchTaxRates]);
+
   const clearDateFilters = () => { setStartDate(''); setEndDate(''); };
 
   const filteredInventory = recentInventory.filter(item => {
@@ -1006,6 +1212,17 @@ export default function AdminDashboard() {
     item.status !== 'archived' &&
     (item.name.toLowerCase().includes(priceSearchQuery.toLowerCase()) ||
       item.barcode.toLowerCase().includes(priceSearchQuery.toLowerCase()))
+  );
+
+  const addSaleResults = addSaleSearchQuery === '' ? [] : recentInventory.filter(item =>
+    item.status !== 'archived' && item.quantity > 0 &&
+    (item.name.toLowerCase().includes(addSaleSearchQuery.toLowerCase()) ||
+      item.barcode.toLowerCase().includes(addSaleSearchQuery.toLowerCase()))
+  );
+
+  const allSalesFiltered = allSalesSearchQuery === '' ? salesRecord : salesRecord.filter(sale =>
+    (sale.dresses?.name ?? '').toLowerCase().includes(allSalesSearchQuery.toLowerCase()) ||
+    (sale.dresses?.barcode ?? '').toLowerCase().includes(allSalesSearchQuery.toLowerCase())
   );
 
   const activeStock = recentInventory.filter(item => item.status !== 'archived');
@@ -1047,6 +1264,16 @@ export default function AdminDashboard() {
     if (groupId) setExpandedGroup(groupId);
   };
 
+  // Which group's children to show in the mobile sub-tab strip, based on
+  // the currently active tab's prefix.
+  const mobileSubGroupId =
+    activeTab.startsWith('sell-') || activeTab === 'pos' || activeTab === 'refund' ? 'sell'
+    : activeTab.startsWith('products-') ? 'products'
+    : activeTab.startsWith('purchases-') ? 'purchases'
+    : activeTab.startsWith('settings-') ? 'settings'
+    : null;
+  const mobileSubGroup: any = mobileSubGroupId ? NAV_GROUPS.find((g: any) => g.id === mobileSubGroupId) : null;
+
   // --- LOGIN SCREEN ---
   if (!isAuthenticated) {
     return (
@@ -1075,7 +1302,7 @@ export default function AdminDashboard() {
               </button>
             </form>
           </div>
-          <p className="text-center text-[11px] text-muted mt-6 font-mono uppercase tracking-widest">Mymensingh · Bangladesh</p>
+          <p className="text-center text-[11px] text-muted mt-6 font-mono uppercase tracking-widest">{businessSettings.address}</p>
         </div>
       </div>
     );
@@ -1112,9 +1339,7 @@ export default function AdminDashboard() {
                     onClick={() => goToTab(item.tab)}
                     className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold transition-colors border-l-2 ${
                       activeTab === item.tab
-                        ? item.id === 'refund'
-                          ? 'border-oxblood text-oxblood bg-oxblood-light/60'
-                          : 'border-brass text-ink bg-brass-light/50'
+                        ? 'border-brass text-ink bg-brass-light/50'
                         : 'border-transparent text-muted hover:text-ink hover:bg-paper-dim'
                     }`}
                   >
@@ -1138,11 +1363,6 @@ export default function AdminDashboard() {
                   >
                     <Icon className="w-[18px] h-[18px] shrink-0" />
                     <span className="flex-1 text-left">{item.label}</span>
-                    {item.id === 'products' && lowStockItems.length > 0 && (
-                      <span className="text-[10px] font-mono font-bold bg-oxblood text-white w-5 h-5 rounded-full flex items-center justify-center shrink-0">
-                        {lowStockItems.length}
-                      </span>
-                    )}
                     <IconChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                   </button>
                   {isExpanded && (
@@ -1152,7 +1372,9 @@ export default function AdminDashboard() {
                           key={child.tab}
                           onClick={() => goToTab(child.tab, item.id)}
                           className={`w-full text-left px-3 py-2 text-[13px] font-semibold transition-colors ${
-                            activeTab === child.tab ? 'text-brass' : 'text-muted hover:text-ink'
+                            activeTab === child.tab
+                              ? child.tab === 'refund' ? 'text-oxblood' : 'text-brass'
+                              : 'text-muted hover:text-ink'
                           }`}
                         >
                           {child.label}
@@ -1194,31 +1416,25 @@ export default function AdminDashboard() {
                   key={item.id}
                   onClick={() => (item.kind === 'single' ? goToTab(item.tab) : goToTab(item.children[0].tab, item.id))}
                   className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
-                    isActive
-                      ? item.id === 'refund' ? 'text-oxblood bg-oxblood-light/60' : 'text-ink bg-brass-light/50'
-                      : 'text-muted'
+                    isActive ? 'text-ink bg-brass-light/50' : 'text-muted'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
                   {item.label}
-                  {item.id === 'products' && lowStockItems.length > 0 && (
-                    <span className="text-[9px] font-mono font-bold bg-oxblood text-white w-4 h-4 rounded-full flex items-center justify-center">{lowStockItems.length}</span>
-                  )}
                 </button>
               );
             })}
           </div>
-          {(activeTab.startsWith('products-') || activeTab.startsWith('purchases-')) && (
+          {mobileSubGroup && (
             <div className="flex overflow-x-auto px-2 pb-2 gap-1 border-t border-thread pt-2">
-              {(activeTab.startsWith('products-')
-                ? NAV_GROUPS.find((g: any) => g.id === 'products') as any
-                : NAV_GROUPS.find((g: any) => g.id === 'purchases') as any
-              ).children.map((child: any) => (
+              {mobileSubGroup.children.map((child: any) => (
                 <button
                   key={child.tab}
                   onClick={() => setActiveTab(child.tab)}
                   className={`whitespace-nowrap px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide transition-colors ${
-                    activeTab === child.tab ? 'text-brass bg-brass-light/40' : 'text-muted'
+                    activeTab === child.tab
+                      ? child.tab === 'refund' ? 'text-oxblood bg-oxblood-light/40' : 'text-brass bg-brass-light/40'
+                      : 'text-muted'
                   }`}
                 >
                   {child.label}
@@ -2316,6 +2532,271 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* SELL: SALES ORDER */}
+            {activeTab === 'sell-order' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 print:hidden">
+                <div className="lg:col-span-5">
+                  <div className="bg-canvas p-7 border border-thread">
+                    <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                      <IconCalendar className="w-4 h-4 text-brass" />
+                      New Sales Order
+                    </h3>
+                    <p className="text-sm text-muted mb-6">Log a customer pre-order to fulfill later — no stock is deducted until you ring it up at the till.</p>
+                    {soMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${soMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{soMessage.text}</div>}
+                    <form onSubmit={handleAddSalesOrder} className="space-y-5">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Customer Name</label>
+                          <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={soCustomerName} onChange={(e) => setSoCustomerName(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Customer Phone</label>
+                          <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Optional" value={soCustomerPhone} onChange={(e) => setSoCustomerPhone(e.target.value)} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Item Wanted</label>
+                        <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="e.g., Maroon Panjabi - Large" value={soItemDescription} onChange={(e) => setSoItemDescription(e.target.value)} />
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Quantity</label>
+                          <input required type="number" min="1" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" value={soQuantity} onChange={(e) => setSoQuantity(e.target.value)} />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Agreed Price (৳)</label>
+                          <input type="number" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Optional" value={soUnitPrice} onChange={(e) => setSoUnitPrice(e.target.value)} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Needed By</label>
+                        <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={soExpectedDate} onChange={(e) => setSoExpectedDate(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Notes</label>
+                        <textarea rows={2} className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors resize-none" placeholder="Optional" value={soNotes} onChange={(e) => setSoNotes(e.target.value)} />
+                      </div>
+                      <button type="submit" className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                        Log Sales Order
+                      </button>
+                    </form>
+                  </div>
+                </div>
+                <div className="lg:col-span-7">
+                  <div className="bg-canvas border border-thread h-full flex flex-col">
+                    <div className="flex items-center justify-between px-7 pt-7 mb-5">
+                      <h3 className="text-base font-bold text-ink">Sales Orders</h3>
+                      <span className="text-muted text-xs font-mono font-bold">{salesOrders.length} LOGGED</span>
+                    </div>
+                    <div className="stitch mx-7 mb-1" />
+                    <div className="px-7 py-2 divide-y divide-thread overflow-y-auto max-h-[560px]">
+                      {salesOrders.length === 0 ? (
+                        <p className="text-center py-12 text-sm text-muted">No sales orders logged yet.</p>
+                      ) : (
+                        salesOrders.map((so: any) => (
+                          <div key={so.id} className="py-4 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-bold text-ink text-sm truncate">{so.item_description}</p>
+                              <p className="text-xs text-muted mt-0.5">
+                                {so.customer_name} · {so.quantity}x{so.unit_price ? ` · ৳${so.unit_price}` : ''}{so.expected_date ? ` · by ${new Date(so.expected_date).toLocaleDateString('en-BD')}` : ''}
+                              </p>
+                            </div>
+                            <select
+                              value={so.status}
+                              onChange={(e) => updateSalesOrderStatus(so.id, e.target.value)}
+                              className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 border-0 outline-none cursor-pointer shrink-0 ${
+                                so.status === 'fulfilled' ? 'bg-moss-light text-moss'
+                                : so.status === 'cancelled' ? 'bg-oxblood-light text-oxblood'
+                                : 'bg-brass-light text-brass-dark'
+                              }`}
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="fulfilled">Fulfilled</option>
+                              <option value="cancelled">Cancelled</option>
+                            </select>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div className="pb-7" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SELL: ALL SALES */}
+            {activeTab === 'sell-all' && (
+              <div className="print:hidden">
+                <div className="bg-canvas border border-thread overflow-hidden">
+                  <div className="flex items-center justify-between p-7 pb-5 gap-4">
+                    <h3 className="text-base font-bold text-ink">All Sales</h3>
+                    <div className="relative w-64">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted">
+                        <IconSearch className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search item or barcode..."
+                        className="w-full pl-9 pr-3 py-2 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                        value={allSalesSearchQuery}
+                        onChange={(e) => setAllSalesSearchQuery(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread">
+                          <th className="p-4 font-bold">Date & Time</th>
+                          <th className="p-4 font-bold">Item Details</th>
+                          <th className="p-4 font-bold">Method</th>
+                          <th className="p-4 font-bold">Status</th>
+                          <th className="p-4 font-bold text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-thread">
+                        {allSalesFiltered.length === 0 && (
+                          <tr><td colSpan={5} className="p-8 text-center text-muted font-medium">No matching sales.</td></tr>
+                        )}
+                        {allSalesFiltered.map((sale) => (
+                          <tr key={sale.id} className={sale.status === 'refunded' ? 'opacity-50' : ''}>
+                            <td className="p-4 text-sm text-muted whitespace-nowrap font-mono">{new Date(sale.sold_at).toLocaleString('en-BD')}</td>
+                            <td className="p-4">
+                              <p className={`text-sm font-bold ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
+                              <span className="text-xs font-mono text-muted">{sale.dresses?.barcode}</span>
+                            </td>
+                            <td className="p-4">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-ink bg-paper-dim px-2 py-1">
+                                {sale.transaction_id === 'BANK/CARD-SALE' ? 'BANK/CARD' : sale.payment_method}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${sale.status === 'refunded' ? 'bg-paper-dim text-muted' : 'bg-moss-light text-moss'}`}>
+                                {sale.status}
+                              </span>
+                            </td>
+                            <td className={`p-4 text-right text-sm font-mono font-bold whitespace-nowrap ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>
+                              ৳{sale.amount_paid}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SELL: ADD SALE (search-based quick sale, no scanner needed) */}
+            {activeTab === 'sell-add' && (
+              <div className="max-w-xl print:hidden">
+                <div className="bg-canvas p-7 border border-thread">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconBag className="w-4 h-4 text-brass" />
+                    Add Sale
+                  </h3>
+                  <p className="text-sm text-muted mb-6">Find a product by name when there's no barcode to scan, then complete the sale directly.</p>
+
+                  {addSaleMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${addSaleMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{addSaleMessage.text}</div>}
+
+                  {!addSaleSelectedItem ? (
+                    <>
+                      <div className="relative mb-4">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted">
+                          <IconSearch className="h-4 w-4" />
+                        </div>
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Search product by name..."
+                          className="w-full pl-11 pr-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors"
+                          value={addSaleSearchQuery}
+                          onChange={(e) => setAddSaleSearchQuery(e.target.value)}
+                        />
+                      </div>
+                      <div className="divide-y divide-thread max-h-[400px] overflow-y-auto">
+                        {addSaleSearchQuery !== '' && addSaleResults.length === 0 && (
+                          <p className="text-center py-8 text-sm text-muted">No in-stock items match that search.</p>
+                        )}
+                        {addSaleResults.map(item => (
+                          <button key={item.id} onClick={() => selectAddSaleItem(item)} className="w-full py-3 flex items-center justify-between gap-3 text-left hover:bg-paper-dim transition-colors px-2">
+                            <div className="min-w-0">
+                              <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                              <p className="text-xs text-muted font-mono">{item.barcode} · {item.quantity} in stock</p>
+                            </div>
+                            <p className="font-mono font-bold text-ink text-sm shrink-0">৳{item.price}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-5">
+                      <div className="bg-paper-dim p-4 border border-thread flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-ink text-sm">{addSaleSelectedItem.name}</p>
+                          <p className="text-xs text-muted font-mono mt-0.5">{addSaleSelectedItem.barcode} · ৳{addSaleSelectedItem.price}</p>
+                        </div>
+                        <button onClick={() => setAddSaleSelectedItem(null)} className="text-xs font-bold text-muted hover:text-ink uppercase tracking-wide">Change</button>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold text-muted uppercase tracking-widest mb-3">Payment Method</p>
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                          {PAYMENT_METHODS.map((method) => (
+                            <button
+                              key={method}
+                              className={`py-2.5 text-[11px] font-bold uppercase tracking-wider border transition-colors ${
+                                addSalePaymentMethod === method ? 'bg-ink text-paper border-ink' : 'bg-canvas text-ink border-thread hover:border-thread-dark'
+                              }`}
+                              onClick={() => setAddSalePaymentMethod(method as any)}
+                            >
+                              {method}
+                            </button>
+                          ))}
+                        </div>
+                        {(addSalePaymentMethod !== 'cash' && addSalePaymentMethod !== 'bank/card') && (
+                          <input type="text" placeholder="Mobile banking TrxID" className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors mb-4" value={addSaleTrxId} onChange={(e) => setAddSaleTrxId(e.target.value)} />
+                        )}
+                      </div>
+                      <button onClick={handleCompleteAddSale} className="w-full bg-moss text-white py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors">
+                        Complete Sale
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SELL: LIST POS (recent terminal activity, compact view) */}
+            {activeTab === 'sell-list-pos' && (
+              <div className="print:hidden">
+                <div className="bg-canvas border border-thread">
+                  <div className="flex items-center justify-between px-7 pt-7 pb-5">
+                    <h3 className="text-base font-bold text-ink">Recent POS Activity</h3>
+                    <button onClick={() => goToTab('pos', 'sell')} className="bg-ink text-paper px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5">
+                      <IconScan className="w-3.5 h-3.5" /> Open POS
+                    </button>
+                  </div>
+                  <div className="stitch mx-7 mb-1" />
+                  <div className="px-7 py-2 divide-y divide-thread">
+                    {salesRecord.length === 0 ? (
+                      <p className="text-center py-12 text-sm text-muted">No sales recorded yet.</p>
+                    ) : (
+                      salesRecord.slice(0, 30).map(sale => (
+                        <div key={sale.id} className="py-3.5 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className={`font-bold text-sm truncate ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
+                            <p className="text-xs text-muted font-mono mt-0.5">{new Date(sale.sold_at).toLocaleString('en-BD')}</p>
+                          </div>
+                          <p className={`font-mono text-sm font-bold shrink-0 ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>৳{sale.amount_paid}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="pb-7" />
+                </div>
+              </div>
+            )}
+
             {/* TAB 3: REFUND */}
             {activeTab === 'refund' && (
               <div className="max-w-3xl print:hidden">
@@ -2364,6 +2845,28 @@ export default function AdminDashboard() {
                       </div>
                     ))}
                   </div>
+                </div>
+
+                <div className="bg-canvas border border-thread mt-6">
+                  <div className="p-6 border-b border-thread">
+                    <h3 className="text-base font-bold text-ink">Recent Returns</h3>
+                  </div>
+                  <div className="divide-y divide-thread px-7">
+                    {salesRecord.filter(s => s.status === 'refunded').length === 0 ? (
+                      <p className="text-center py-10 text-sm text-muted">No returns recorded yet.</p>
+                    ) : (
+                      salesRecord.filter(s => s.status === 'refunded').slice(0, 10).map(sale => (
+                        <div key={sale.id} className="py-4 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-bold text-ink text-sm truncate">{sale.dresses?.name}</p>
+                            <p className="text-xs text-muted font-mono mt-0.5">{new Date(sale.sold_at).toLocaleString('en-BD')}</p>
+                          </div>
+                          <p className="font-mono text-sm font-bold text-oxblood shrink-0">৳{sale.amount_paid}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="pb-6" />
                 </div>
               </div>
             )}
@@ -2471,6 +2974,157 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* SETTINGS: BUSINESS SETTINGS */}
+            {activeTab === 'settings-business' && (
+              <div className="max-w-xl print:hidden">
+                <div className="bg-canvas p-7 border border-thread">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconSettingsGear className="w-4 h-4 text-brass" />
+                    Business Settings
+                  </h3>
+                  <p className="text-sm text-muted mb-6">Your shop's address and phone — shown on the login screen and printed on every receipt.</p>
+                  {settingsSaved === 'business' && <div className="px-4 py-3 mb-5 text-sm font-semibold border bg-moss-light text-moss border-moss/20">Saved.</div>}
+                  <div className="space-y-5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Business Name</label>
+                      <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={businessSettings.business_name} onChange={(e) => setBusinessSettings({ ...businessSettings, business_name: e.target.value })} />
+                      <p className="text-xs text-muted mt-1.5">Stored for your records — the sidebar wordmark stays "CRAVE ABS" by design.</p>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Address</label>
+                      <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={businessSettings.address} onChange={(e) => setBusinessSettings({ ...businessSettings, address: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Phone</label>
+                      <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Optional — printed on receipts if set" value={businessSettings.phone} onChange={(e) => setBusinessSettings({ ...businessSettings, phone: e.target.value })} />
+                    </div>
+                    <button
+                      onClick={() => saveBusinessSettings({ business_name: businessSettings.business_name, address: businessSettings.address, phone: businessSettings.phone }, 'business')}
+                      className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SETTINGS: INVOICE SETTINGS */}
+            {activeTab === 'settings-invoice' && (
+              <div className="max-w-xl print:hidden">
+                <div className="bg-canvas p-7 border border-thread">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconReceipt className="w-4 h-4 text-brass" />
+                    Invoice Settings
+                  </h3>
+                  <p className="text-sm text-muted mb-6">The two footer lines printed at the bottom of every receipt.</p>
+                  {settingsSaved === 'invoice' && <div className="px-4 py-3 mb-5 text-sm font-semibold border bg-moss-light text-moss border-moss/20">Saved.</div>}
+                  <div className="space-y-5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Footer Line 1</label>
+                      <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={businessSettings.receipt_footer_line1} onChange={(e) => setBusinessSettings({ ...businessSettings, receipt_footer_line1: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Footer Line 2</label>
+                      <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={businessSettings.receipt_footer_line2} onChange={(e) => setBusinessSettings({ ...businessSettings, receipt_footer_line2: e.target.value })} />
+                    </div>
+                    <div className="bg-paper-dim border border-thread p-4">
+                      <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-2">Receipt Preview</p>
+                      <p className="text-center text-xs font-bold font-mono text-ink">{businessSettings.receipt_footer_line1}</p>
+                      <p className="text-center text-[10px] font-mono text-muted mt-1">{businessSettings.receipt_footer_line2}</p>
+                    </div>
+                    <button
+                      onClick={() => saveBusinessSettings({ receipt_footer_line1: businessSettings.receipt_footer_line1, receipt_footer_line2: businessSettings.receipt_footer_line2 }, 'invoice')}
+                      className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SETTINGS: BARCODE SETTINGS */}
+            {activeTab === 'settings-barcode' && (
+              <div className="max-w-xl print:hidden">
+                <div className="bg-canvas p-7 border border-thread">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconScan className="w-4 h-4 text-brass" />
+                    Barcode Settings
+                  </h3>
+                  <p className="text-sm text-muted mb-6">A short prefix for barcodes you write yourself on items without a manufacturer tag.</p>
+                  {settingsSaved === 'barcode' && <div className="px-4 py-3 mb-5 text-sm font-semibold border bg-moss-light text-moss border-moss/20">Saved.</div>}
+                  <div className="space-y-5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Barcode Prefix</label>
+                      <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono uppercase transition-colors" maxLength={10} value={businessSettings.barcode_prefix} onChange={(e) => setBusinessSettings({ ...businessSettings, barcode_prefix: e.target.value.toUpperCase() })} />
+                      <p className="text-xs text-muted mt-1.5">e.g. a tag reading <span className="font-mono font-bold text-ink">{businessSettings.barcode_prefix || 'CRV'}-0142</span> for the 142nd hand-tagged item.</p>
+                    </div>
+                    <button
+                      onClick={() => saveBusinessSettings({ barcode_prefix: businessSettings.barcode_prefix }, 'barcode')}
+                      className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SETTINGS: TAX RATES */}
+            {activeTab === 'settings-tax' && (
+              <div className="max-w-xl print:hidden">
+                <div className="bg-canvas border border-thread">
+                  <div className="px-7 pt-7 pb-5">
+                    <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                      <IconFileText className="w-4 h-4 text-brass" />
+                      Tax Rates
+                    </h3>
+                    <p className="text-sm text-muted mt-1">Keep a record of the tax rates you work with. This list isn't applied to the POS total automatically yet — let me know if you'd like that wired in next.</p>
+                  </div>
+                  <form onSubmit={addTaxRate} className="px-7 mb-5 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Name, e.g. VAT"
+                      className="flex-1 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                      value={newTaxName}
+                      onChange={(e) => setNewTaxName(e.target.value)}
+                    />
+                    <input
+                      type="number"
+                      placeholder="%"
+                      step="0.01"
+                      className="w-24 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors text-sm"
+                      value={newTaxRate}
+                      onChange={(e) => setNewTaxRate(e.target.value)}
+                    />
+                    <button type="submit" className="bg-ink text-paper px-5 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5 shrink-0">
+                      <IconPlus className="w-3.5 h-3.5" /> Add
+                    </button>
+                  </form>
+                  <div className="stitch mx-7 mb-1" />
+                  <div className="px-7 py-2 divide-y divide-thread">
+                    {taxRates.length === 0 ? (
+                      <p className="text-center py-12 text-sm text-muted">No tax rates yet.</p>
+                    ) : (
+                      taxRates.map((t: any) => (
+                        <div key={t.id} className="py-3 flex items-center justify-between">
+                          <span className="font-semibold text-ink text-sm">{t.name}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono font-bold text-ink text-sm">{t.rate_percent}%</span>
+                            <button onClick={() => deleteTaxRate(t.id)} title="Remove" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
+                              <IconTrash className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="pb-7" />
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       </div>
@@ -2479,7 +3133,7 @@ export default function AdminDashboard() {
       {cart.length > 0 && activeTab === 'pos' && (
         <div className="hidden print:block w-[80mm] text-black font-mono text-sm p-2 mx-auto">
           <div className="text-center font-bold text-xl mb-1 tracking-widest">CRAVE ABS</div>
-          <div className="text-center text-xs mb-4 uppercase">Mymensingh, Bangladesh</div>
+          <div className="text-center text-xs mb-4 uppercase">{businessSettings.address}{businessSettings.phone ? ` · ${businessSettings.phone}` : ''}</div>
           <div className="border-b border-dashed border-black my-2"></div>
           <div className="flex justify-between text-xs">
             <span>Date: {new Date().toLocaleDateString()}</span>
@@ -2510,8 +3164,8 @@ export default function AdminDashboard() {
           <div className="text-xs mt-2 uppercase">Paid via: <span className="font-bold">{paymentMethod}</span></div>
           {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && <div className="text-xs font-mono mt-1">TrxID: {trxId}</div>}
           <div className="border-b border-dashed border-black my-2 mt-4"></div>
-          <div className="text-center text-xs font-bold mt-2">THANK YOU FOR SHOPPING!</div>
-          <div className="text-center text-[10px] mt-1">No refunds without receipt.</div>
+          <div className="text-center text-xs font-bold mt-2">{businessSettings.receipt_footer_line1}</div>
+          <div className="text-center text-[10px] mt-1">{businessSettings.receipt_footer_line2}</div>
         </div>
       )}
 
