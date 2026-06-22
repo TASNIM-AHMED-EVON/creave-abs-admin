@@ -223,8 +223,11 @@ const FALLBACK_CATEGORIES = ['Panjabi', 'Shirt', 'T-Shirt', 'Pant', '0-5 Years',
 
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [username, setUsername] = useState('CraveABS');
+  const [authChecked, setAuthChecked] = useState(false);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
@@ -521,59 +524,72 @@ export default function AdminDashboard() {
   }, []);
 
   // Business name/address are shown on the login screen too, before any
-  // session check runs, so fetch them unconditionally on first mount.
+  // session exists, so fetch them unconditionally on first mount. (The RLS
+  // policy on business_settings allows public SELECT for exactly this
+  // reason — see migration_005.)
   useEffect(() => {
     fetchBusinessSettings();
   }, [fetchBusinessSettings]);
 
-  // --- 24-HOUR AUTO LOGIN SESSION CHECK ---
-  useEffect(() => {
-    const savedSessionTime = localStorage.getItem('crave_abs_session_start');
-    if (savedSessionTime) {
-      const loginTimestamp = parseInt(savedSessionTime, 10);
-      const continuousDuration = Date.now() - loginTimestamp;
-      const twentyFourHours = 24 * 60 * 60 * 1000;
-
-      if (continuousDuration < twentyFourHours) {
-        setIsAuthenticated(true);
-        fetchRecentInventory();
-        fetchSalesData();
-        fetchOverviewData();
-        fetchCategories();
-        fetchUnits();
-        fetchBrands();
-        fetchBusinessSettings();
-        fetchTaxRates();
-      } else {
-        localStorage.removeItem('crave_abs_session_start');
-      }
-    }
+  const loadAuthenticatedData = useCallback(() => {
+    fetchRecentInventory();
+    fetchSalesData();
+    fetchOverviewData();
+    fetchCategories();
+    fetchUnits();
+    fetchBrands();
+    fetchBusinessSettings();
+    fetchTaxRates();
   }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings, fetchTaxRates]);
 
+  // --- REAL SUPABASE AUTH SESSION HANDLING ---
+  // Replaces the old localStorage timer: Supabase's own client keeps the
+  // session (and its refresh token) in localStorage under its own keys and
+  // refreshes it automatically, so there's nothing custom to manage here —
+  // just ask it for the current session once, then listen for changes.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setIsAuthenticated(true);
+        loadAuthenticatedData();
+      }
+      setAuthChecked(true);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        setIsAuthenticated(true);
+        loadAuthenticatedData();
+      }
+      if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false);
+      }
+    });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auth Submit Handler
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === "CraveABS" && password === "CRAVE_ABS_2026") {
-      localStorage.setItem('crave_abs_session_start', Date.now().toString());
-      setIsAuthenticated(true);
-      fetchRecentInventory();
-      fetchSalesData();
-      fetchOverviewData();
-      fetchCategories();
-      fetchUnits();
-      fetchBrands();
-      fetchBusinessSettings();
-      fetchTaxRates();
-    } else {
-      alert("Incorrect username or password");
+    setLoginError('');
+    setLoginSubmitting(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoginSubmitting(false);
+    if (error) {
+      setLoginError('Incorrect email or password.');
     }
+    // On success, onAuthStateChange (above) fires SIGNED_IN and handles
+    // setting isAuthenticated + loading data — nothing else to do here.
   };
 
   // Logout Handler
-  const handleLogout = () => {
-    localStorage.removeItem('crave_abs_session_start');
-    setIsAuthenticated(false);
-    setUsername('CraveABS');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setEmail('');
     setPassword('');
   };
 
@@ -1313,6 +1329,17 @@ export default function AdminDashboard() {
     : null;
   const mobileSubGroup: any = mobileSubGroupId ? NAV_GROUPS.find((g: any) => g.id === mobileSubGroupId) : null;
 
+  // --- AUTH CHECK GATE ---
+  // Avoids flashing the login screen while we ask Supabase whether a
+  // session already exists (e.g. on a page refresh).
+  if (!authChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-paper px-4">
+        <div className="barcode-stripe h-6 w-28 opacity-50" />
+      </div>
+    );
+  }
+
   // --- LOGIN SCREEN ---
   if (!isAuthenticated) {
     return (
@@ -1325,31 +1352,42 @@ export default function AdminDashboard() {
               <p className="text-muted mt-2 text-xs font-mono uppercase tracking-[0.2em]">Admin Console</p>
               <div className="stitch mt-6" />
             </div>
+            {loginError && (
+              <div className="px-4 py-3 mb-5 text-sm font-semibold border bg-oxblood-light text-oxblood border-oxblood/20 text-center">{loginError}</div>
+            )}
             <form onSubmit={handleLogin} className="space-y-5">
               <div>
-                <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Username</label>
+                <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Email</label>
                 <input
-                  type="text"
-                  placeholder="Username"
+                  type="email"
+                  required
+                  placeholder="you@example.com"
                   className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass transition-colors outline-none text-ink font-mono text-center"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   autoCapitalize="none"
                   autoCorrect="off"
+                  autoComplete="username"
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Admin Password</label>
+                <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Password</label>
                 <input
                   type="password"
+                  required
                   placeholder="••••••••••"
                   className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass transition-colors outline-none text-ink font-mono text-center"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
                 />
               </div>
-              <button type="submit" className="w-full bg-ink text-paper font-bold text-sm uppercase tracking-wider py-3.5 hover:bg-brass-dark transition-colors">
-                Access System
+              <button
+                type="submit"
+                disabled={loginSubmitting}
+                className="w-full bg-ink text-paper font-bold text-sm uppercase tracking-wider py-3.5 hover:bg-brass-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loginSubmitting ? 'Checking…' : 'Access System'}
               </button>
             </form>
           </div>
