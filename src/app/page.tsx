@@ -1343,55 +1343,192 @@ export default function AdminDashboard() {
   // --- LOGIN SCREEN ---
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-paper px-4">
-        <div className="w-full max-w-[400px]">
-          <div className="barcode-stripe h-6 w-28 mx-auto mb-8 opacity-70" />
-          <div className="bg-canvas px-10 pt-10 pb-9 border border-thread shadow-sm">
-            <div className="text-center mb-8">
-              <h1 className="font-display text-3xl text-ink tracking-tight">CRAVE <em className="not-italic text-brass">ABS</em></h1>
-              <p className="text-muted mt-2 text-xs font-mono uppercase tracking-[0.2em]">Admin Console</p>
-              <div className="stitch mt-6" />
-            </div>
+      <div className="login-bg flex min-h-screen items-center justify-center px-4">
+        <style>{`
+          .login-bg {
+            background: #050505;
+          }
+          .glow-card-wrap {
+            position: relative;
+            width: 380px;
+            max-width: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0,243,255,0.15), 0 0 60px rgba(255,0,200,0.1);
+          }
+          .glow-card-wrap::before {
+            content: '';
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            top: -25%;
+            left: -25%;
+            background: conic-gradient(#00f3ff, #ff00c8, #00f3ff, #ff00c8, #00f3ff);
+            animation: glow-spin 4s linear infinite;
+            z-index: 0;
+          }
+          .glow-card-wrap::after {
+            content: '';
+            position: absolute;
+            inset: 2.5px;
+            background: #0f0f11;
+            border-radius: 14px;
+            z-index: 1;
+          }
+          @keyframes glow-spin {
+            0%   { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          .glow-card-inner {
+            position: relative;
+            z-index: 2;
+            padding: 50px 44px 44px;
+          }
+          .glow-wordmark {
+            font-size: 2rem;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            color: #ffffff;
+            text-align: center;
+            margin-bottom: 4px;
+          }
+          .glow-wordmark span {
+            color: #ff00c8;
+            text-shadow: 0 0 12px #ff00c8;
+          }
+          .glow-subtitle {
+            text-align: center;
+            font-size: 10px;
+            letter-spacing: 0.25em;
+            text-transform: uppercase;
+            color: #00f3ff;
+            text-shadow: 0 0 8px #00f3ff;
+            margin-bottom: 36px;
+            font-family: monospace;
+          }
+          .glow-divider {
+            border: none;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            margin-bottom: 32px;
+          }
+          .glow-error {
+            background: rgba(255,0,100,0.12);
+            border: 1px solid rgba(255,0,100,0.3);
+            color: #ff6b8a;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 10px 16px;
+            border-radius: 6px;
+            text-align: center;
+            margin-bottom: 20px;
+          }
+          .glow-label {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 8px;
+            font-family: monospace;
+          }
+          .glow-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1.5px solid rgba(255,255,255,0.2);
+            color: #fff;
+            font-size: 15px;
+            padding: 8px 0;
+            outline: none;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            font-family: monospace;
+            margin-bottom: 28px;
+          }
+          .glow-input:focus {
+            border-bottom-color: #00f3ff;
+            box-shadow: 0 4px 8px -4px #00f3ff;
+          }
+          .glow-input::placeholder { color: rgba(255,255,255,0.25); }
+          .glow-btn {
+            width: 100%;
+            padding: 14px;
+            background: transparent;
+            color: #00f3ff;
+            border: 1.5px solid #00f3ff;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background 0.25s, box-shadow 0.25s, color 0.25s;
+            margin-top: 4px;
+          }
+          .glow-btn:hover:not(:disabled) {
+            background: #00f3ff;
+            color: #050505;
+            box-shadow: 0 0 24px #00f3ff, inset 0 0 12px rgba(0,243,255,0.3);
+          }
+          .glow-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+          }
+          .glow-footer {
+            text-align: center;
+            font-size: 10px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.2);
+            margin-top: 28px;
+            font-family: monospace;
+          }
+        `}</style>
+
+        <div className="glow-card-wrap">
+          <div className="glow-card-inner">
+            <div className="glow-wordmark">CRAVE <span>ABS</span></div>
+            <div className="glow-subtitle">Admin Console</div>
+            <hr className="glow-divider" />
+
             {loginError && (
-              <div className="px-4 py-3 mb-5 text-sm font-semibold border bg-oxblood-light text-oxblood border-oxblood/20 text-center">{loginError}</div>
+              <div className="glow-error">{loginError}</div>
             )}
-            <form onSubmit={handleLogin} className="space-y-5">
-              <div>
-                <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Email</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="you@example.com"
-                  className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass transition-colors outline-none text-ink font-mono text-center"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  autoComplete="username"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Password</label>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••••"
-                  className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass transition-colors outline-none text-ink font-mono text-center"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                />
-              </div>
+
+            <form onSubmit={handleLogin}>
+              <label className="glow-label">Email</label>
+              <input
+                type="email"
+                required
+                placeholder="you@example.com"
+                className="glow-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="username"
+              />
+              <label className="glow-label">Password</label>
+              <input
+                type="password"
+                required
+                placeholder="••••••••"
+                className="glow-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
               <button
                 type="submit"
                 disabled={loginSubmitting}
-                className="w-full bg-ink text-paper font-bold text-sm uppercase tracking-wider py-3.5 hover:bg-brass-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="glow-btn"
               >
-                {loginSubmitting ? 'Checking…' : 'Access System'}
+                {loginSubmitting ? 'Signing in…' : 'Access System'}
               </button>
             </form>
+
+            <div className="glow-footer">{businessSettings.address}</div>
           </div>
-          <p className="text-center text-[11px] text-muted mt-6 font-mono uppercase tracking-widest">{businessSettings.address}</p>
         </div>
       </div>
     );
