@@ -1577,23 +1577,88 @@ export default function AdminDashboard() {
         <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 bg-canvas border-r border-thread print:hidden" style={{ transition: 'background 0.25s' }}>
 
           {/* ── Brand header ── */}
+          <style>{`
+            @keyframes brand-glow {
+              0%, 100% {
+                text-shadow:
+                  0 0 6px rgba(168,118,59,0.6),
+                  0 0 14px rgba(168,118,59,0.4),
+                  0 0 28px rgba(168,118,59,0.2);
+              }
+              50% {
+                text-shadow:
+                  0 0 10px rgba(196,154,74,0.9),
+                  0 0 22px rgba(196,154,74,0.6),
+                  0 0 40px rgba(196,154,74,0.35),
+                  0 0 60px rgba(0,200,255,0.15);
+              }
+            }
+            @keyframes bar-glow {
+              0%, 100% {
+                box-shadow: 0 0 4px rgba(168,118,59,0.5), 0 0 10px rgba(168,118,59,0.3);
+                opacity: 0.75;
+              }
+              50% {
+                box-shadow: 0 0 8px rgba(196,154,74,1), 0 0 18px rgba(196,154,74,0.6), 0 0 30px rgba(0,200,255,0.2);
+                opacity: 1;
+              }
+            }
+            @keyframes bar-dance {
+              0%,100% { transform: scaleY(1); }
+              50%      { transform: scaleY(0.65); }
+            }
+            .brand-wordmark {
+              animation: brand-glow 2.4s ease-in-out infinite;
+            }
+            .brand-wordmark-abs {
+              animation: brand-glow 2.4s ease-in-out infinite 0.3s;
+              color: var(--color-brass);
+            }
+            .brand-bar {
+              animation: bar-glow 2.4s ease-in-out infinite, bar-dance 1.2s ease-in-out infinite;
+              border-radius: 2px;
+            }
+            .brand-bar:nth-child(1)  { animation-delay: 0s,    0s; }
+            .brand-bar:nth-child(2)  { animation-delay: 0.05s, 0.1s; }
+            .brand-bar:nth-child(3)  { animation-delay: 0.1s,  0.2s; }
+            .brand-bar:nth-child(4)  { animation-delay: 0.05s, 0.05s; }
+            .brand-bar:nth-child(5)  { animation-delay: 0.15s, 0.3s; }
+            .brand-bar:nth-child(6)  { animation-delay: 0.0s,  0.15s; }
+            .brand-bar:nth-child(7)  { animation-delay: 0.1s,  0.05s; }
+            .brand-bar:nth-child(8)  { animation-delay: 0.2s,  0.25s; }
+            .brand-bar:nth-child(9)  { animation-delay: 0.05s, 0.1s; }
+            .brand-bar:nth-child(10) { animation-delay: 0.15s, 0.0s; }
+            .brand-subtitle {
+              animation: brand-glow 2.4s ease-in-out infinite 0.6s;
+              color: var(--color-brass);
+              opacity: 0.8;
+            }
+          `}</style>
+
           <div className="px-6 pt-7 pb-5">
             <div className="flex items-center gap-3 mb-1">
-              {/* Mini barcode brand mark */}
-              <div className="flex items-end gap-[2px] h-7 shrink-0">
+              {/* Animated barcode brand mark */}
+              <div className="flex items-end gap-[2.5px] h-7 shrink-0">
                 {[3,5,2,6,3,4,6,2,5,3].map((h, i) => (
-                  <div key={i} className="w-[2px] bg-brass rounded-full opacity-80" style={{ height: `${h * 4}px` }} />
+                  <div
+                    key={i}
+                    className="brand-bar w-[2.5px] bg-brass"
+                    style={{ height: `${h * 4}px` }}
+                  />
                 ))}
               </div>
               <div>
-                <h1 className="font-display text-xl text-ink tracking-tight leading-none">CRAVE <em className="not-italic text-brass">ABS</em></h1>
-                <p className="text-[9px] font-mono uppercase tracking-[0.22em] text-muted mt-0.5">Admin Console</p>
+                <h1 className="font-display text-xl tracking-tight leading-none">
+                  <span className="brand-wordmark text-ink">CRAVE </span>
+                  <em className="brand-wordmark-abs not-italic">ABS</em>
+                </h1>
+                <p className="brand-subtitle text-[9px] font-mono uppercase tracking-[0.22em] mt-0.5">Admin Console</p>
               </div>
             </div>
           </div>
 
-          {/* Subtle gradient separator */}
-          <div className="mx-5 h-px" style={{ background: 'linear-gradient(to right, transparent, var(--color-thread-dark), transparent)' }} />
+          {/* Glowing gradient separator */}
+          <div className="mx-5 h-px" style={{ background: 'linear-gradient(to right, transparent, var(--color-brass), transparent)', opacity: 0.4, boxShadow: '0 0 8px rgba(168,118,59,0.5)' }} />
 
           {/* ── Navigation ── */}
           <nav className="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto">
