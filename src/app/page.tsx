@@ -230,6 +230,7 @@ export default function AdminDashboard() {
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const [isDark, setIsDark] = useState(false);
 
   // POS State
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -522,6 +523,31 @@ export default function AdminDashboard() {
     const { data } = await supabase.from('tax_rates').select('*').order('name', { ascending: true });
     if (data) setTaxRates(data);
   }, []);
+
+  // --- DARK MODE ---
+  // Reads saved preference on first load, then toggles the `dark` class on
+  // <html> so every CSS variable defined in globals.css flips at once —
+  // no Tailwind `dark:` classes needed anywhere in the JSX.
+  useEffect(() => {
+    const saved = localStorage.getItem('crave_abs_theme');
+    const prefersDark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (prefersDark) {
+      document.documentElement.classList.add('dark');
+      setIsDark(true);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !isDark;
+    setIsDark(next);
+    if (next) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('crave_abs_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('crave_abs_theme', 'light');
+    }
+  };
 
   // Business name/address are shown on the login screen too, before any
   // session exists, so fetch them unconditionally on first mount. (The RLS
@@ -1614,7 +1640,30 @@ export default function AdminDashboard() {
           </nav>
 
           <div className="stitch mx-7 mb-4" />
-          <div className="px-4 pb-7">
+          <div className="px-4 pb-7 space-y-1">
+            {/* Dark / Light mode toggle */}
+            <button
+              onClick={toggleTheme}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-muted hover:text-ink hover:bg-paper-dim transition-colors"
+            >
+              {isDark ? (
+                <>
+                  <svg className="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                    <circle cx="12" cy="12" r="4.5" />
+                    <path strokeLinecap="round" d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                  </svg>
+                  Light Mode
+                </>
+              ) : (
+                <>
+                  <svg className="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z" />
+                  </svg>
+                  Dark Mode
+                </>
+              )}
+            </button>
+
             <button
               onClick={handleLogout}
               className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-oxblood hover:bg-oxblood-light/60 transition-colors"
@@ -1629,9 +1678,27 @@ export default function AdminDashboard() {
         <div className="lg:hidden sticky top-0 z-50 bg-canvas border-b border-thread print:hidden">
           <div className="flex items-center justify-between px-5 h-16">
             <h1 className="font-display text-xl text-ink tracking-tight">CRAVE <em className="not-italic text-brass">ABS</em></h1>
-            <button onClick={handleLogout} className="text-[11px] font-bold uppercase tracking-wider text-oxblood">
-              Log Out
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleTheme}
+                className="w-8 h-8 flex items-center justify-center rounded-full border border-thread text-muted hover:text-ink hover:border-thread-dark transition-colors"
+                title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              >
+                {isDark ? (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                    <circle cx="12" cy="12" r="4.5" />
+                    <path strokeLinecap="round" d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z" />
+                  </svg>
+                )}
+              </button>
+              <button onClick={handleLogout} className="text-[11px] font-bold uppercase tracking-wider text-oxblood">
+                Log Out
+              </button>
+            </div>
           </div>
           <div className="flex overflow-x-auto px-2 pb-2 gap-1">
             {NAV_GROUPS.map((item: any) => {

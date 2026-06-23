@@ -1,15 +1,13 @@
 @import "tailwindcss";
 
-/*
-  CRAVE ABS design tokens
-  -----------------------
-  Palette is built around the shop floor, not generic SaaS gray:
-  warm paper stock, ink for type, brass for the brand accent (think
-  garment hardware — buttons, buckles, tags), oxblood for refunds/danger,
-  moss for confirmed/success states.
-*/
+/* ============================================================
+   CRAVE ABS design tokens
+   Light mode: warm paper/ink boutique palette
+   Dark mode:  deep navy blue theme
+   ============================================================ */
 
 :root {
+  /* Light mode */
   --background: #faf7f1;
   --foreground: #1c1a17;
 
@@ -31,6 +29,32 @@
 
   --color-moss: #3f6b4f;
   --color-moss-light: #e6ede3;
+}
+
+/* Dark mode — applied when <html class="dark"> */
+html.dark {
+  --background: #0d1b2e;
+  --foreground: #e2eaf4;
+
+  --color-canvas: #112240;
+  --color-paper: #0d1b2e;
+  --color-paper-dim: #0a1628;
+  --color-ink: #e2eaf4;
+  --color-muted: #7a9bbf;
+
+  --color-thread: #1e3a5f;
+  --color-thread-dark: #2a4f7a;
+
+  /* Brass stays warm — it's the brand accent, unchanged in dark mode */
+  --color-brass: #c49a4a;
+  --color-brass-dark: #a8763b;
+  --color-brass-light: #1e3050;
+
+  --color-oxblood: #e05c5c;
+  --color-oxblood-light: #1f1520;
+
+  --color-moss: #4caf80;
+  --color-moss-light: #0f2820;
 }
 
 @theme inline {
@@ -65,10 +89,10 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
-/* Signature motif: a stitched seam, used as the one recurring structural
-   device — section dividers, card tops, the wordmark underline. */
+/* Signature motif: stitched seam */
 .stitch {
   background-image: linear-gradient(
     to right,
@@ -97,8 +121,7 @@ body {
   width: 1.5px;
 }
 
-/* Secondary motif: a thin barcode stripe, used sparingly as a brand mark
-   on the login screen and sidebar header. */
+/* Barcode stripe motif */
 .barcode-stripe {
   background-image: repeating-linear-gradient(
     90deg,
@@ -122,7 +145,6 @@ body {
   color: var(--color-ink);
 }
 
-/* Quiet, deliberate focus ring rather than the browser default */
 :focus-visible {
   outline: 2px solid var(--color-brass);
   outline-offset: 2px;
