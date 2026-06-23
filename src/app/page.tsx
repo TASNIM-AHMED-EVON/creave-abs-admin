@@ -1574,28 +1574,44 @@ export default function AdminDashboard() {
       <div className="lg:flex">
 
         {/* ---- Sidebar (desktop) ---- */}
-        <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 bg-canvas border-r border-thread print:hidden">
-          <div className="px-7 pt-8 pb-6">
-            <h1 className="font-display text-2xl text-ink tracking-tight leading-none">CRAVE <em className="not-italic text-brass">ABS</em></h1>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted mt-2">Admin Console</p>
-          </div>
-          <div className="stitch mx-7" />
+        <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 bg-canvas border-r border-thread print:hidden" style={{ transition: 'background 0.25s' }}>
 
-          <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+          {/* ── Brand header ── */}
+          <div className="px-6 pt-7 pb-5">
+            <div className="flex items-center gap-3 mb-1">
+              {/* Mini barcode brand mark */}
+              <div className="flex items-end gap-[2px] h-7 shrink-0">
+                {[3,5,2,6,3,4,6,2,5,3].map((h, i) => (
+                  <div key={i} className="w-[2px] bg-brass rounded-full opacity-80" style={{ height: `${h * 4}px` }} />
+                ))}
+              </div>
+              <div>
+                <h1 className="font-display text-xl text-ink tracking-tight leading-none">CRAVE <em className="not-italic text-brass">ABS</em></h1>
+                <p className="text-[9px] font-mono uppercase tracking-[0.22em] text-muted mt-0.5">Admin Console</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Subtle gradient separator */}
+          <div className="mx-5 h-px" style={{ background: 'linear-gradient(to right, transparent, var(--color-thread-dark), transparent)' }} />
+
+          {/* ── Navigation ── */}
+          <nav className="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto">
             {NAV_GROUPS.map((item: any) => {
               if (item.kind === 'single') {
                 const Icon = item.icon;
+                const isActive = activeTab === item.tab;
                 return (
                   <button
                     key={item.id}
                     onClick={() => goToTab(item.tab)}
-                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold transition-colors border-l-2 ${
-                      activeTab === item.tab
-                        ? 'border-brass text-ink bg-brass-light/50'
-                        : 'border-transparent text-muted hover:text-ink hover:bg-paper-dim'
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                      isActive
+                        ? 'bg-brass text-white shadow-sm'
+                        : 'text-muted hover:text-ink hover:bg-paper-dim'
                     }`}
                   >
-                    <Icon className="w-[18px] h-[18px] shrink-0" />
+                    <Icon className="w-[17px] h-[17px] shrink-0" />
                     <span className="flex-1 text-left">{item.label}</span>
                   </button>
                 );
@@ -1609,29 +1625,43 @@ export default function AdminDashboard() {
                 <div key={item.id}>
                   <button
                     onClick={() => setExpandedGroup(isExpanded ? null : item.id)}
-                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold transition-colors border-l-2 ${
-                      isGroupActive ? 'border-brass text-ink bg-brass-light/50' : 'border-transparent text-muted hover:text-ink hover:bg-paper-dim'
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                      isGroupActive
+                        ? 'text-ink bg-brass-light/60'
+                        : 'text-muted hover:text-ink hover:bg-paper-dim'
                     }`}
                   >
-                    <Icon className="w-[18px] h-[18px] shrink-0" />
+                    <Icon className="w-[17px] h-[17px] shrink-0" />
                     <span className="flex-1 text-left">{item.label}</span>
-                    <IconChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                    <IconChevronDown className={`w-3 h-3 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                   </button>
+
                   {isExpanded && (
-                    <div className="ml-[27px] border-l border-thread pl-3 my-1 space-y-0.5">
-                      {item.children.map((child: any) => (
-                        <button
-                          key={child.tab}
-                          onClick={() => goToTab(child.tab, item.id)}
-                          className={`w-full text-left px-3 py-2 text-[13px] font-semibold transition-colors ${
-                            activeTab === child.tab
-                              ? child.tab === 'refund' ? 'text-oxblood' : 'text-brass'
-                              : 'text-muted hover:text-ink'
-                          }`}
-                        >
-                          {child.label}
-                        </button>
-                      ))}
+                    <div className="mt-0.5 mb-1 ml-4 pl-4 border-l-2 border-thread space-y-0.5">
+                      {item.children.map((child: any) => {
+                        const isChildActive = activeTab === child.tab;
+                        return (
+                          <button
+                            key={child.tab}
+                            onClick={() => goToTab(child.tab, item.id)}
+                            className={`w-full flex items-center gap-2.5 text-left px-2.5 py-2 rounded-md text-[13px] font-semibold transition-all duration-150 ${
+                              isChildActive
+                                ? child.tab === 'refund'
+                                  ? 'text-oxblood bg-oxblood-light/50'
+                                  : 'text-brass bg-brass-light/40'
+                                : 'text-muted hover:text-ink hover:bg-paper-dim'
+                            }`}
+                          >
+                            {/* Active dot indicator */}
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-all ${
+                              isChildActive
+                                ? child.tab === 'refund' ? 'bg-oxblood' : 'bg-brass'
+                                : 'bg-transparent'
+                            }`} />
+                            {child.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1639,38 +1669,41 @@ export default function AdminDashboard() {
             })}
           </nav>
 
-          <div className="stitch mx-7 mb-4" />
-          <div className="px-4 pb-7 space-y-1">
-            {/* Dark / Light mode toggle */}
+          {/* ── Bottom utility strip ── */}
+          <div className="px-4 pt-3 pb-5 space-y-1 border-t border-thread">
+
+            {/* Theme toggle — pill switch design */}
             <button
               onClick={toggleTheme}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-muted hover:text-ink hover:bg-paper-dim transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-muted hover:text-ink hover:bg-paper-dim transition-all duration-150"
             >
+              <div className={`relative w-9 h-5 rounded-full transition-colors duration-300 shrink-0 ${isDark ? 'bg-brass' : 'bg-thread-dark'}`}>
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ${isDark ? 'left-[18px]' : 'left-0.5'}`} />
+              </div>
+              <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
               {isDark ? (
-                <>
-                  <svg className="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                    <circle cx="12" cy="12" r="4.5" />
-                    <path strokeLinecap="round" d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-                  </svg>
-                  Light Mode
-                </>
+                <svg className="w-4 h-4 ml-auto text-brass shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <circle cx="12" cy="12" r="4.5" /><path strokeLinecap="round" d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg>
               ) : (
-                <>
-                  <svg className="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z" />
-                  </svg>
-                  Dark Mode
-                </>
+                <svg className="w-4 h-4 ml-auto text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z" />
+                </svg>
               )}
             </button>
 
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-oxblood hover:bg-oxblood-light/60 transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-oxblood hover:bg-oxblood-light/50 transition-all duration-150"
             >
-              <IconLogout className="w-[18px] h-[18px]" />
+              <IconLogout className="w-[17px] h-[17px]" />
               Log Out
             </button>
+
+            {/* Version tag */}
+            <p className="text-center text-[10px] font-mono text-muted/50 uppercase tracking-widest pt-2">
+              CRAVE ABS v1.0
+            </p>
           </div>
         </aside>
 
