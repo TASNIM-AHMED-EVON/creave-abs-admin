@@ -164,6 +164,26 @@ const IconList = (p: React.SVGProps<SVGSVGElement>) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />
   </svg>
 );
+const IconUsers = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+  </svg>
+);
+const IconUserPlus = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <line x1="19" y1="8" x2="19" y2="14" />
+    <line x1="22" y1="11" x2="16" y2="11" />
+  </svg>
+);
+const IconBadge = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+  </svg>
+);
 
 const NAV_GROUPS = [
   { kind: 'single', id: 'overview', tab: 'overview', label: 'Overview', icon: IconHome },
@@ -197,6 +217,14 @@ const NAV_GROUPS = [
       { tab: 'purchases-list', label: 'List Purchases' },
       { tab: 'purchases-add', label: 'Add Purchase' },
       { tab: 'purchases-return', label: 'List Purchase Return' },
+    ],
+  },
+  {
+    kind: 'group', id: 'membership', label: 'Membership', icon: IconUsers,
+    children: [
+      { tab: 'membership-list', label: 'Members List' },
+      { tab: 'membership-add', label: 'Add Member' },
+      { tab: 'membership-settings', label: 'Membership Settings' },
     ],
   },
   {
@@ -366,6 +394,17 @@ export default function AdminDashboard() {
   const [newTaxName, setNewTaxName] = useState('');
   const [newTaxRate, setNewTaxRate] = useState('');
 
+  // --- Membership ---
+  const [members, setMembers] = useState<any[]>([]);
+  const [memberMobile, setMemberMobile] = useState('');
+  const [memberMessage, setMemberMessage] = useState({ type: '', text: '' });
+  const [memberSearch, setMemberSearch] = useState('');
+  const [membershipSettings, setMembershipSettings] = useState({ discount_percent: 10 });
+  const [membershipDiscountInput, setMembershipDiscountInput] = useState('10');
+  const [membershipSettingsSaved, setMembershipSettingsSaved] = useState(false);
+  const [memberPhone, setMemberPhone] = useState('');
+  const [memberNote, setMemberNote] = useState('');
+
   // --- INVENTORY MEMOIZED FETCH ---
   const fetchRecentInventory = useCallback(async () => {
     const { data } = await supabase
@@ -524,6 +563,98 @@ export default function AdminDashboard() {
     if (data) setTaxRates(data);
   }, []);
 
+  const fetchMembers = useCallback(async () => {
+    const { data } = await supabase
+      .from('memberships')
+      .select('*')
+      .order('start_date', { ascending: false });
+    if (data) setMembers(data);
+  }, []);
+
+  const fetchMembershipSettings = useCallback(async () => {
+    const { data } = await supabase.from('membership_settings').select('*').eq('id', 1).single();
+    if (data) {
+      setMembershipSettings(data);
+      setMembershipDiscountInput(String(data.discount_percent));
+    }
+  }, []);
+
+  // --- MEMBERSHIP HANDLERS ---
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMemberMessage({ type: '', text: '' });
+    const phone = memberPhone.trim();
+    if (!phone) return;
+
+    // Check for duplicate
+    const { data: existing } = await supabase
+      .from('memberships')
+      .select('id')
+      .eq('phone', phone)
+      .single();
+
+    if (existing) {
+      setMemberMessage({ type: 'error', text: `${phone} is already a member.` });
+      return;
+    }
+
+    const startDate = new Date();
+    const expiryDate = new Date(startDate);
+    expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+
+    const { error } = await supabase.from('memberships').insert([{
+      phone,
+      note: memberNote.trim() || null,
+      start_date: startDate.toISOString(),
+      expiry_date: expiryDate.toISOString(),
+      status: 'active',
+    }]);
+
+    if (error) {
+      setMemberMessage({ type: 'error', text: 'Failed to add member. Please try again.' });
+    } else {
+      setMemberMessage({ type: 'success', text: `${phone} enrolled. Membership valid until ${expiryDate.toLocaleDateString('en-BD')}.` });
+      setMemberPhone('');
+      setMemberNote('');
+      fetchMembers();
+    }
+  };
+
+  const renewMember = async (member: any) => {
+    const newExpiry = new Date(member.expiry_date);
+    newExpiry.setFullYear(newExpiry.getFullYear() + 1);
+    const { error } = await supabase
+      .from('memberships')
+      .update({ expiry_date: newExpiry.toISOString(), status: 'active' })
+      .eq('id', member.id);
+    if (!error) fetchMembers();
+  };
+
+  const revokeMember = async (member: any) => {
+    if (!window.confirm(`Revoke membership for ${member.phone}?`)) return;
+    const { error } = await supabase
+      .from('memberships')
+      .update({ status: 'revoked' })
+      .eq('id', member.id);
+    if (!error) fetchMembers();
+  };
+
+  const saveMembershipSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const pct = Math.min(Math.max(parseFloat(membershipDiscountInput) || 0, 0), 100);
+    const { error } = await supabase
+      .from('membership_settings')
+      .update({ discount_percent: pct })
+      .eq('id', 1);
+    if (!error) {
+      setMembershipSettings({ discount_percent: pct });
+      setMembershipSettingsSaved(true);
+      setTimeout(() => setMembershipSettingsSaved(false), 2500);
+    } else {
+      alert('Failed to save. Make sure migration_006 has been run.');
+    }
+  };
+
   // --- DARK MODE ---
   // Reads saved preference on first load, then toggles the `dark` class on
   // <html> so every CSS variable defined in globals.css flips at once —
@@ -566,7 +697,9 @@ export default function AdminDashboard() {
     fetchBrands();
     fetchBusinessSettings();
     fetchTaxRates();
-  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings, fetchTaxRates]);
+    fetchMembers();
+    fetchMembershipSettings();
+  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings]);
 
   // --- REAL SUPABASE AUTH SESSION HANDLING ---
   // Replaces the old localStorage timer: Supabase's own client keeps the
@@ -1277,7 +1410,9 @@ export default function AdminDashboard() {
     if (activeTab === 'sell-order') fetchSalesOrders();
     if (activeTab === 'sell-all') fetchSalesData();
     if (activeTab === 'settings-tax') fetchTaxRates();
-  }, [activeTab, isAuthenticated, fetchSalesOrders, fetchSalesData, fetchTaxRates]);
+    if (activeTab === 'membership-list' || activeTab === 'membership-add') fetchMembers();
+    if (activeTab === 'membership-settings') { fetchMembers(); fetchMembershipSettings(); }
+  }, [activeTab, isAuthenticated, fetchSalesOrders, fetchSalesData, fetchTaxRates, fetchMembers, fetchMembershipSettings]);
 
   const clearDateFilters = () => { setStartDate(''); setEndDate(''); };
 
@@ -1311,6 +1446,18 @@ export default function AdminDashboard() {
     .filter(item => item.quantity > 0 && item.quantity <= LOW_STOCK_THRESHOLD)
     .sort((a, b) => a.quantity - b.quantity);
   const outOfStockItems = activeStock.filter(item => item.quantity === 0);
+
+  const memberDaysLeft = (expiry: string) => {
+    const diff = new Date(expiry).getTime() - Date.now();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  };
+  const filteredMembers = members.filter(m =>
+    m.phone.includes(memberSearch) && (memberSearch === '' || true)
+  );
+  const expiringMembers = members.filter(m => {
+    const days = memberDaysLeft(m.expiry_date);
+    return m.status === 'active' && days >= 0 && days <= 30;
+  });
 
   const exportLedgerCSV = () => {
     const headers = ['Date', 'Item', 'Barcode', 'Method', 'Status', 'Amount (BDT)'];
@@ -1351,6 +1498,7 @@ export default function AdminDashboard() {
     activeTab.startsWith('sell-') || activeTab === 'pos' || activeTab === 'refund' ? 'sell'
     : activeTab.startsWith('products-') ? 'products'
     : activeTab.startsWith('purchases-') ? 'purchases'
+    : activeTab.startsWith('membership-') ? 'membership'
     : activeTab.startsWith('settings-') ? 'settings'
     : null;
   const mobileSubGroup: any = mobileSubGroupId ? NAV_GROUPS.find((g: any) => g.id === mobileSubGroupId) : null;
@@ -3299,6 +3447,110 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* MEMBERSHIP: MEMBERS LIST */}
+            {activeTab === 'membership-list' && (
+              <div className="print:hidden">
+                <div className="bg-canvas border border-thread">
+                  <div className="flex items-center justify-between px-7 pt-7 pb-5 gap-4 flex-wrap">
+                    <div>
+                      <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                        <IconUsers className="w-4 h-4 text-brass" />
+                        All Members
+                      </h3>
+                      <p className="text-xs text-muted mt-1 font-mono">
+                        {members.filter(m => m.status === 'active').length} active ·{' '}
+                        {members.filter(m => {
+                          if (m.status !== 'active') return false;
+                          const days = Math.ceil((new Date(m.expiry_date).getTime() - Date.now()) / 86400000);
+                          return days >= 0 && days <= 30;
+                        }).length} expiring within 30 days ·{' '}
+                        Discount: <span className="text-brass font-bold">{membershipSettings.discount_percent}%</span>
+                      </p>
+                    </div>
+                    <div className="relative w-60">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted">
+                        <IconSearch className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search by phone..."
+                        className="w-full pl-9 pr-3 py-2 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm font-mono"
+                        value={memberSearch}
+                        onChange={(e) => setMemberSearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread">
+                          <th className="p-4 font-bold">Mobile Number</th>
+                          <th className="p-4 font-bold">Note</th>
+                          <th className="p-4 font-bold">Start Date</th>
+                          <th className="p-4 font-bold">Expiry Date</th>
+                          <th className="p-4 font-bold">Days Left</th>
+                          <th className="p-4 font-bold">Status</th>
+                          <th className="p-4 font-bold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-thread">
+                        {members.length === 0 && (
+                          <tr><td colSpan={7} className="p-8 text-center text-muted">No members registered yet.</td></tr>
+                        )}
+                        {members
+                          .filter(m => memberSearch === '' || m.phone.includes(memberSearch))
+                          .map((m: any) => {
+                            const daysLeft = Math.ceil((new Date(m.expiry_date).getTime() - Date.now()) / 86400000);
+                            const isExpired = daysLeft < 0;
+                            const isExpiringSoon = !isExpired && daysLeft <= 30;
+                            return (
+                              <tr key={m.id} className={m.status === 'revoked' ? 'opacity-50' : ''}>
+                                <td className="p-4 font-mono font-bold text-ink text-sm">{m.phone}</td>
+                                <td className="p-4 text-sm text-muted">{m.note || '—'}</td>
+                                <td className="p-4 text-sm text-muted font-mono whitespace-nowrap">{new Date(m.start_date).toLocaleDateString('en-BD')}</td>
+                                <td className="p-4 text-sm text-muted font-mono whitespace-nowrap">{new Date(m.expiry_date).toLocaleDateString('en-BD')}</td>
+                                <td className="p-4">
+                                  {m.status === 'revoked' ? (
+                                    <span className="text-[10px] font-bold text-muted">—</span>
+                                  ) : isExpired ? (
+                                    <span className="text-[10px] font-bold text-oxblood">Expired</span>
+                                  ) : (
+                                    <span className={`text-[10px] font-bold font-mono ${isExpiringSoon ? 'text-oxblood' : 'text-ink'}`}>{daysLeft}d</span>
+                                  )}
+                                </td>
+                                <td className="p-4">
+                                  <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${
+                                    m.status === 'revoked' ? 'bg-paper-dim text-muted'
+                                    : isExpired ? 'bg-oxblood-light text-oxblood'
+                                    : isExpiringSoon ? 'bg-brass-light text-brass-dark'
+                                    : 'bg-moss-light text-moss'
+                                  }`}>
+                                    {m.status === 'revoked' ? 'Revoked' : isExpired ? 'Expired' : isExpiringSoon ? 'Expiring' : 'Active'}
+                                  </span>
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex gap-2">
+                                    {m.status !== 'revoked' && (
+                                      <>
+                                        <button onClick={() => renewMember(m)} className="text-[11px] font-bold text-brass hover:text-brass-dark uppercase tracking-wide border border-brass/30 px-2.5 py-1 hover:bg-brass-light/50 transition-colors">
+                                          Renew
+                                        </button>
+                                        <button onClick={() => revokeMember(m)} className="text-[11px] font-bold text-muted hover:text-oxblood uppercase tracking-wide border border-thread px-2.5 py-1 hover:border-oxblood transition-colors">
+                                          Revoke
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
             {/* TAB 4: REPORTS */}
             {activeTab === 'reports' && (
               <div className="space-y-6 print:hidden">
