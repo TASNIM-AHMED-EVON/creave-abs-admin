@@ -564,18 +564,26 @@ export default function AdminDashboard() {
   }, []);
 
   const fetchMembers = useCallback(async () => {
-    const { data } = await supabase
-      .from('memberships')
-      .select('*')
-      .order('start_date', { ascending: false });
-    if (data) setMembers(data);
+    try {
+      const { data, error } = await supabase
+        .from('memberships')
+        .select('*')
+        .order('start_date', { ascending: false });
+      if (!error && data) setMembers(data);
+    } catch (_) {
+      // table not yet created — stays empty
+    }
   }, []);
 
   const fetchMembershipSettings = useCallback(async () => {
-    const { data } = await supabase.from('membership_settings').select('*').eq('id', 1).single();
-    if (data) {
-      setMembershipSettings(data);
-      setMembershipDiscountInput(String(data.discount_percent));
+    try {
+      const { data, error } = await supabase.from('membership_settings').select('*').eq('id', 1).single();
+      if (!error && data) {
+        setMembershipSettings(data);
+        setMembershipDiscountInput(String(data.discount_percent));
+      }
+    } catch (_) {
+      // table not yet created — use defaults
     }
   }, []);
 
@@ -3551,6 +3559,185 @@ export default function AdminDashboard() {
                 </div>
               </div>
             )}
+            {/* MEMBERSHIP: ADD MEMBER */}
+            {activeTab === 'membership-add' && (
+              <div className="max-w-lg print:hidden">
+                {members.length === 0 && memberMessage.text === '' && (
+                  <div className="px-4 py-3 mb-5 text-sm font-semibold border bg-brass-light text-brass-dark border-brass/20">
+                    ⚠ If this page appears blank after a fresh deploy, run <span className="font-mono">migration_006_membership.sql</span> in your Supabase SQL editor first, then refresh.
+                  </div>
+                )}
+                <div className="bg-canvas p-7 border border-thread">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconUserPlus className="w-4 h-4 text-brass" />
+                    Enroll New Member
+                  </h3>
+                  <p className="text-sm text-muted mb-6">
+                    Membership is registered by mobile number only. It starts today and expires after exactly 1 year.
+                    Members get a <span className="font-bold text-brass">{membershipSettings.discount_percent}%</span> discount at checkout.
+                  </p>
+
+                  {memberMessage.text && (
+                    <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${memberMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
+                      {memberMessage.text}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleAddMember} className="space-y-5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Mobile Number</label>
+                      <input
+                        required
+                        type="tel"
+                        placeholder="01XXXXXXXXX"
+                        className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-lg tracking-widest transition-colors"
+                        value={memberPhone}
+                        onChange={(e) => setMemberPhone(e.target.value)}
+                        maxLength={15}
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">
+                        Note <span className="text-muted font-normal normal-case">(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. VIP customer, referred by..."
+                        className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors"
+                        value={memberNote}
+                        onChange={(e) => setMemberNote(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Date preview */}
+                    <div className="bg-paper-dim p-4 border border-thread space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted font-semibold">Start date</span>
+                        <span className="font-mono font-bold text-ink">{new Date().toLocaleDateString('en-BD')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted font-semibold">Expiry date</span>
+                        <span className="font-mono font-bold text-moss">{new Date(Date.now() + 365 * 86400000).toLocaleDateString('en-BD')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted font-semibold">Discount</span>
+                        <span className="font-mono font-bold text-brass">{membershipSettings.discount_percent}%</span>
+                      </div>
+                    </div>
+
+                    <button type="submit" className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                      Enroll Member
+                    </button>
+                  </form>
+
+                  {/* Recent enrolments quick-view */}
+                  {members.length > 0 && (
+                    <div className="mt-8">
+                      <p className="text-[11px] font-bold text-muted uppercase tracking-widest mb-3">Recent Enrolments</p>
+                      <div className="divide-y divide-thread">
+                        {members.slice(0, 5).map((m: any) => (
+                          <div key={m.id} className="py-3 flex items-center justify-between gap-3">
+                            <span className="font-mono font-bold text-ink text-sm">{m.phone}</span>
+                            <span className="text-xs text-muted font-mono">expires {new Date(m.expiry_date).toLocaleDateString('en-BD')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* MEMBERSHIP: SETTINGS */}
+            {activeTab === 'membership-settings' && (
+              <div className="max-w-xl print:hidden space-y-6">
+                <div className="px-4 py-3 text-sm font-semibold border bg-brass-light text-brass-dark border-brass/20">
+                  ℹ If this page appears blank, run <span className="font-mono">migration_006_membership.sql</span> in your Supabase SQL editor, then refresh.
+                </div>
+                {/* Discount control */}
+                <div className="bg-canvas p-7 border border-thread">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconSettingsGear className="w-4 h-4 text-brass" />
+                    Membership Discount
+                  </h3>
+                  <p className="text-sm text-muted mb-6">
+                    Set the discount percentage all active members receive at checkout. You can change this at any time — it takes effect immediately.
+                  </p>
+                  <form onSubmit={saveMembershipSettings} className="space-y-5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Discount Percentage (%)</label>
+                      <div className="flex items-center gap-5">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          className="w-32 px-4 py-3 bg-brass-light/30 border border-brass/30 focus:border-brass outline-none text-ink font-mono text-xl font-bold text-center transition-colors"
+                          value={membershipDiscountInput}
+                          onChange={(e) => setMembershipDiscountInput(e.target.value)}
+                        />
+                        <div>
+                          <p className="text-4xl font-mono font-bold text-brass">{membershipDiscountInput || '0'}%</p>
+                          <p className="text-xs text-muted mt-1">off every purchase</p>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      className={`px-7 py-3 font-bold text-sm uppercase tracking-wider transition-colors ${membershipSettingsSaved ? 'bg-moss text-white' : 'bg-ink text-paper hover:bg-brass-dark'}`}
+                    >
+                      {membershipSettingsSaved ? '✓ Saved' : 'Save Discount'}
+                    </button>
+                  </form>
+                </div>
+
+                {/* Quick stats */}
+                <div className="bg-canvas p-7 border border-thread">
+                  <h3 className="text-base font-bold mb-5 text-ink">Membership Overview</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {[
+                      {
+                        label: 'Total Members',
+                        value: members.length,
+                        color: 'text-ink',
+                      },
+                      {
+                        label: 'Active',
+                        value: members.filter((m: any) =>
+                          m.status === 'active' &&
+                          Math.ceil((new Date(m.expiry_date).getTime() - Date.now()) / 86400000) >= 0
+                        ).length,
+                        color: 'text-moss',
+                      },
+                      {
+                        label: 'Expiring (30d)',
+                        value: members.filter((m: any) => {
+                          if (m.status !== 'active') return false;
+                          const d = Math.ceil((new Date(m.expiry_date).getTime() - Date.now()) / 86400000);
+                          return d >= 0 && d <= 30;
+                        }).length,
+                        color: 'text-brass',
+                      },
+                      {
+                        label: 'Expired / Revoked',
+                        value: members.filter((m: any) =>
+                          m.status === 'revoked' ||
+                          Math.ceil((new Date(m.expiry_date).getTime() - Date.now()) / 86400000) < 0
+                        ).length,
+                        color: 'text-oxblood',
+                      },
+                    ].map((stat) => (
+                      <div key={stat.label} className="bg-paper-dim p-4 border border-thread text-center">
+                        <p className={`font-mono text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+                        <p className="text-[10px] font-bold text-muted uppercase tracking-wider mt-1 leading-tight">{stat.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* TAB 4: REPORTS */}
             {activeTab === 'reports' && (
               <div className="space-y-6 print:hidden">
