@@ -3724,11 +3724,6 @@ export default function AdminDashboard() {
             {/* MEMBERSHIP: ADD MEMBER */}
             {activeTab === 'membership-add' && (
               <div className="max-w-lg print:hidden">
-                {members.length === 0 && memberMessage.text === '' && (
-                  <div className="px-4 py-3 mb-5 text-sm font-semibold border bg-brass-light text-brass-dark border-brass/20">
-                    ⚠ If this page appears blank after a fresh deploy, run <span className="font-mono">migration_006_membership.sql</span> in your Supabase SQL editor first, then refresh.
-                  </div>
-                )}
                 <div className="bg-canvas p-7 border border-thread">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconUserPlus className="w-4 h-4 text-brass" />
@@ -3814,9 +3809,6 @@ export default function AdminDashboard() {
             {/* MEMBERSHIP: SETTINGS */}
             {activeTab === 'membership-settings' && (
               <div className="max-w-xl print:hidden space-y-6">
-                <div className="px-4 py-3 text-sm font-semibold border bg-brass-light text-brass-dark border-brass/20">
-                  ℹ If this page appears blank, run <span className="font-mono">migration_006_membership.sql</span> in your Supabase SQL editor, then refresh.
-                </div>
                 {/* Discount control */}
                 <div className="bg-canvas p-7 border border-thread">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
