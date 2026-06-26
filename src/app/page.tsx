@@ -255,6 +255,96 @@ const LOW_STOCK_THRESHOLD = 3;
 // (e.g. before the SQL migration has been run, or freshly run with no rows).
 const FALLBACK_CATEGORIES = ['Panjabi', 'Shirt', 'T-Shirt', 'Pant', '0-5 Years', 'Small Baby Dress', 'Medium Dress', 'Maximum Dress'];
 
+// ---------------------------------------------------------------------------
+// SurveyChart — mounts Chart.js onto a canvas after React renders it.
+// Lives outside AdminDashboard so it re-mounts cleanly when its key changes.
+// ---------------------------------------------------------------------------
+declare global { interface Window { Chart: any } }
+
+function SurveyChart({ canvasId, records, isDark }: {
+  canvasId: string;
+  records: { date: string; amount: number }[];
+  isDark: boolean;
+}) {
+  useEffect(() => {
+    if (records.length === 0) return;
+
+    const loadAndInit = () => {
+      const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+      if (!canvas || !window.Chart) return;
+
+      const labels = records.map(r => r.date.slice(5).replace('-', '/'));
+      const amounts = records.map(r => r.amount);
+
+      const gridColor  = isDark ? 'rgba(255,255,255,0.07)' : '#e1e0d9';
+      const tickColor  = isDark ? '#898781' : '#898781';
+      const barColor   = isDark ? '#3987e5' : '#2a78d6';
+
+      new window.Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Daily sales (৳)',
+            data: amounts,
+            backgroundColor: barColor,
+            borderRadius: { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 },
+            borderSkipped: 'bottom',
+            maxBarThickness: 52,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: (ctx: any) => ctx[0].label,
+                label: (ctx: any) => ' ৳' + Math.round(ctx.parsed.y).toLocaleString(),
+              },
+            },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                color: tickColor,
+                font: { size: 11 },
+                callback: (v: number) => v >= 1000 ? Math.round(v / 1000) + 'k' : v,
+              },
+              grid: { color: gridColor },
+              border: { display: false },
+            },
+            x: {
+              ticks: {
+                color: tickColor,
+                font: { size: 11 },
+                autoSkip: false,
+                maxRotation: 0,
+              },
+              grid: { display: false },
+              border: { display: false },
+            },
+          },
+          animation: { duration: 400 },
+        },
+      });
+    };
+
+    if (window.Chart) {
+      loadAndInit();
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
+      script.onload = loadAndInit;
+      document.head.appendChild(script);
+    }
+  }, [canvasId, records, isDark]);
+
+  return null;
+}
+
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
@@ -4065,193 +4155,102 @@ export default function AdminDashboard() {
             )}
 
             {/* TAB: DAILY SALES SURVEY */}
+            {/* TAB: DAILY SALES SURVEY */}
             {activeTab === 'survey' && (
               <div className="space-y-6 print:hidden">
 
-                {/* Summary stat cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {(() => {
-                    const total = surveyRecords.reduce((s, r) => s + r.amount, 0);
-                    const avg = surveyRecords.length ? Math.round(total / surveyRecords.length) : 0;
-                    const best = surveyRecords.length ? Math.max(...surveyRecords.map(r => r.amount)) : 0;
-                    const bestDay = surveyRecords.find(r => r.amount === best);
-                    const latest = surveyRecords[surveyRecords.length - 1];
-                    const getBand = (v: number) => {
-                      if (v < 10000) return { label: '0–10k', color: '#E24B4A' };
-                      if (v < 20000) return { label: '10–20k', color: '#EF9F27' };
-                      if (v < 30000) return { label: '20–30k', color: '#FAC775' };
-                      if (v < 40000) return { label: '30–40k', color: '#639922' };
-                      if (v < 50000) return { label: '40–50k', color: '#1D9E75' };
-                      if (v < 60000) return { label: '50–60k', color: '#378ADD' };
-                      return { label: '60–80k+', color: '#7F77DD' };
-                    };
-                    const band = latest ? getBand(latest.amount) : null;
-                    return (
-                      <>
-                        <div className="bg-canvas border border-thread p-5">
-                          <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">10-day total</p>
-                          <p className="font-mono text-2xl font-bold text-ink">৳{total.toLocaleString()}</p>
-                        </div>
-                        <div className="bg-canvas border border-thread p-5">
-                          <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Daily average</p>
-                          <p className="font-mono text-2xl font-bold text-ink">{surveyRecords.length ? `৳${avg.toLocaleString()}` : '—'}</p>
-                        </div>
-                        <div className="bg-canvas border border-thread p-5">
-                          <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Best day</p>
-                          <p className="font-mono text-2xl font-bold text-ink">{best > 0 ? `৳${best.toLocaleString()}` : '—'}</p>
-                          <p className="text-xs text-muted mt-1 font-mono">{bestDay ? bestDay.date : ''}</p>
-                        </div>
-                        <div className="bg-canvas border border-thread p-5">
-                          <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Latest band</p>
-                          {band ? (
-                            <span className="text-sm font-bold px-3 py-1 border" style={{ color: band.color, borderColor: band.color + '50', backgroundColor: band.color + '18' }}>
-                              {band.label}
-                            </span>
-                          ) : <p className="font-mono text-xl text-muted">—</p>}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
+                {/* Stat cards */}
+                {(() => {
+                  const total = surveyRecords.reduce((s, r) => s + r.amount, 0);
+                  const avg = surveyRecords.length ? Math.round(total / surveyRecords.length) : 0;
+                  const amounts = surveyRecords.map(r => r.amount);
+                  const best = amounts.length ? Math.max(...amounts) : 0;
+                  const low  = amounts.length ? Math.min(...amounts) : 0;
+                  const bestDay = surveyRecords.find(r => r.amount === best);
+                  const lowDay  = surveyRecords.find(r => r.amount === low);
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="bg-canvas border border-thread p-5">
+                        <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">10-day total</p>
+                        <p className="font-mono text-2xl font-bold text-ink">৳{total.toLocaleString()}</p>
+                      </div>
+                      <div className="bg-canvas border border-thread p-5">
+                        <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Daily average</p>
+                        <p className="font-mono text-2xl font-bold text-ink">{surveyRecords.length ? `৳${avg.toLocaleString()}` : '—'}</p>
+                      </div>
+                      <div className="bg-canvas border border-thread p-5">
+                        <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Best day</p>
+                        <p className="font-mono text-2xl font-bold text-moss">{best > 0 ? `৳${best.toLocaleString()}` : '—'}</p>
+                        <p className="text-xs text-muted mt-1 font-mono">{bestDay?.date ?? ''}</p>
+                      </div>
+                      <div className="bg-canvas border border-thread p-5">
+                        <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Lowest day</p>
+                        <p className="font-mono text-2xl font-bold text-oxblood">{low > 0 ? `৳${low.toLocaleString()}` : '—'}</p>
+                        <p className="text-xs text-muted mt-1 font-mono">{lowDay?.date ?? ''}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
 
-                {/* Chart */}
+                {/* Chart.js bar chart */}
                 <div className="bg-canvas border border-thread p-6">
-                  <div className="flex items-center justify-between mb-5">
-                    <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                    <div className="flex items-center gap-2">
                       <IconSurvey className="w-4 h-4 text-brass" />
-                      Daily sales — last 10 days
-                    </h3>
-                    <button
-                      onClick={fetchSurveyData}
-                      className="text-[11px] font-bold text-brass hover:text-brass-dark uppercase tracking-wide flex items-center gap-1.5 border border-brass/30 px-3 py-1.5 hover:bg-brass-light/40 transition-colors"
-                    >
-                      Sync from sales data
-                    </button>
-                  </div>
-
-                  {/* Y-axis band labels + bars */}
-                  <div className="flex gap-3">
-                    {/* Y-axis */}
-                    <div className="flex flex-col-reverse justify-between text-right shrink-0 pb-8" style={{ height: 280 }}>
-                      {['0', '10k', '20k', '30k', '40k', '50k', '60k', '80k'].map(l => (
-                        <span key={l} className="text-[10px] font-mono text-muted">{l}</span>
-                      ))}
+                      <h3 className="text-base font-bold text-ink">Daily sales — last 10 days</h3>
                     </div>
-
-                    {/* Chart area */}
-                    <div className="flex-1 min-w-0">
-                      {/* Horizontal band stripes */}
-                      <div className="relative" style={{ height: 280 }}>
-                        {[
-                          { pct: 12.5, color: '#E24B4A', label: '0–10k' },
-                          { pct: 12.5, color: '#EF9F27', label: '10–20k' },
-                          { pct: 12.5, color: '#FAC775', label: '20–30k' },
-                          { pct: 12.5, color: '#639922', label: '30–40k' },
-                          { pct: 12.5, color: '#1D9E75', label: '40–50k' },
-                          { pct: 12.5, color: '#378ADD', label: '50–60k' },
-                          { pct: 25, color: '#7F77DD', label: '60–80k+' },
-                        ].reverse().map((band, i) => (
-                          <div
-                            key={i}
-                            className="absolute left-0 right-0"
-                            style={{
-                              height: `${band.pct}%`,
-                              bottom: `${[0,12.5,25,37.5,50,62.5,75].reverse()[i]}%`,
-                              backgroundColor: band.color + '14',
-                              borderBottom: `1px solid ${band.color}30`,
-                            }}
-                          />
-                        ))}
-
-                        {/* Bars */}
-                        {surveyRecords.length === 0 ? (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <p className="text-sm text-muted text-center">No data yet — click "Sync from sales data" or add a manual entry below.</p>
-                          </div>
-                        ) : (
-                          <div className="absolute inset-0 flex items-end gap-1 px-1 pb-0">
-                            {surveyRecords.map(r => {
-                              const MAX = 80000;
-                              const pct = Math.min((r.amount / MAX) * 100, 100);
-                              const getBand = (v: number) => {
-                                if (v < 10000) return '#E24B4A';
-                                if (v < 20000) return '#EF9F27';
-                                if (v < 30000) return '#FAC775';
-                                if (v < 40000) return '#639922';
-                                if (v < 50000) return '#1D9E75';
-                                if (v < 60000) return '#378ADD';
-                                return '#7F77DD';
-                              };
-                              const shortDate = r.date.slice(5).replace('-', '/');
-                              return (
-                                <div key={r.date} className="flex-1 flex flex-col items-center gap-1" style={{ minWidth: 0 }}>
-                                  <span className="font-mono text-[9px] text-muted text-center leading-tight" style={{ fontSize: 9 }}>
-                                    ৳{r.amount >= 1000 ? `${Math.round(r.amount/1000)}k` : r.amount}
-                                  </span>
-                                  <div
-                                    className="w-full transition-all duration-500"
-                                    style={{
-                                      height: `${pct}%`,
-                                      minHeight: 3,
-                                      backgroundColor: getBand(r.amount),
-                                      borderRadius: '3px 3px 0 0',
-                                    }}
-                                  />
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* X-axis date labels */}
-                      <div className="flex gap-1 mt-2 px-1">
-                        {surveyRecords.map(r => (
-                          <div key={r.date} className="flex-1 text-center" style={{ minWidth: 0 }}>
-                            <span className="text-[9px] font-mono text-muted">{r.date.slice(5).replace('-', '/')}</span>
-                          </div>
-                        ))}
-                        {surveyRecords.length === 0 && (
-                          [...Array(10)].map((_, i) => (
-                            <div key={i} className="flex-1 text-center">
-                              <span className="text-[9px] font-mono text-muted">—</span>
-                            </div>
-                          ))
-                        )}
-                      </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={fetchSurveyData}
+                        className="text-[11px] font-bold text-brass hover:text-brass-dark uppercase tracking-wide border border-brass/30 px-3 py-1.5 hover:bg-brass-light/40 transition-colors flex items-center gap-1.5"
+                      >
+                        ↻ Sync from real sales
+                      </button>
                     </div>
                   </div>
 
-                  {/* Band legend */}
-                  <div className="flex flex-wrap gap-3 mt-5 pt-4 border-t border-thread">
-                    {[
-                      { label: '0–10k', color: '#E24B4A' },
-                      { label: '10–20k', color: '#EF9F27' },
-                      { label: '20–30k', color: '#FAC775' },
-                      { label: '30–40k', color: '#639922' },
-                      { label: '40–50k', color: '#1D9E75' },
-                      { label: '50–60k', color: '#378ADD' },
-                      { label: '60–80k+', color: '#7F77DD' },
-                    ].map(b => (
-                      <span key={b.label} className="flex items-center gap-1.5 text-[11px] text-muted">
-                        <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: b.color }} />
-                        {b.label}
-                      </span>
-                    ))}
+                  {/* Chart.js renders here via the dangerouslySetInnerHTML trick —
+                      we use a key-controlled div so React re-mounts the canvas
+                      whenever surveyChartKey changes, letting Chart.js reinitialise. */}
+                  <div key={surveyChartKey} style={{ position: 'relative', width: '100%', height: 300 }}>
+                    <canvas id={`survey-chart-${surveyChartKey}`} />
                   </div>
+
+                  {surveyRecords.length === 0 && (
+                    <p className="text-center text-sm text-muted mt-4">
+                      No data yet — click "Sync from real sales" or add a manual record below.
+                    </p>
+                  )}
+
+                  {/* Inline script — executes after mount via dangerouslySetInnerHTML on
+                      a wrapper won't work in React, so we use useEffect via a ref instead.
+                      The chart init is handled by the SurveyChart component below. */}
+                  <SurveyChart
+                    key={`chart-${surveyChartKey}`}
+                    canvasId={`survey-chart-${surveyChartKey}`}
+                    records={surveyRecords}
+                    isDark={isDark}
+                  />
+
+                  {surveyRecords.length > 0 && (
+                    <p className="text-[11px] text-muted mt-4 font-mono text-right">
+                      Taka (৳) · last {surveyRecords.length} recorded days
+                    </p>
+                  )}
                 </div>
 
                 {/* Manual entry form */}
                 <div className="bg-canvas border border-thread p-6">
                   <h3 className="text-base font-bold mb-1 text-ink">Manual entry</h3>
-                  <p className="text-sm text-muted mb-5">Override or supplement a day's total — useful for offline cash-only sales not yet in the system. Syncing from sales data will replace this with the real calculated figure.</p>
-
+                  <p className="text-sm text-muted mb-5">
+                    Add or override a day's total — useful for cash-only sales not yet in the system.
+                    "Sync from real sales" will replace manual entries with calculated figures from your actual transactions.
+                  </p>
                   {surveyMessage.text && (
                     <div className={`px-4 py-3 mb-4 text-sm font-semibold border ${surveyMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
                       {surveyMessage.text}
                     </div>
                   )}
-
                   <form onSubmit={handleAddSurveyEntry} className="flex flex-wrap gap-3 items-end">
                     <div>
                       <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Date</label>
@@ -4265,60 +4264,44 @@ export default function AdminDashboard() {
                     <div>
                       <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Total sales (৳)</label>
                       <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="e.g. 18500"
+                        type="number" min="0" step="1" placeholder="e.g. 18500"
                         className="w-44 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors"
                         value={surveyAmountInput}
                         onChange={e => setSurveyAmountInput(e.target.value)}
                       />
                     </div>
                     <button type="submit" className="bg-ink text-paper px-6 py-2.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
-                      Add Entry
+                      Save Entry
                     </button>
                   </form>
                 </div>
 
-                {/* Recorded entries list */}
+                {/* Entry log */}
                 {surveyRecords.length > 0 && (
                   <div className="bg-canvas border border-thread overflow-hidden">
-                    <div className="p-6 pb-4 border-b border-thread">
+                    <div className="px-6 py-4 border-b border-thread">
                       <h3 className="text-base font-bold text-ink">Recorded entries</h3>
                     </div>
                     <div className="divide-y divide-thread">
-                      {[...surveyRecords].reverse().map(r => {
-                        const getBand = (v: number) => {
-                          if (v < 10000) return { label: '0–10k', color: '#E24B4A' };
-                          if (v < 20000) return { label: '10–20k', color: '#EF9F27' };
-                          if (v < 30000) return { label: '20–30k', color: '#FAC775' };
-                          if (v < 40000) return { label: '30–40k', color: '#639922' };
-                          if (v < 50000) return { label: '40–50k', color: '#1D9E75' };
-                          if (v < 60000) return { label: '50–60k', color: '#378ADD' };
-                          return { label: '60–80k+', color: '#7F77DD' };
-                        };
-                        const band = getBand(r.amount);
-                        return (
-                          <div key={r.date} className="px-6 py-4 flex items-center justify-between gap-4">
-                            <span className="font-mono text-sm text-muted">{r.date}</span>
-                            <span className="font-mono font-bold text-ink text-sm">৳{r.amount.toLocaleString()}</span>
-                            <span className="text-[10px] font-bold px-2.5 py-1 border" style={{ color: band.color, borderColor: band.color + '40', backgroundColor: band.color + '15' }}>
-                              {band.label}
-                            </span>
-                            <button
-                              onClick={() => handleDeleteSurveyEntry(r.date)}
-                              className="text-[11px] font-bold text-muted hover:text-oxblood uppercase tracking-wide transition-colors"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        );
-                      })}
+                      {[...surveyRecords].reverse().map(r => (
+                        <div key={r.date} className="px-6 py-4 flex items-center justify-between gap-4">
+                          <span className="font-mono text-sm text-muted">{r.date}</span>
+                          <span className="font-mono font-bold text-ink">৳{r.amount.toLocaleString()}</span>
+                          <button
+                            onClick={() => handleDeleteSurveyEntry(r.date)}
+                            className="text-[11px] font-bold text-muted hover:text-oxblood uppercase tracking-wide transition-colors"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
+
               </div>
             )}
+
 
           </div>
         </div>
