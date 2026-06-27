@@ -1,58 +1,43 @@
 @import "tailwindcss";
 
 /* ============================================================
-   CRAVE ABS design tokens
-   Light mode: warm paper/ink boutique palette
-   Dark mode:  deep navy blue theme
+   CRAVE ABS — Design tokens + Ultra Animation System
    ============================================================ */
 
 :root {
-  /* Light mode */
   --background: #faf7f1;
   --foreground: #1c1a17;
-
   --color-canvas: #ffffff;
   --color-paper: #faf7f1;
   --color-paper-dim: #f3eee4;
   --color-ink: #1c1a17;
   --color-muted: #837a6e;
-
   --color-thread: #e4dac8;
   --color-thread-dark: #c9bb9e;
-
   --color-brass: #a8763b;
   --color-brass-dark: #87602e;
   --color-brass-light: #f1e3c9;
-
   --color-oxblood: #7a2e2a;
   --color-oxblood-light: #f6e7e3;
-
   --color-moss: #3f6b4f;
   --color-moss-light: #e6ede3;
 }
 
-/* Dark mode — applied when <html class="dark"> */
 html.dark {
   --background: #0d1b2e;
   --foreground: #e2eaf4;
-
   --color-canvas: #112240;
   --color-paper: #0d1b2e;
   --color-paper-dim: #0a1628;
   --color-ink: #e2eaf4;
   --color-muted: #7a9bbf;
-
   --color-thread: #1e3a5f;
   --color-thread-dark: #2a4f7a;
-
-  /* Brass stays warm — it's the brand accent, unchanged in dark mode */
   --color-brass: #c49a4a;
   --color-brass-dark: #a8763b;
   --color-brass-light: #1e3050;
-
   --color-oxblood: #e05c5c;
   --color-oxblood-light: #1f1520;
-
   --color-moss: #4caf80;
   --color-moss-light: #0f2820;
 }
@@ -60,95 +45,346 @@ html.dark {
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-
   --font-display: var(--font-fraunces);
   --font-sans: var(--font-manrope);
   --font-mono: var(--font-space-mono);
-
   --color-canvas: var(--color-canvas);
   --color-paper: var(--color-paper);
   --color-paper-dim: var(--color-paper-dim);
   --color-ink: var(--color-ink);
   --color-muted: var(--color-muted);
-
   --color-thread: var(--color-thread);
   --color-thread-dark: var(--color-thread-dark);
-
   --color-brass: var(--color-brass);
   --color-brass-dark: var(--color-brass-dark);
   --color-brass-light: var(--color-brass-light);
-
   --color-oxblood: var(--color-oxblood);
   --color-oxblood-light: var(--color-oxblood-light);
-
   --color-moss: var(--color-moss);
   --color-moss-light: var(--color-moss-light);
 }
+
+/* ============================================================
+   BASE
+   ============================================================ */
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-  transition: background 0.25s ease, color 0.25s ease;
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
-/* Signature motif: stitched seam */
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-thread-dark); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-brass); }
+
+::selection { background: var(--color-brass-light); color: var(--color-ink); }
+
+:focus-visible {
+  outline: 2px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   SIGNATURE MOTIFS
+   ============================================================ */
+
 .stitch {
-  background-image: linear-gradient(
-    to right,
-    var(--color-thread-dark) 0,
-    var(--color-thread-dark) 6px,
-    transparent 6px,
-    transparent 12px
-  );
+  background-image: linear-gradient(to right, var(--color-thread-dark) 0, var(--color-thread-dark) 6px, transparent 6px, transparent 12px);
   background-size: 12px 1.5px;
   background-repeat: repeat-x;
   background-position: left center;
   height: 1.5px;
 }
 
-.stitch-v {
-  background-image: linear-gradient(
-    to bottom,
-    var(--color-thread-dark) 0,
-    var(--color-thread-dark) 6px,
-    transparent 6px,
-    transparent 12px
-  );
-  background-size: 1.5px 12px;
-  background-repeat: repeat-y;
-  background-position: center top;
-  width: 1.5px;
-}
-
-/* Barcode stripe motif */
 .barcode-stripe {
   background-image: repeating-linear-gradient(
     90deg,
-    var(--color-ink) 0px,
-    var(--color-ink) 1.5px,
-    transparent 1.5px,
-    transparent 4px,
-    var(--color-ink) 4px,
-    var(--color-ink) 6px,
-    transparent 6px,
-    transparent 8.5px,
-    var(--color-ink) 8.5px,
-    var(--color-ink) 9.5px,
-    transparent 9.5px,
-    transparent 13px
+    var(--color-ink) 0px, var(--color-ink) 1.5px, transparent 1.5px, transparent 4px,
+    var(--color-ink) 4px, var(--color-ink) 6px, transparent 6px, transparent 8.5px,
+    var(--color-ink) 8.5px, var(--color-ink) 9.5px, transparent 9.5px, transparent 13px
   );
 }
 
-::selection {
-  background: var(--color-brass-light);
-  color: var(--color-ink);
+/* ============================================================
+   KEYFRAME LIBRARY
+   ============================================================ */
+
+/* Tab entrance — primary page transition */
+@keyframes tab-enter {
+  from { opacity: 0; transform: translateY(14px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-brass);
-  outline-offset: 2px;
+/* Cards fade up in staggered sequence */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Slides in from the left */
+@keyframes slide-right {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Slides in from right */
+@keyframes slide-left {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Alert / message pop */
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-10px) scaleY(0.9); }
+  to   { opacity: 1; transform: translateY(0)     scaleY(1);   }
+}
+
+/* Shimmer sweep — used on skeleton loaders and button hover */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+/* Pulse ring — used on important action buttons */
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0   rgba(168,118,59,0.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(168,118,59,0);   }
+  100% { box-shadow: 0 0 0 0   rgba(168,118,59,0);   }
+}
+
+/* Float — used on the POS "Complete Sale" button */
+@keyframes float {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+/* Spin — used on loading spinners */
+@keyframes spin-smooth {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(360deg); }
+}
+
+/* Ripple — click feedback on interactive elements */
+@keyframes ripple {
+  0%   { transform: scale(0);   opacity: 0.35; }
+  100% { transform: scale(3.5); opacity: 0;    }
+}
+
+/* Bounce-in — success checkmarks, badges */
+@keyframes bounce-in {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.12); opacity: 1; }
+  80%  { transform: scale(0.95); }
+  100% { transform: scale(1);    }
+}
+
+/* Number count-up — cosmetic flicker on stat values */
+@keyframes stat-appear {
+  0%   { opacity: 0; transform: translateY(6px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+/* Cart item drop-in */
+@keyframes drop-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Sidebar child items reveal */
+@keyframes expand-child {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Glow pulse on focused inputs */
+@keyframes input-glow {
+  0%,100% { box-shadow: 0 0 0 2px rgba(168,118,59,0.3); }
+  50%      { box-shadow: 0 0 0 4px rgba(168,118,59,0.15), 0 0 12px rgba(168,118,59,0.1); }
+}
+
+/* ============================================================
+   ANIMATION UTILITY CLASSES
+   ============================================================ */
+
+/* Tab content — applied to the key-prop wrapper in page.tsx */
+.tab-enter {
+  animation: tab-enter 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Staggered card rows — add .anim-card to each card */
+.anim-card {
+  animation: fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.anim-card:nth-child(1) { animation-delay: 0.04s; }
+.anim-card:nth-child(2) { animation-delay: 0.09s; }
+.anim-card:nth-child(3) { animation-delay: 0.14s; }
+.anim-card:nth-child(4) { animation-delay: 0.19s; }
+.anim-card:nth-child(5) { animation-delay: 0.24s; }
+.anim-card:nth-child(6) { animation-delay: 0.29s; }
+
+/* Table rows stagger */
+.anim-row {
+  animation: slide-right 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.anim-row:nth-child(1)  { animation-delay: 0.02s; }
+.anim-row:nth-child(2)  { animation-delay: 0.05s; }
+.anim-row:nth-child(3)  { animation-delay: 0.08s; }
+.anim-row:nth-child(4)  { animation-delay: 0.11s; }
+.anim-row:nth-child(5)  { animation-delay: 0.14s; }
+.anim-row:nth-child(6)  { animation-delay: 0.17s; }
+.anim-row:nth-child(7)  { animation-delay: 0.20s; }
+.anim-row:nth-child(8)  { animation-delay: 0.23s; }
+.anim-row:nth-child(9)  { animation-delay: 0.26s; }
+.anim-row:nth-child(10) { animation-delay: 0.29s; }
+
+/* Alert messages */
+.anim-alert {
+  animation: slide-down 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Stat values */
+.anim-stat {
+  animation: stat-appear 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Cart items */
+.anim-cart-item {
+  animation: drop-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Sidebar child items */
+.anim-nav-child {
+  animation: expand-child 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.anim-nav-child:nth-child(1) { animation-delay: 0.02s; }
+.anim-nav-child:nth-child(2) { animation-delay: 0.05s; }
+.anim-nav-child:nth-child(3) { animation-delay: 0.08s; }
+.anim-nav-child:nth-child(4) { animation-delay: 0.11s; }
+.anim-nav-child:nth-child(5) { animation-delay: 0.14s; }
+.anim-nav-child:nth-child(6) { animation-delay: 0.17s; }
+
+/* Bounce-in for badges / success icons */
+.anim-bounce {
+  animation: bounce-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ============================================================
+   INTERACTIVE ELEMENT ENHANCEMENTS
+   ============================================================ */
+
+/* Shimmer button effect */
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.18) 50%, transparent 60%);
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.btn-shimmer:hover::after {
+  opacity: 1;
+  animation: shimmer 0.7s ease forwards;
+}
+
+/* Pulse ring on primary action buttons */
+.btn-pulse {
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+/* Float animation on CTA */
+.btn-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Ripple container */
+.ripple-container {
+  position: relative;
+  overflow: hidden;
+}
+.ripple-container .ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(168,118,59,0.25);
+  width: 100px;
+  height: 100px;
+  margin-top: -50px;
+  margin-left: -50px;
+  animation: ripple 0.55s linear;
+  pointer-events: none;
+}
+
+/* Loading spinner */
+.spin {
+  animation: spin-smooth 0.8s linear infinite;
+}
+
+/* ============================================================
+   CARD & SURFACE ENHANCEMENTS
+   ============================================================ */
+
+/* Cards lift on hover */
+.card-lift {
+  transition: transform 0.2s cubic-bezier(0.22,1,0.36,1),
+              box-shadow 0.2s cubic-bezier(0.22,1,0.36,1),
+              border-color 0.2s ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.08);
+  border-color: var(--color-brass) !important;
+}
+html.dark .card-lift:hover {
+  box-shadow: 0 6px 24px rgba(0,0,0,0.3);
+}
+
+/* Input focus glow */
+input:focus, select:focus, textarea:focus {
+  animation: input-glow 2s ease-in-out infinite;
+}
+
+/* Smooth transitions on all interactive elements */
+button, a, select, input, textarea {
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 0.18s;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ============================================================
+   SKELETON LOADER
+   ============================================================ */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-paper-dim) 25%,
+    var(--color-thread) 50%,
+    var(--color-paper-dim) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+/* ============================================================
+   PAGE TRANSITION OVERLAY (used when isDark changes)
+   ============================================================ */
+
+html {
+  transition: background-color 0.3s ease;
+}
+
+/* ============================================================
+   REDUCED MOTION OVERRIDE
+   ============================================================ */
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

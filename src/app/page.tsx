@@ -2027,7 +2027,7 @@ export default function AdminDashboard() {
                           <button
                             key={child.tab}
                             onClick={() => goToTab(child.tab, item.id)}
-                            className={`w-full flex items-center gap-2.5 text-left px-2.5 py-2 rounded-md text-[13px] font-semibold transition-all duration-150 ${
+                            className={`anim-nav-child w-full flex items-center gap-2.5 text-left px-2.5 py-2 rounded-md text-[13px] font-semibold transition-all duration-150 ${
                               isChildActive
                                 ? child.tab === 'refund'
                                   ? 'text-oxblood bg-oxblood-light/50'
@@ -2164,11 +2164,14 @@ export default function AdminDashboard() {
               </p>
             </div>
 
+            {/* key forces remount on tab switch → triggers .tab-enter animation */}
+            <div key={activeTab} className="tab-enter">
+
             {/* TAB 0: OVERVIEW */}
             {activeTab === 'overview' && (
               <div className="space-y-6 print:hidden">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  <div className="bg-ink p-7 text-paper relative overflow-hidden">
+                  <div className="anim-card bg-ink p-7 text-paper relative overflow-hidden card-lift">
                     <div className="barcode-stripe absolute top-0 right-0 h-full w-20 opacity-[0.06]" style={{ filter: 'invert(1)' }} />
                     <p className="text-xs font-bold uppercase tracking-wider text-thread mb-2">Today&rsquo;s Revenue</p>
                     <p className="font-mono text-3xl sm:text-4xl font-bold tracking-tight">৳{todayRevenue.toLocaleString()}</p>
@@ -2289,7 +2292,7 @@ export default function AdminDashboard() {
                 <div className="bg-canvas border border-thread">
                   <div className="px-7 pt-7">
                     {posMessage.text && (
-                      <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${posMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
+                      <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${posMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
                         {posMessage.text}
                       </div>
                     )}
@@ -2318,7 +2321,7 @@ export default function AdminDashboard() {
 
                       <div className="border border-thread divide-y divide-dashed divide-thread-dark mb-6">
                         {cart.map((item) => (
-                          <div key={item.id} className="flex justify-between items-center gap-4 p-4 bg-paper-dim/40">
+                          <div key={item.id} className="anim-cart-item flex justify-between items-center gap-4 p-4 bg-paper-dim/40">
                             <div className="flex-1 min-w-0">
                               <p className="font-bold text-ink text-sm truncate">{item.name}</p>
                               <p className="text-xs text-muted mt-0.5 font-mono">৳{item.price} · {item.quantity} in stock</p>
@@ -2404,7 +2407,7 @@ export default function AdminDashboard() {
                         </div>
                       )}
 
-                      <button onClick={handleCheckout} className="w-full bg-moss text-white py-4 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors flex items-center justify-center gap-2">
+                      <button onClick={handleCheckout} className="btn-shimmer btn-float w-full bg-moss text-white py-4 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors flex items-center justify-center gap-2">
                         <IconReceipt className="w-5 h-5" />
                         Complete Sale & Print
                       </button>
@@ -2599,7 +2602,7 @@ export default function AdminDashboard() {
                     Add Product
                   </h3>
 
-                  {invMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${invMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{invMessage.text}</div>}
+                  {invMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${invMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{invMessage.text}</div>}
 
                   <form onSubmit={handleAddInventory} className="space-y-5">
                     <div>
@@ -2659,7 +2662,7 @@ export default function AdminDashboard() {
                         <input required type="number" min="1" className="w-full px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="Pieces" value={invQuantity} onChange={(e) => setInvQuantity(e.target.value)} />
                       </div>
                     </div>
-                    <button type="submit" className="w-full mt-2 bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                    <button type="submit" className="btn-shimmer w-full mt-2 bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
                       Save to Database
                     </button>
                   </form>
@@ -2883,7 +2886,7 @@ export default function AdminDashboard() {
                       New Requisition
                     </h3>
                     <p className="text-sm text-muted mb-6">Log what you need to reorder before placing an actual order.</p>
-                    {reqMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${reqMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{reqMessage.text}</div>}
+                    {reqMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${reqMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{reqMessage.text}</div>}
                     <form onSubmit={handleAddRequisition} className="space-y-5">
                       <div>
                         <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Item Needed</label>
@@ -2903,7 +2906,7 @@ export default function AdminDashboard() {
                         <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Notes</label>
                         <textarea rows={2} className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors resize-none" placeholder="Optional" value={reqNotes} onChange={(e) => setReqNotes(e.target.value)} />
                       </div>
-                      <button type="submit" className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                      <button type="submit" className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
                         Log Requisition
                       </button>
                     </form>
@@ -2960,7 +2963,7 @@ export default function AdminDashboard() {
                     New Purchase Order
                   </h3>
                   <p className="text-sm text-muted mb-6">Place an order with a supplier. Stock updates later, once it's received under Add Purchase.</p>
-                  {poMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${poMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{poMessage.text}</div>}
+                  {poMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${poMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{poMessage.text}</div>}
                   <form onSubmit={handleCreatePurchaseOrder} className="space-y-5">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
@@ -3140,7 +3143,7 @@ export default function AdminDashboard() {
                   </h3>
                   <p className="text-sm text-muted mb-6">Recording a purchase here adds stock directly to that product's quantity.</p>
 
-                  {purchaseMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${purchaseMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{purchaseMessage.text}</div>}
+                  {purchaseMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${purchaseMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{purchaseMessage.text}</div>}
 
                   <form onSubmit={handlePurchaseBarcodeSearch} className="flex gap-2 mb-6">
                     <input type="text" placeholder="Scan or type product barcode..." className="flex-1 px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" value={purchaseBarcode} onChange={(e) => setPurchaseBarcode(e.target.value)} />
@@ -3185,7 +3188,7 @@ export default function AdminDashboard() {
                           ))}
                         </div>
                       </div>
-                      <button onClick={handleRecordPurchase} className="w-full bg-moss text-white py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors">
+                      <button onClick={handleRecordPurchase} className="btn-shimmer w-full bg-moss text-white py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors">
                         Record Purchase & Update Stock
                       </button>
                     </div>
@@ -3204,7 +3207,7 @@ export default function AdminDashboard() {
                   </h3>
                   <p className="text-sm text-muted mb-6">Sending stock back to a supplier removes it from your active inventory.</p>
 
-                  {returnMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${returnMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{returnMessage.text}</div>}
+                  {returnMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${returnMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{returnMessage.text}</div>}
 
                   <form onSubmit={handleReturnBarcodeSearch} className="flex gap-2 mb-6">
                     <input type="text" placeholder="Scan or type product barcode..." className="flex-1 px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-oxblood outline-none text-ink font-mono transition-colors" value={returnBarcode} onChange={(e) => setReturnBarcode(e.target.value)} />
@@ -3288,7 +3291,7 @@ export default function AdminDashboard() {
                       New Sales Order
                     </h3>
                     <p className="text-sm text-muted mb-6">Log a customer pre-order to fulfill later — no stock is deducted until you ring it up at the till.</p>
-                    {soMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${soMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{soMessage.text}</div>}
+                    {soMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${soMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{soMessage.text}</div>}
                     <form onSubmit={handleAddSalesOrder} className="space-y-5">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -3322,7 +3325,7 @@ export default function AdminDashboard() {
                         <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Notes</label>
                         <textarea rows={2} className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors resize-none" placeholder="Optional" value={soNotes} onChange={(e) => setSoNotes(e.target.value)} />
                       </div>
-                      <button type="submit" className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                      <button type="submit" className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
                         Log Sales Order
                       </button>
                     </form>
@@ -3443,7 +3446,7 @@ export default function AdminDashboard() {
                   </h3>
                   <p className="text-sm text-muted mb-6">Find a product by name when there's no barcode to scan, then complete the sale directly.</p>
 
-                  {addSaleMessage.text && <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${addSaleMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{addSaleMessage.text}</div>}
+                  {addSaleMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${addSaleMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{addSaleMessage.text}</div>}
 
                   {!addSaleSelectedItem ? (
                     <>
@@ -3503,7 +3506,7 @@ export default function AdminDashboard() {
                           <input type="text" placeholder="Mobile banking TrxID" className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors mb-4" value={addSaleTrxId} onChange={(e) => setAddSaleTrxId(e.target.value)} />
                         )}
                       </div>
-                      <button onClick={handleCompleteAddSale} className="w-full bg-moss text-white py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors">
+                      <button onClick={handleCompleteAddSale} className="btn-shimmer w-full bg-moss text-white py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors">
                         Complete Sale
                       </button>
                     </div>
@@ -3735,7 +3738,7 @@ export default function AdminDashboard() {
                   </p>
 
                   {memberMessage.text && (
-                    <div className={`px-4 py-3 mb-5 text-sm font-semibold border ${memberMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
+                    <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${memberMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
                       {memberMessage.text}
                     </div>
                   )}
@@ -3783,7 +3786,7 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    <button type="submit" className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                    <button type="submit" className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
                       Enroll Member
                     </button>
                   </form>
@@ -3923,7 +3926,7 @@ export default function AdminDashboard() {
                     <p className="text-xs font-bold uppercase tracking-wider text-thread mb-2">Net Revenue {startDate ? '(Filtered Period)' : '(All Time)'}</p>
                     <p className="font-mono text-4xl sm:text-5xl font-bold tracking-tight">৳{totalRevenue.toLocaleString()}</p>
                   </div>
-                  <div className="bg-canvas p-8 border border-thread flex flex-col justify-center">
+                  <div className="anim-card bg-canvas p-8 border border-thread flex flex-col justify-center card-lift">
                     <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Total Successful Sales</p>
                     <div className="flex items-baseline gap-2">
                       <p className="font-mono text-4xl sm:text-5xl font-bold text-ink">{salesRecord.filter(s => s.status === 'completed').length}</p>
@@ -4021,7 +4024,7 @@ export default function AdminDashboard() {
                     </div>
                     <button
                       onClick={() => saveBusinessSettings({ business_name: businessSettings.business_name, address: businessSettings.address, phone: businessSettings.phone }, 'business')}
-                      className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
+                      className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
                     >
                       Save Changes
                     </button>
@@ -4056,7 +4059,7 @@ export default function AdminDashboard() {
                     </div>
                     <button
                       onClick={() => saveBusinessSettings({ receipt_footer_line1: businessSettings.receipt_footer_line1, receipt_footer_line2: businessSettings.receipt_footer_line2 }, 'invoice')}
-                      className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
+                      className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
                     >
                       Save Changes
                     </button>
@@ -4083,7 +4086,7 @@ export default function AdminDashboard() {
                     </div>
                     <button
                       onClick={() => saveBusinessSettings({ barcode_prefix: businessSettings.barcode_prefix }, 'barcode')}
-                      className="w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
+                      className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
                     >
                       Save Changes
                     </button>
@@ -4239,7 +4242,7 @@ export default function AdminDashboard() {
                     "Sync from real sales" will replace manual entries with calculated figures from your actual transactions.
                   </p>
                   {surveyMessage.text && (
-                    <div className={`px-4 py-3 mb-4 text-sm font-semibold border ${surveyMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
+                    <div className={`anim-alert px-4 py-3 mb-4 text-sm font-semibold border ${surveyMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
                       {surveyMessage.text}
                     </div>
                   )}
@@ -4294,6 +4297,7 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            </div>{/* end tab-enter wrapper */}
 
           </div>
         </div>
