@@ -363,6 +363,7 @@ export default function AdminDashboard() {
   const [trxId, setTrxId] = useState('');
   const [posMessage, setPosMessage] = useState({ type: '', text: '' });
   const [discountAmount, setDiscountAmount] = useState('0');
+  const [isCheckingOut, setIsCheckingOut] = useState(false); // BUG-01 fix: prevents double-submit
   const [selectedTaxRateId, setSelectedTaxRateId] = useState<string>('');
 
   // Inventory State
@@ -725,12 +726,12 @@ export default function AdminDashboard() {
     const phone = memberPhone.trim();
     if (!phone) return;
 
-    // Check for duplicate
+    // BUG-05 fix: .maybeSingle() returns null (not an error) when no row found
     const { data: existing } = await supabase
       .from('memberships')
       .select('id')
       .eq('phone', phone)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       setMemberMessage({ type: 'error', text: `${phone} is already a member.` });
@@ -838,7 +839,8 @@ export default function AdminDashboard() {
     fetchTaxRates();
     fetchMembers();
     fetchMembershipSettings();
-  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings]);
+    fetchSurveyData(); // BUG-06 fix: was missing — Survey tab was blank on first login
+  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchSurveyData]);
 
   // --- REAL SUPABASE AUTH SESSION HANDLING ---
   // Replaces the old localStorage timer: Supabase's own client keeps the
@@ -905,6 +907,9 @@ export default function AdminDashboard() {
 
     if (error || !data) {
       setPosMessage({ type: 'error', text: 'Dress not found! Check the barcode.' });
+    } else if (data.status === 'archived') {
+      // BUG-07 fix: archived items must not be sold
+      setPosMessage({ type: 'error', text: `"${data.name}" is archived and cannot be sold. Restore it under Stock & Bundles first.` });
     } else {
       const existingCartItem = cart.find(item => item.id === data.id);
       const currentCartQty = existingCartItem ? existingCartItem.cartQty : 0;
@@ -942,82 +947,91 @@ export default function AdminDashboard() {
   };
 
   const handleCheckout = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || isCheckingOut) return; // BUG-01: block double-submit
+    setIsCheckingOut(true);
 
-    const subtotal = cart.reduce((total, item) => total + item.price * item.cartQty, 0);
-    const discount = Math.min(Math.max(parseFloat(discountAmount) || 0, 0), subtotal);
-    const subtotalAfterDiscount = subtotal - discount;
-    const activeTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
-    const taxTotal = activeTaxRate ? Math.round(subtotalAfterDiscount * (Number(activeTaxRate.rate_percent) / 100)) : 0;
+    try {
+      const subtotal = cart.reduce((total, item) => total + item.price * item.cartQty, 0);
+      const discount = Math.min(Math.max(parseFloat(discountAmount) || 0, 0), subtotal);
+      const subtotalAfterDiscount = subtotal - discount;
+      const activeTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
+      const taxTotal = activeTaxRate ? Math.round(subtotalAfterDiscount * (Number(activeTaxRate.rate_percent) / 100)) : 0;
 
-    // Flatten the cart to one entry per physical unit (matches how each row
-    // in `sales` represents a single sold piece), then spread the discount
-    // and tax proportionally across those units so amount_paid always
-    // reflects what was actually collected — which keeps every revenue
-    // total elsewhere (Reports, Overview, All Sales) correct automatically,
-    // since they all just sum amount_paid.
-    const units: any[] = [];
-    cart.forEach(item => {
-      for (let i = 0; i < item.cartQty; i++) units.push(item);
-    });
+      const units: any[] = [];
+      cart.forEach(item => {
+        for (let i = 0; i < item.cartQty; i++) units.push(item);
+      });
 
-    let remainingDiscount = discount;
-    let remainingTax = taxTotal;
+      let remainingDiscount = discount;
+      let remainingTax = taxTotal;
 
-    const dbPaymentMethod = paymentMethod === 'bank/card' ? 'cash' : paymentMethod;
-    const dbTrxId = paymentMethod === 'bank/card'
-      ? 'BANK/CARD-SALE'
-      : (paymentMethod === 'cash' ? 'DIRECT-SALE' : trxId);
+      const dbPaymentMethod = paymentMethod === 'bank/card' ? 'cash' : paymentMethod;
+      const dbTrxId = paymentMethod === 'bank/card'
+        ? 'BANK/CARD-SALE'
+        : (paymentMethod === 'cash' ? 'DIRECT-SALE' : trxId);
 
-    const salesData = units.map((item, idx) => {
-      const isLast = idx === units.length - 1;
-      const rowDiscount = isLast ? remainingDiscount : (subtotal > 0 ? Math.round((item.price / subtotal) * discount) : 0);
-      if (!isLast) remainingDiscount -= rowDiscount;
-      const rowTax = isLast ? remainingTax : (subtotal > 0 ? Math.round((item.price / subtotal) * taxTotal) : 0);
-      if (!isLast) remainingTax -= rowTax;
+      const salesData = units.map((item, idx) => {
+        const isLast = idx === units.length - 1;
+        const rowDiscount = isLast ? remainingDiscount : (subtotal > 0 ? Math.round((item.price / subtotal) * discount) : 0);
+        if (!isLast) remainingDiscount -= rowDiscount;
+        const rowTax = isLast ? remainingTax : (subtotal > 0 ? Math.round((item.price / subtotal) * taxTotal) : 0);
+        if (!isLast) remainingTax -= rowTax;
 
-      return {
-        dress_id: item.id,
-        payment_method: dbPaymentMethod,
-        transaction_id: dbTrxId,
-        amount_paid: item.price - rowDiscount + rowTax,
-        discount_amount: rowDiscount,
-        tax_amount: rowTax,
-        status: 'completed',
-      };
-    });
+        return {
+          dress_id: item.id,
+          payment_method: dbPaymentMethod,
+          transaction_id: dbTrxId,
+          amount_paid: item.price - rowDiscount + rowTax,
+          discount_amount: rowDiscount,
+          tax_amount: rowTax,
+          status: 'completed',
+        };
+      });
 
-    const { error: saleError } = await supabase.from('sales').insert(salesData);
+      const { error: saleError } = await supabase.from('sales').insert(salesData);
 
-    if (saleError) {
-      console.error(saleError);
-      setPosMessage({ type: 'error', text: 'Checkout failed. Check console for details.' });
-      return;
+      if (saleError) {
+        console.error(saleError);
+        setPosMessage({ type: 'error', text: 'Checkout failed. Check console for details.' });
+        return;
+      }
+
+      // BUG-03: capture and report stock update failures
+      for (const item of cart) {
+        const newQuantity = item.quantity - item.cartQty;
+        const { error: stockError } = await supabase
+          .from('dresses')
+          .update({
+            quantity: newQuantity,
+            status: newQuantity === 0 ? 'sold' : 'available'
+          })
+          .eq('id', item.id);
+
+        if (stockError) {
+          setPosMessage({
+            type: 'error',
+            text: `Sale saved but stock for "${item.name}" failed to update. Check inventory manually.`
+          });
+          return;
+        }
+      }
+
+      setPosMessage({ type: 'success', text: 'Sale recorded! Printing receipt...' });
+
+      setTimeout(() => {
+        window.print();
+        setCart([]);
+        setTrxId('');
+        setDiscountAmount('0');
+        setSelectedTaxRateId('');
+        fetchRecentInventory();
+        fetchSalesData();
+        fetchOverviewData();
+      }, 500);
+
+    } finally {
+      setIsCheckingOut(false); // BUG-01: always re-enable the button
     }
-
-    for (const item of cart) {
-      const newQuantity = item.quantity - item.cartQty;
-      await supabase
-        .from('dresses')
-        .update({
-          quantity: newQuantity,
-          status: newQuantity === 0 ? 'sold' : 'available'
-        })
-        .eq('id', item.id);
-    }
-
-    setPosMessage({ type: 'success', text: 'Sale recorded! Printing receipt...' });
-
-    setTimeout(() => {
-      window.print();
-      setCart([]);
-      setTrxId('');
-      setDiscountAmount('0');
-      setSelectedTaxRateId('');
-      fetchRecentInventory();
-      fetchSalesData();
-      fetchOverviewData();
-    }, 500);
   };
 
   const cartSubtotal = cart.reduce((total, item) => total + (item.price * item.cartQty), 0);
@@ -1271,7 +1285,9 @@ export default function AdminDashboard() {
     const { error: itemsError } = await supabase.from('purchase_order_items').insert(itemsPayload);
 
     if (itemsError) {
-      setPoMessage({ type: 'error', text: 'Order created, but line items failed to save.' });
+      // BUG-10 fix: delete the orphaned header so the DB isn't left with an empty order
+      await supabase.from('purchase_orders').delete().eq('id', order.id);
+      setPoMessage({ type: 'error', text: 'Failed to save line items. Please try again.' });
     } else {
       setPoMessage({ type: 'success', text: 'Purchase order created.' });
       setPoSupplierName(''); setPoSupplierPhone(''); setPoExpectedDate(''); setPoNotes('');
@@ -1328,7 +1344,15 @@ export default function AdminDashboard() {
     }
 
     const newQuantity = purchaseMatch.quantity + qty;
-    await supabase.from('dresses').update({ quantity: newQuantity, status: 'available' }).eq('id', purchaseMatch.id);
+    const { error: stockError } = await supabase
+      .from('dresses')
+      .update({ quantity: newQuantity, status: 'available' })
+      .eq('id', purchaseMatch.id);
+
+    if (stockError) {
+      setPurchaseMessage({ type: 'error', text: 'Purchase saved but stock failed to update — check inventory manually.' });
+      return;
+    }
 
     setPurchaseMessage({ type: 'success', text: `Stock updated — ${purchaseMatch.name} now has ${newQuantity} on hand.` });
     setPurchaseBarcode(''); setPurchaseMatch(null); setPurchaseQuantity('1'); setPurchaseUnitCost('');
@@ -1380,7 +1404,15 @@ export default function AdminDashboard() {
     }
 
     const newQuantity = returnMatch.quantity - qty;
-    await supabase.from('dresses').update({ quantity: newQuantity, status: newQuantity === 0 ? 'sold' : 'available' }).eq('id', returnMatch.id);
+    const { error: stockError } = await supabase
+      .from('dresses')
+      .update({ quantity: newQuantity, status: newQuantity === 0 ? 'sold' : 'available' })
+      .eq('id', returnMatch.id);
+
+    if (stockError) {
+      setReturnMessage({ type: 'error', text: 'Return logged but stock failed to update — check inventory manually.' });
+      return;
+    }
 
     setReturnMessage({ type: 'success', text: 'Return logged and stock adjusted.' });
     setReturnBarcode(''); setReturnMatch(null); setReturnQuantity('1'); setReturnReason(''); setReturnSupplierName('');
@@ -1427,6 +1459,22 @@ export default function AdminDashboard() {
     if (!addSaleSelectedItem) return;
     setAddSaleMessage({ type: '', text: '' });
 
+    // BUG-04 fix: re-fetch live stock before selling to avoid stale quantity
+    const { data: liveItem, error: fetchErr } = await supabase
+      .from('dresses')
+      .select('quantity, status')
+      .eq('id', addSaleSelectedItem.id)
+      .single();
+
+    if (fetchErr || !liveItem) {
+      setAddSaleMessage({ type: 'error', text: 'Could not verify stock. Please try again.' });
+      return;
+    }
+    if (liveItem.quantity < 1) {
+      setAddSaleMessage({ type: 'error', text: 'This item is out of stock.' });
+      return;
+    }
+
     const dbPaymentMethod = addSalePaymentMethod === 'bank/card' ? 'cash' : addSalePaymentMethod;
     const dbTrxId = addSalePaymentMethod === 'bank/card'
       ? 'BANK/CARD-SALE'
@@ -1437,6 +1485,8 @@ export default function AdminDashboard() {
       payment_method: dbPaymentMethod,
       transaction_id: dbTrxId,
       amount_paid: addSaleSelectedItem.price,
+      discount_amount: 0, // BUG-09 fix: keep columns consistent with POS checkout
+      tax_amount: 0,
       status: 'completed',
     }]);
 
@@ -1445,11 +1495,17 @@ export default function AdminDashboard() {
       return;
     }
 
-    const newQuantity = addSaleSelectedItem.quantity - 1;
-    await supabase.from('dresses').update({
+    // BUG-04: use live quantity; BUG-03: check stock update error
+    const newQuantity = liveItem.quantity - 1;
+    const { error: stockError } = await supabase.from('dresses').update({
       quantity: newQuantity,
       status: newQuantity === 0 ? 'sold' : 'available',
     }).eq('id', addSaleSelectedItem.id);
+
+    if (stockError) {
+      setAddSaleMessage({ type: 'error', text: 'Sale saved but stock failed to update — check inventory manually.' });
+      return;
+    }
 
     setAddSaleMessage({ type: 'success', text: `Sale recorded for ${addSaleSelectedItem.name}.` });
     setAddSaleSelectedItem(null);
@@ -1542,15 +1598,38 @@ export default function AdminDashboard() {
   };
 
   const processRefund = async (sale: any) => {
-    if (!window.confirm(`Are you sure you want to refund this purchase of ${sale.dresses.name}?`)) return;
+    if (!window.confirm(`Are you sure you want to refund this purchase of ${sale.dresses?.name ?? 'this item'}?`)) return;
     const { error: updateSaleError } = await supabase.from('sales').update({ status: 'refunded' }).eq('id', sale.id);
     if (updateSaleError) {
       setRefundMessage({ type: 'error', text: 'Failed to update sale status.' });
       return;
     }
 
-    const restoredQuantity = sale.dresses.quantity + 1;
-    await supabase.from('dresses').update({ quantity: restoredQuantity, status: 'available' }).eq('id', sale.dresses.id);
+    // BUG-02 fix: re-fetch the current live quantity rather than using the
+    // stale value from the join, which may be minutes or hours out of date.
+    const { data: currentDress, error: fetchError } = await supabase
+      .from('dresses')
+      .select('quantity')
+      .eq('id', sale.dresses.id)
+      .single();
+
+    if (fetchError || !currentDress) {
+      setRefundMessage({ type: 'error', text: 'Refund marked but could not update stock — check inventory manually.' });
+      return;
+    }
+
+    const restoredQuantity = currentDress.quantity + 1;
+    const { error: stockError } = await supabase
+      .from('dresses')
+      .update({ quantity: restoredQuantity, status: 'available' })
+      .eq('id', sale.dresses.id);
+
+    // BUG-03 fix: surface stock update failure instead of silently ignoring it
+    if (stockError) {
+      setRefundMessage({ type: 'error', text: 'Refund marked but stock failed to update — check inventory manually.' });
+      return;
+    }
+
     setRefundMessage({ type: 'success', text: 'Refund successful! Stock levels updated.' });
     setRefundBarcode('');
     setRefundItemSales([]);
@@ -2407,9 +2486,9 @@ export default function AdminDashboard() {
                         </div>
                       )}
 
-                      <button onClick={handleCheckout} className="btn-shimmer btn-float w-full bg-moss text-white py-4 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors flex items-center justify-center gap-2">
+                      <button onClick={handleCheckout} disabled={isCheckingOut} className={`btn-shimmer btn-float w-full bg-moss text-white py-4 font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${isCheckingOut ? 'opacity-60 cursor-not-allowed' : 'hover:bg-moss/90'}`}>
                         <IconReceipt className="w-5 h-5" />
-                        Complete Sale & Print
+                        {isCheckingOut ? 'Processing…' : 'Complete Sale & Print'}
                       </button>
                     </div>
                   )}
@@ -3569,7 +3648,7 @@ export default function AdminDashboard() {
                     {refundItemSales.map((sale) => (
                       <div key={sale.id} className="py-5 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                         <div>
-                          <h4 className="font-bold text-ink text-base">{sale.dresses.name}</h4>
+                          <h4 className="font-bold text-ink text-base">{sale.dresses?.name ?? 'Unknown item'}</h4>
                           <div className="flex flex-col gap-1 mt-2">
                             <p className="text-xs text-muted flex items-center gap-1.5">
                               <IconClock className="w-3.5 h-3.5" />
