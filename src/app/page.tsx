@@ -189,6 +189,11 @@ const IconBadge = (p: React.SVGProps<SVGSVGElement>) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
   </svg>
 );
+const IconWallet = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5A1.5 1.5 0 014.5 6h13A1.5 1.5 0 0119 7.5v10A1.5 1.5 0 0117.5 19h-13A1.5 1.5 0 013 17.5v-10zM3 9.5h16.5M16 13.5h1.5" />
+  </svg>
+);
 
 const NAV_GROUPS = [
   { kind: 'single', id: 'overview', tab: 'overview', label: 'Overview', icon: IconHome },
@@ -224,6 +229,7 @@ const NAV_GROUPS = [
       { tab: 'purchases-return', label: 'List Purchase Return' },
     ],
   },
+  { kind: 'single', id: 'daily-cost', tab: 'daily-cost', label: 'Daily Cost', icon: IconWallet },
   {
     kind: 'group', id: 'membership', label: 'Membership', icon: IconUsers,
     children: [
@@ -511,6 +517,16 @@ export default function AdminDashboard() {
   const [surveyMessage, setSurveyMessage] = useState({ type: '', text: '' });
   const [surveyChartKey, setSurveyChartKey] = useState(0);
 
+  // --- Daily Cost ---
+  const [dailyCosts, setDailyCosts] = useState<any[]>([]);
+  const [dailyCostDate, setDailyCostDate] = useState(() => {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  });
+  const [dailyCostAmount, setDailyCostAmount] = useState('');
+  const [dailyCostNote, setDailyCostNote] = useState('');
+  const [dailyCostMessage, setDailyCostMessage] = useState({ type: '', text: '' });
+
   // --- INVENTORY MEMOIZED FETCH ---
   const fetchRecentInventory = useCallback(async () => {
     const { data } = await supabase
@@ -718,6 +734,16 @@ export default function AdminDashboard() {
     setSurveyChartKey(k => k + 1);
   }, []);
 
+  // --- DAILY COST ---
+  const fetchDailyCosts = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('daily_costs')
+      .select('*')
+      .order('cost_date', { ascending: false })
+      .limit(200);
+    if (!error && data) setDailyCosts(data);
+  }, []);
+
   // --- MEMBERSHIP HANDLERS ---
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -838,7 +864,8 @@ export default function AdminDashboard() {
     fetchTaxRates();
     fetchMembers();
     fetchMembershipSettings();
-  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings]);
+    fetchDailyCosts();
+  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchDailyCosts]);
 
   // --- REAL SUPABASE AUTH SESSION HANDLING ---
   // Replaces the old localStorage timer: Supabase's own client keeps the
@@ -1521,6 +1548,38 @@ export default function AdminDashboard() {
     setSurveyChartKey(k => k + 1);
   };
 
+  // --- DAILY COST HANDLERS ---
+  const handleAddDailyCost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDailyCostMessage({ type: '', text: '' });
+    const amount = parseFloat(dailyCostAmount);
+    if (!dailyCostDate) { setDailyCostMessage({ type: 'error', text: 'Pick a date.' }); return; }
+    if (!amount || amount <= 0) { setDailyCostMessage({ type: 'error', text: 'Enter a valid amount.' }); return; }
+    if (!dailyCostNote.trim()) { setDailyCostMessage({ type: 'error', text: 'Add a short note — what was this cost for?' }); return; }
+
+    const { error } = await supabase.from('daily_costs').insert([{
+      cost_date: dailyCostDate,
+      amount: Math.round(amount * 100) / 100,
+      note: dailyCostNote.trim(),
+    }]);
+
+    if (error) {
+      setDailyCostMessage({ type: 'error', text: 'Failed to save. Make sure migration_007 has been run.' });
+      return;
+    }
+
+    setDailyCostMessage({ type: 'success', text: 'Cost recorded.' });
+    setDailyCostAmount('');
+    setDailyCostNote('');
+    fetchDailyCosts();
+  };
+
+  const handleDeleteDailyCost = async (id: any) => {
+    if (!window.confirm('Remove this cost entry?')) return;
+    const { error } = await supabase.from('daily_costs').delete().eq('id', id);
+    if (!error) fetchDailyCosts();
+  };
+
   // --- REFUND FUNCTIONS ---
   const handleRefundSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1582,7 +1641,8 @@ export default function AdminDashboard() {
     if (activeTab === 'membership-list' || activeTab === 'membership-add') fetchMembers();
     if (activeTab === 'membership-settings') { fetchMembers(); fetchMembershipSettings(); }
     if (activeTab === 'survey') fetchSurveyData();
-  }, [activeTab, isAuthenticated, fetchSalesOrders, fetchSalesData, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchSurveyData]);
+    if (activeTab === 'daily-cost') fetchDailyCosts();
+  }, [activeTab, isAuthenticated, fetchSalesOrders, fetchSalesData, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchSurveyData, fetchDailyCosts]);
 
   const clearDateFilters = () => { setStartDate(''); setEndDate(''); };
 
@@ -4033,6 +4093,125 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* TAB: DAILY COST */}
+            {activeTab === 'daily-cost' && (
+              <div className="space-y-6 print:hidden">
+
+                {/* Summary cards */}
+                {(() => {
+                  const today = new Date();
+                  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+                  const todaysCosts = dailyCosts.filter((c: any) => c.cost_date === todayStr);
+                  const todaysTotal = todaysCosts.reduce((s: number, c: any) => s + Number(c.amount), 0);
+                  const monthStr = todayStr.slice(0, 7);
+                  const monthCosts = dailyCosts.filter((c: any) => c.cost_date.startsWith(monthStr));
+                  const monthTotal = monthCosts.reduce((s: number, c: any) => s + Number(c.amount), 0);
+                  const allTimeTotal = dailyCosts.reduce((s: number, c: any) => s + Number(c.amount), 0);
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="bg-canvas border border-thread p-5">
+                        <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Today's cost</p>
+                        <p className="font-mono text-2xl font-bold text-oxblood">৳{todaysTotal.toLocaleString()}</p>
+                        <p className="text-xs text-muted mt-1">{todaysCosts.length} entr{todaysCosts.length === 1 ? 'y' : 'ies'}</p>
+                      </div>
+                      <div className="bg-canvas border border-thread p-5">
+                        <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">This month</p>
+                        <p className="font-mono text-2xl font-bold text-oxblood">৳{monthTotal.toLocaleString()}</p>
+                        <p className="text-xs text-muted mt-1">{monthCosts.length} entr{monthCosts.length === 1 ? 'y' : 'ies'}</p>
+                      </div>
+                      <div className="bg-canvas border border-thread p-5">
+                        <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">All time</p>
+                        <p className="font-mono text-2xl font-bold text-ink">৳{allTimeTotal.toLocaleString()}</p>
+                        <p className="text-xs text-muted mt-1">{dailyCosts.length} total entries</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Add entry form */}
+                <div className="bg-canvas border border-thread p-6">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconWallet className="w-4 h-4 text-oxblood" />
+                    Add Daily Cost
+                  </h3>
+                  <p className="text-sm text-muted mb-5">
+                    Small out-of-pocket spends — tea, rickshaw fare, a quick repair — that come out of the till.
+                    Every entry here is subtracted from Gross Revenue to calculate Net Profit in Reports.
+                  </p>
+
+                  {dailyCostMessage.text && (
+                    <div className={`anim-alert px-4 py-3 mb-4 text-sm font-semibold border ${dailyCostMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
+                      {dailyCostMessage.text}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleAddDailyCost} className="space-y-4">
+                    <div className="flex flex-wrap gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Date</label>
+                        <input
+                          type="date"
+                          className="px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors"
+                          value={dailyCostDate}
+                          onChange={e => setDailyCostDate(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Amount (৳)</label>
+                        <input
+                          type="number" min="0" step="1" placeholder="e.g. 10"
+                          className="w-36 px-4 py-2.5 bg-oxblood-light/30 border border-oxblood/25 focus:border-oxblood outline-none text-ink font-mono font-bold transition-colors"
+                          value={dailyCostAmount}
+                          onChange={e => setDailyCostAmount(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Note — what was this for?</label>
+                      <input
+                        type="text" placeholder="e.g. Tea for staff, rickshaw fare to bank"
+                        className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors"
+                        value={dailyCostNote}
+                        onChange={e => setDailyCostNote(e.target.value)}
+                      />
+                    </div>
+                    <button type="submit" className="btn-shimmer bg-oxblood text-white px-6 py-2.5 font-bold text-sm uppercase tracking-wider hover:bg-oxblood/90 transition-colors">
+                      Record Cost
+                    </button>
+                  </form>
+                </div>
+
+                {/* Entry log */}
+                <div className="bg-canvas border border-thread overflow-hidden">
+                  <div className="px-6 py-4 border-b border-thread">
+                    <h3 className="text-base font-bold text-ink">Recorded costs</h3>
+                  </div>
+                  {dailyCosts.length === 0 ? (
+                    <p className="text-center py-12 text-sm text-muted">No costs logged yet.</p>
+                  ) : (
+                    <div className="divide-y divide-thread">
+                      {dailyCosts.map((c: any) => (
+                        <div key={c.id} className="px-6 py-4 flex items-center justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="font-mono text-sm text-muted">{c.cost_date}</p>
+                            <p className="text-sm text-ink mt-0.5 truncate">{c.note}</p>
+                          </div>
+                          <span className="font-mono font-bold text-oxblood shrink-0">৳{Number(c.amount).toLocaleString()}</span>
+                          <button
+                            onClick={() => handleDeleteDailyCost(c.id)}
+                            className="text-[11px] font-bold text-muted hover:text-oxblood uppercase tracking-wide transition-colors shrink-0"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
+
             {/* TAB 4: REPORTS */}
             {activeTab === 'reports' && (
               <div className="space-y-6 print:hidden">
@@ -4058,13 +4237,42 @@ export default function AdminDashboard() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="bg-ink p-8 text-paper relative overflow-hidden">
                     <div className="barcode-stripe absolute top-0 right-0 h-full w-24 opacity-[0.06]" style={{ filter: 'invert(1)' }} />
-                    <p className="text-xs font-bold uppercase tracking-wider text-thread mb-2">Net Revenue {startDate ? '(Filtered Period)' : '(All Time)'}</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-thread mb-2">Gross Revenue {startDate ? '(Filtered Period)' : '(All Time)'}</p>
                     <p className="font-mono text-4xl sm:text-5xl font-bold tracking-tight">৳{totalRevenue.toLocaleString()}</p>
                   </div>
-                  <div className="anim-card bg-canvas p-8 border border-thread flex flex-col justify-center card-lift">
+
+                  {(() => {
+                    // Daily costs within the same date window as the sales filter above,
+                    // so "Net Profit" always reflects the same period the admin is viewing.
+                    const filteredCosts = dailyCosts.filter((c: any) => {
+                      if (startDate && c.cost_date < startDate) return false;
+                      if (endDate && c.cost_date > endDate) return false;
+                      return true;
+                    });
+                    const totalCosts = filteredCosts.reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+                    const netProfit = totalRevenue - totalCosts;
+                    return (
+                      <>
+                        <div className="anim-card bg-oxblood-light/40 border border-oxblood/20 p-8 flex flex-col justify-center card-lift">
+                          <p className="text-xs font-bold uppercase tracking-wider text-oxblood mb-2">Daily Costs {startDate ? '(Filtered Period)' : '(All Time)'}</p>
+                          <p className="font-mono text-4xl sm:text-5xl font-bold text-oxblood">৳{totalCosts.toLocaleString()}</p>
+                          <p className="text-xs text-muted mt-2">{filteredCosts.length} entr{filteredCosts.length === 1 ? 'y' : 'ies'} logged</p>
+                        </div>
+                        <div className="anim-card bg-moss-light/50 border border-moss/20 p-8 flex flex-col justify-center card-lift">
+                          <p className="text-xs font-bold uppercase tracking-wider text-moss mb-2">Net Profit {startDate ? '(Filtered Period)' : '(All Time)'}</p>
+                          <p className={`font-mono text-4xl sm:text-5xl font-bold ${netProfit < 0 ? 'text-oxblood' : 'text-moss'}`}>৳{netProfit.toLocaleString()}</p>
+                          <p className="text-xs text-muted mt-2">Revenue minus daily costs</p>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
+                  <div className="bg-canvas p-8 border border-thread flex flex-col justify-center card-lift">
                     <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Total Successful Sales</p>
                     <div className="flex items-baseline gap-2">
                       <p className="font-mono text-4xl sm:text-5xl font-bold text-ink">{salesRecord.filter(s => s.status === 'completed').length}</p>
