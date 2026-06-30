@@ -363,7 +363,6 @@ export default function AdminDashboard() {
   const [trxId, setTrxId] = useState('');
   const [posMessage, setPosMessage] = useState({ type: '', text: '' });
   const [discountAmount, setDiscountAmount] = useState('0');
-  const [isCheckingOut, setIsCheckingOut] = useState(false); // BUG-01 fix: prevents double-submit
   const [selectedTaxRateId, setSelectedTaxRateId] = useState<string>('');
 
   // Inventory State
@@ -726,12 +725,12 @@ export default function AdminDashboard() {
     const phone = memberPhone.trim();
     if (!phone) return;
 
-    // BUG-05 fix: .maybeSingle() returns null (not an error) when no row found
+    // Check for duplicate
     const { data: existing } = await supabase
       .from('memberships')
       .select('id')
       .eq('phone', phone)
-      .maybeSingle();
+      .single();
 
     if (existing) {
       setMemberMessage({ type: 'error', text: `${phone} is already a member.` });
@@ -839,8 +838,7 @@ export default function AdminDashboard() {
     fetchTaxRates();
     fetchMembers();
     fetchMembershipSettings();
-    fetchSurveyData(); // BUG-06 fix: was missing — Survey tab was blank on first login
-  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchSurveyData]);
+  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings]);
 
   // --- REAL SUPABASE AUTH SESSION HANDLING ---
   // Replaces the old localStorage timer: Supabase's own client keeps the
@@ -907,9 +905,6 @@ export default function AdminDashboard() {
 
     if (error || !data) {
       setPosMessage({ type: 'error', text: 'Dress not found! Check the barcode.' });
-    } else if (data.status === 'archived') {
-      // BUG-07 fix: archived items must not be sold
-      setPosMessage({ type: 'error', text: `"${data.name}" is archived and cannot be sold. Restore it under Stock & Bundles first.` });
     } else {
       const existingCartItem = cart.find(item => item.id === data.id);
       const currentCartQty = existingCartItem ? existingCartItem.cartQty : 0;
@@ -947,91 +942,82 @@ export default function AdminDashboard() {
   };
 
   const handleCheckout = async () => {
-    if (cart.length === 0 || isCheckingOut) return; // BUG-01: block double-submit
-    setIsCheckingOut(true);
+    if (cart.length === 0) return;
 
-    try {
-      const subtotal = cart.reduce((total, item) => total + item.price * item.cartQty, 0);
-      const discount = Math.min(Math.max(parseFloat(discountAmount) || 0, 0), subtotal);
-      const subtotalAfterDiscount = subtotal - discount;
-      const activeTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
-      const taxTotal = activeTaxRate ? Math.round(subtotalAfterDiscount * (Number(activeTaxRate.rate_percent) / 100)) : 0;
+    const subtotal = cart.reduce((total, item) => total + item.price * item.cartQty, 0);
+    const discount = Math.min(Math.max(parseFloat(discountAmount) || 0, 0), subtotal);
+    const subtotalAfterDiscount = subtotal - discount;
+    const activeTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
+    const taxTotal = activeTaxRate ? Math.round(subtotalAfterDiscount * (Number(activeTaxRate.rate_percent) / 100)) : 0;
 
-      const units: any[] = [];
-      cart.forEach(item => {
-        for (let i = 0; i < item.cartQty; i++) units.push(item);
-      });
+    // Flatten the cart to one entry per physical unit (matches how each row
+    // in `sales` represents a single sold piece), then spread the discount
+    // and tax proportionally across those units so amount_paid always
+    // reflects what was actually collected — which keeps every revenue
+    // total elsewhere (Reports, Overview, All Sales) correct automatically,
+    // since they all just sum amount_paid.
+    const units: any[] = [];
+    cart.forEach(item => {
+      for (let i = 0; i < item.cartQty; i++) units.push(item);
+    });
 
-      let remainingDiscount = discount;
-      let remainingTax = taxTotal;
+    let remainingDiscount = discount;
+    let remainingTax = taxTotal;
 
-      const dbPaymentMethod = paymentMethod === 'bank/card' ? 'cash' : paymentMethod;
-      const dbTrxId = paymentMethod === 'bank/card'
-        ? 'BANK/CARD-SALE'
-        : (paymentMethod === 'cash' ? 'DIRECT-SALE' : trxId);
+    const dbPaymentMethod = paymentMethod === 'bank/card' ? 'cash' : paymentMethod;
+    const dbTrxId = paymentMethod === 'bank/card'
+      ? 'BANK/CARD-SALE'
+      : (paymentMethod === 'cash' ? 'DIRECT-SALE' : trxId);
 
-      const salesData = units.map((item, idx) => {
-        const isLast = idx === units.length - 1;
-        const rowDiscount = isLast ? remainingDiscount : (subtotal > 0 ? Math.round((item.price / subtotal) * discount) : 0);
-        if (!isLast) remainingDiscount -= rowDiscount;
-        const rowTax = isLast ? remainingTax : (subtotal > 0 ? Math.round((item.price / subtotal) * taxTotal) : 0);
-        if (!isLast) remainingTax -= rowTax;
+    const salesData = units.map((item, idx) => {
+      const isLast = idx === units.length - 1;
+      const rowDiscount = isLast ? remainingDiscount : (subtotal > 0 ? Math.round((item.price / subtotal) * discount) : 0);
+      if (!isLast) remainingDiscount -= rowDiscount;
+      const rowTax = isLast ? remainingTax : (subtotal > 0 ? Math.round((item.price / subtotal) * taxTotal) : 0);
+      if (!isLast) remainingTax -= rowTax;
 
-        return {
-          dress_id: item.id,
-          payment_method: dbPaymentMethod,
-          transaction_id: dbTrxId,
-          amount_paid: item.price - rowDiscount + rowTax,
-          discount_amount: rowDiscount,
-          tax_amount: rowTax,
-          status: 'completed',
-        };
-      });
+      return {
+        dress_id: item.id,
+        payment_method: dbPaymentMethod,
+        transaction_id: dbTrxId,
+        amount_paid: item.price - rowDiscount + rowTax,
+        discount_amount: rowDiscount,
+        tax_amount: rowTax,
+        status: 'completed',
+      };
+    });
 
-      const { error: saleError } = await supabase.from('sales').insert(salesData);
+    const { error: saleError } = await supabase.from('sales').insert(salesData);
 
-      if (saleError) {
-        console.error(saleError);
-        setPosMessage({ type: 'error', text: 'Checkout failed. Check console for details.' });
-        return;
-      }
-
-      // BUG-03: capture and report stock update failures
-      for (const item of cart) {
-        const newQuantity = item.quantity - item.cartQty;
-        const { error: stockError } = await supabase
-          .from('dresses')
-          .update({
-            quantity: newQuantity,
-            status: newQuantity === 0 ? 'sold' : 'available'
-          })
-          .eq('id', item.id);
-
-        if (stockError) {
-          setPosMessage({
-            type: 'error',
-            text: `Sale saved but stock for "${item.name}" failed to update. Check inventory manually.`
-          });
-          return;
-        }
-      }
-
-      setPosMessage({ type: 'success', text: 'Sale recorded! Printing receipt...' });
-
-      setTimeout(() => {
-        window.print();
-        setCart([]);
-        setTrxId('');
-        setDiscountAmount('0');
-        setSelectedTaxRateId('');
-        fetchRecentInventory();
-        fetchSalesData();
-        fetchOverviewData();
-      }, 500);
-
-    } finally {
-      setIsCheckingOut(false); // BUG-01: always re-enable the button
+    if (saleError) {
+      console.error(saleError);
+      setPosMessage({ type: 'error', text: 'Checkout failed. Check console for details.' });
+      return;
     }
+
+    for (const item of cart) {
+      const newQuantity = item.quantity - item.cartQty;
+      await supabase
+        .from('dresses')
+        .update({
+          quantity: newQuantity,
+          status: newQuantity === 0 ? 'sold' : 'available'
+        })
+        .eq('id', item.id);
+    }
+
+    setPosMessage({ type: 'success', text: 'Sale recorded! Printing receipt...' });
+
+    setTimeout(() => {
+      window.print();
+      setCart([]);
+      setTrxId('');
+      setDiscountAmount('0');
+      setSelectedTaxRateId('');
+      fetchRecentInventory();
+      fetchSalesData();
+      fetchOverviewData();
+    }, 500);
   };
 
   const cartSubtotal = cart.reduce((total, item) => total + (item.price * item.cartQty), 0);
@@ -1285,9 +1271,7 @@ export default function AdminDashboard() {
     const { error: itemsError } = await supabase.from('purchase_order_items').insert(itemsPayload);
 
     if (itemsError) {
-      // BUG-10 fix: delete the orphaned header so the DB isn't left with an empty order
-      await supabase.from('purchase_orders').delete().eq('id', order.id);
-      setPoMessage({ type: 'error', text: 'Failed to save line items. Please try again.' });
+      setPoMessage({ type: 'error', text: 'Order created, but line items failed to save.' });
     } else {
       setPoMessage({ type: 'success', text: 'Purchase order created.' });
       setPoSupplierName(''); setPoSupplierPhone(''); setPoExpectedDate(''); setPoNotes('');
@@ -1344,15 +1328,7 @@ export default function AdminDashboard() {
     }
 
     const newQuantity = purchaseMatch.quantity + qty;
-    const { error: stockError } = await supabase
-      .from('dresses')
-      .update({ quantity: newQuantity, status: 'available' })
-      .eq('id', purchaseMatch.id);
-
-    if (stockError) {
-      setPurchaseMessage({ type: 'error', text: 'Purchase saved but stock failed to update — check inventory manually.' });
-      return;
-    }
+    await supabase.from('dresses').update({ quantity: newQuantity, status: 'available' }).eq('id', purchaseMatch.id);
 
     setPurchaseMessage({ type: 'success', text: `Stock updated — ${purchaseMatch.name} now has ${newQuantity} on hand.` });
     setPurchaseBarcode(''); setPurchaseMatch(null); setPurchaseQuantity('1'); setPurchaseUnitCost('');
@@ -1404,15 +1380,7 @@ export default function AdminDashboard() {
     }
 
     const newQuantity = returnMatch.quantity - qty;
-    const { error: stockError } = await supabase
-      .from('dresses')
-      .update({ quantity: newQuantity, status: newQuantity === 0 ? 'sold' : 'available' })
-      .eq('id', returnMatch.id);
-
-    if (stockError) {
-      setReturnMessage({ type: 'error', text: 'Return logged but stock failed to update — check inventory manually.' });
-      return;
-    }
+    await supabase.from('dresses').update({ quantity: newQuantity, status: newQuantity === 0 ? 'sold' : 'available' }).eq('id', returnMatch.id);
 
     setReturnMessage({ type: 'success', text: 'Return logged and stock adjusted.' });
     setReturnBarcode(''); setReturnMatch(null); setReturnQuantity('1'); setReturnReason(''); setReturnSupplierName('');
@@ -1459,22 +1427,6 @@ export default function AdminDashboard() {
     if (!addSaleSelectedItem) return;
     setAddSaleMessage({ type: '', text: '' });
 
-    // BUG-04 fix: re-fetch live stock before selling to avoid stale quantity
-    const { data: liveItem, error: fetchErr } = await supabase
-      .from('dresses')
-      .select('quantity, status')
-      .eq('id', addSaleSelectedItem.id)
-      .single();
-
-    if (fetchErr || !liveItem) {
-      setAddSaleMessage({ type: 'error', text: 'Could not verify stock. Please try again.' });
-      return;
-    }
-    if (liveItem.quantity < 1) {
-      setAddSaleMessage({ type: 'error', text: 'This item is out of stock.' });
-      return;
-    }
-
     const dbPaymentMethod = addSalePaymentMethod === 'bank/card' ? 'cash' : addSalePaymentMethod;
     const dbTrxId = addSalePaymentMethod === 'bank/card'
       ? 'BANK/CARD-SALE'
@@ -1485,8 +1437,6 @@ export default function AdminDashboard() {
       payment_method: dbPaymentMethod,
       transaction_id: dbTrxId,
       amount_paid: addSaleSelectedItem.price,
-      discount_amount: 0, // BUG-09 fix: keep columns consistent with POS checkout
-      tax_amount: 0,
       status: 'completed',
     }]);
 
@@ -1495,17 +1445,11 @@ export default function AdminDashboard() {
       return;
     }
 
-    // BUG-04: use live quantity; BUG-03: check stock update error
-    const newQuantity = liveItem.quantity - 1;
-    const { error: stockError } = await supabase.from('dresses').update({
+    const newQuantity = addSaleSelectedItem.quantity - 1;
+    await supabase.from('dresses').update({
       quantity: newQuantity,
       status: newQuantity === 0 ? 'sold' : 'available',
     }).eq('id', addSaleSelectedItem.id);
-
-    if (stockError) {
-      setAddSaleMessage({ type: 'error', text: 'Sale saved but stock failed to update — check inventory manually.' });
-      return;
-    }
 
     setAddSaleMessage({ type: 'success', text: `Sale recorded for ${addSaleSelectedItem.name}.` });
     setAddSaleSelectedItem(null);
@@ -1598,38 +1542,15 @@ export default function AdminDashboard() {
   };
 
   const processRefund = async (sale: any) => {
-    if (!window.confirm(`Are you sure you want to refund this purchase of ${sale.dresses?.name ?? 'this item'}?`)) return;
+    if (!window.confirm(`Are you sure you want to refund this purchase of ${sale.dresses.name}?`)) return;
     const { error: updateSaleError } = await supabase.from('sales').update({ status: 'refunded' }).eq('id', sale.id);
     if (updateSaleError) {
       setRefundMessage({ type: 'error', text: 'Failed to update sale status.' });
       return;
     }
 
-    // BUG-02 fix: re-fetch the current live quantity rather than using the
-    // stale value from the join, which may be minutes or hours out of date.
-    const { data: currentDress, error: fetchError } = await supabase
-      .from('dresses')
-      .select('quantity')
-      .eq('id', sale.dresses.id)
-      .single();
-
-    if (fetchError || !currentDress) {
-      setRefundMessage({ type: 'error', text: 'Refund marked but could not update stock — check inventory manually.' });
-      return;
-    }
-
-    const restoredQuantity = currentDress.quantity + 1;
-    const { error: stockError } = await supabase
-      .from('dresses')
-      .update({ quantity: restoredQuantity, status: 'available' })
-      .eq('id', sale.dresses.id);
-
-    // BUG-03 fix: surface stock update failure instead of silently ignoring it
-    if (stockError) {
-      setRefundMessage({ type: 'error', text: 'Refund marked but stock failed to update — check inventory manually.' });
-      return;
-    }
-
+    const restoredQuantity = sale.dresses.quantity + 1;
+    await supabase.from('dresses').update({ quantity: restoredQuantity, status: 'available' }).eq('id', sale.dresses.id);
     setRefundMessage({ type: 'success', text: 'Refund successful! Stock levels updated.' });
     setRefundBarcode('');
     setRefundItemSales([]);
@@ -1971,77 +1892,151 @@ export default function AdminDashboard() {
       <div className="lg:flex">
 
         {/* ---- Sidebar (desktop) ---- */}
-        <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 bg-canvas border-r border-thread print:hidden" style={{ transition: 'background 0.25s' }}>
+        <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 bg-canvas border-r border-thread print:hidden" style={{ transition: 'background 0.25s', overflow: 'hidden', position: 'relative' }}>
 
-          {/* ── Brand header ── */}
+          {/* ── Rain animation + Glow button styles ── */}
           <style>{`
+            /* ---- RAIN ---- */
+            .sb-rain {
+              background: linear-gradient(to bottom, rgba(168,118,59,0) 0%, rgba(168,118,59,0.55) 100%);
+              height: 48px;
+              position: absolute;
+              width: 1.5px;
+              z-index: 0;
+              pointer-events: none;
+              border-radius: 1px;
+            }
+            @keyframes sb-fall-1  { from { top:-12%; opacity:0.45; } to { top:108%; opacity:0; } }
+            @keyframes sb-fall-2  { from { top:-18%; opacity:0.35; } to { top:112%; opacity:0; } }
+            @keyframes sb-fall-3  { from { top:-8%;  opacity:0.50; } to { top:104%; opacity:0; } }
+            @keyframes sb-fall-4  { from { top:-20%; opacity:0.40; } to { top:115%; opacity:0; } }
+            @keyframes sb-fall-5  { from { top:-15%; opacity:0.30; } to { top:110%; opacity:0; } }
+            @keyframes sb-fall-6  { from { top:-10%; opacity:0.55; } to { top:106%; opacity:0; } }
+            @keyframes sb-fall-7  { from { top:-22%; opacity:0.38; } to { top:116%; opacity:0; } }
+            @keyframes sb-fall-8  { from { top:-6%;  opacity:0.45; } to { top:102%; opacity:0; } }
+            @keyframes sb-fall-9  { from { top:-14%; opacity:0.42; } to { top:109%; opacity:0; } }
+            @keyframes sb-fall-10 { from { top:-19%; opacity:0.33; } to { top:113%; opacity:0; } }
+            @keyframes sb-fall-11 { from { top:-9%;  opacity:0.48; } to { top:105%; opacity:0; } }
+            @keyframes sb-fall-12 { from { top:-16%; opacity:0.36; } to { top:111%; opacity:0; } }
+            @keyframes sb-fall-13 { from { top:-11%; opacity:0.52; } to { top:107%; opacity:0; } }
+            @keyframes sb-fall-14 { from { top:-24%; opacity:0.40; } to { top:118%; opacity:0; } }
+            @keyframes sb-fall-15 { from { top:-7%;  opacity:0.44; } to { top:103%; opacity:0; } }
+            @keyframes sb-fall-16 { from { top:-21%; opacity:0.37; } to { top:114%; opacity:0; } }
+            @keyframes sb-fall-17 { from { top:-13%; opacity:0.46; } to { top:108%; opacity:0; } }
+            @keyframes sb-fall-18 { from { top:-17%; opacity:0.32; } to { top:112%; opacity:0; } }
+            .sb-rain:nth-child(1)  { left:4%;  animation:sb-fall-1  7s 0.0s infinite; }
+            .sb-rain:nth-child(2)  { left:11%; animation:sb-fall-2  9s 1.5s infinite; }
+            .sb-rain:nth-child(3)  { left:18%; animation:sb-fall-3  6s 0.8s infinite; }
+            .sb-rain:nth-child(4)  { left:25%; animation:sb-fall-4  8s 2.2s infinite; }
+            .sb-rain:nth-child(5)  { left:32%; animation:sb-fall-5  7s 0.4s infinite; }
+            .sb-rain:nth-child(6)  { left:39%; animation:sb-fall-6  9s 3.1s infinite; }
+            .sb-rain:nth-child(7)  { left:46%; animation:sb-fall-7  6s 1.0s infinite; }
+            .sb-rain:nth-child(8)  { left:53%; animation:sb-fall-8  8s 0.2s infinite; }
+            .sb-rain:nth-child(9)  { left:60%; animation:sb-fall-9  7s 2.8s infinite; }
+            .sb-rain:nth-child(10) { left:67%; animation:sb-fall-10 9s 0.6s infinite; }
+            .sb-rain:nth-child(11) { left:74%; animation:sb-fall-11 6s 1.8s infinite; }
+            .sb-rain:nth-child(12) { left:81%; animation:sb-fall-12 8s 3.5s infinite; }
+            .sb-rain:nth-child(13) { left:88%; animation:sb-fall-13 7s 0.9s infinite; }
+            .sb-rain:nth-child(14) { left:7%;  animation:sb-fall-14 9s 4.2s infinite; }
+            .sb-rain:nth-child(15) { left:22%; animation:sb-fall-15 6s 2.0s infinite; }
+            .sb-rain:nth-child(16) { left:50%; animation:sb-fall-16 8s 1.3s infinite; }
+            .sb-rain:nth-child(17) { left:70%; animation:sb-fall-17 7s 3.7s infinite; }
+            .sb-rain:nth-child(18) { left:92%; animation:sb-fall-18 9s 0.5s infinite; }
+
+            /* ---- BRAND GLOW ---- */
             @keyframes brand-glow {
-              0%, 100% {
-                text-shadow:
-                  0 0 6px rgba(168,118,59,0.6),
-                  0 0 14px rgba(168,118,59,0.4),
-                  0 0 28px rgba(168,118,59,0.2);
-              }
-              50% {
-                text-shadow:
-                  0 0 10px rgba(196,154,74,0.9),
-                  0 0 22px rgba(196,154,74,0.6),
-                  0 0 40px rgba(196,154,74,0.35),
-                  0 0 60px rgba(0,200,255,0.15);
-              }
+              0%,100% { text-shadow: 0 0 6px rgba(168,118,59,0.6), 0 0 14px rgba(168,118,59,0.4), 0 0 28px rgba(168,118,59,0.2); }
+              50%      { text-shadow: 0 0 10px rgba(196,154,74,0.9), 0 0 22px rgba(196,154,74,0.6), 0 0 40px rgba(196,154,74,0.35), 0 0 60px rgba(0,200,255,0.15); }
             }
-            @keyframes bar-glow {
-              0%, 100% {
-                box-shadow: 0 0 4px rgba(168,118,59,0.5), 0 0 10px rgba(168,118,59,0.3);
-                opacity: 0.75;
-              }
-              50% {
-                box-shadow: 0 0 8px rgba(196,154,74,1), 0 0 18px rgba(196,154,74,0.6), 0 0 30px rgba(0,200,255,0.2);
-                opacity: 1;
-              }
+            @keyframes bar-glow  { 0%,100% { box-shadow: 0 0 4px rgba(168,118,59,0.5), 0 0 10px rgba(168,118,59,0.3); opacity:0.75; } 50% { box-shadow: 0 0 8px rgba(196,154,74,1), 0 0 18px rgba(196,154,74,0.6), 0 0 30px rgba(0,200,255,0.2); opacity:1; } }
+            @keyframes bar-dance { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(0.65); } }
+            .brand-wordmark     { animation: brand-glow 2.4s ease-in-out infinite; }
+            .brand-wordmark-abs { animation: brand-glow 2.4s ease-in-out infinite 0.3s; color: var(--color-brass); }
+            .brand-bar          { animation: bar-glow 2.4s ease-in-out infinite, bar-dance 1.2s ease-in-out infinite; border-radius:2px; }
+            .brand-bar:nth-child(1)  { animation-delay:0s,0s; }
+            .brand-bar:nth-child(2)  { animation-delay:0.05s,0.1s; }
+            .brand-bar:nth-child(3)  { animation-delay:0.1s,0.2s; }
+            .brand-bar:nth-child(4)  { animation-delay:0.05s,0.05s; }
+            .brand-bar:nth-child(5)  { animation-delay:0.15s,0.3s; }
+            .brand-bar:nth-child(6)  { animation-delay:0.0s,0.15s; }
+            .brand-bar:nth-child(7)  { animation-delay:0.1s,0.05s; }
+            .brand-bar:nth-child(8)  { animation-delay:0.2s,0.25s; }
+            .brand-bar:nth-child(9)  { animation-delay:0.05s,0.1s; }
+            .brand-bar:nth-child(10) { animation-delay:0.15s,0.0s; }
+            .brand-subtitle { animation: brand-glow 2.4s ease-in-out infinite 0.6s; color: var(--color-brass); opacity:0.8; }
+
+            /* ---- NAV GLOW BUTTONS ---- */
+            @keyframes nav-glow-pulse {
+              0%,100% { box-shadow: 0 0 0px rgba(168,118,59,0); }
+              50%      { box-shadow: 0 0 12px rgba(168,118,59,0.55), 0 0 24px rgba(168,118,59,0.25), inset 0 0 8px rgba(168,118,59,0.1); }
             }
-            @keyframes bar-dance {
-              0%,100% { transform: scaleY(1); }
-              50%      { transform: scaleY(0.65); }
+            @keyframes nav-glow-active {
+              0%,100% { box-shadow: 0 0 8px rgba(168,118,59,0.7), 0 0 20px rgba(168,118,59,0.4), inset 0 0 10px rgba(168,118,59,0.15); }
+              50%      { box-shadow: 0 0 14px rgba(196,154,74,1), 0 0 32px rgba(196,154,74,0.5), 0 0 48px rgba(0,200,255,0.15), inset 0 0 14px rgba(196,154,74,0.2); }
             }
-            .brand-wordmark {
-              animation: brand-glow 2.4s ease-in-out infinite;
+            /* inactive nav button — subtle glow on hover */
+            .nav-btn {
+              position: relative;
+              z-index: 1;
+              border: 1px solid transparent;
+              transition: all 0.25s cubic-bezier(0.22,1,0.36,1);
             }
-            .brand-wordmark-abs {
-              animation: brand-glow 2.4s ease-in-out infinite 0.3s;
-              color: var(--color-brass);
+            .nav-btn:hover {
+              border-color: rgba(168,118,59,0.4);
+              animation: nav-glow-pulse 1.8s ease-in-out infinite;
+              color: var(--color-ink) !important;
+              background: rgba(168,118,59,0.08) !important;
             }
-            .brand-bar {
-              animation: bar-glow 2.4s ease-in-out infinite, bar-dance 1.2s ease-in-out infinite;
-              border-radius: 2px;
+            /* active single-item button — constant glow */
+            .nav-btn-active {
+              position: relative;
+              z-index: 1;
+              border: 1px solid rgba(168,118,59,0.6) !important;
+              animation: nav-glow-active 2s ease-in-out infinite !important;
+              background: var(--color-brass) !important;
+              color: white !important;
             }
-            .brand-bar:nth-child(1)  { animation-delay: 0s,    0s; }
-            .brand-bar:nth-child(2)  { animation-delay: 0.05s, 0.1s; }
-            .brand-bar:nth-child(3)  { animation-delay: 0.1s,  0.2s; }
-            .brand-bar:nth-child(4)  { animation-delay: 0.05s, 0.05s; }
-            .brand-bar:nth-child(5)  { animation-delay: 0.15s, 0.3s; }
-            .brand-bar:nth-child(6)  { animation-delay: 0.0s,  0.15s; }
-            .brand-bar:nth-child(7)  { animation-delay: 0.1s,  0.05s; }
-            .brand-bar:nth-child(8)  { animation-delay: 0.2s,  0.25s; }
-            .brand-bar:nth-child(9)  { animation-delay: 0.05s, 0.1s; }
-            .brand-bar:nth-child(10) { animation-delay: 0.15s, 0.0s; }
-            .brand-subtitle {
-              animation: brand-glow 2.4s ease-in-out infinite 0.6s;
-              color: var(--color-brass);
-              opacity: 0.8;
+            /* active group header */
+            .nav-btn-group-active {
+              position: relative;
+              z-index: 1;
+              border: 1px solid rgba(168,118,59,0.35);
+              animation: nav-glow-pulse 2s ease-in-out infinite;
+            }
+            /* active child item */
+            .nav-child-active {
+              color: var(--color-brass) !important;
+              text-shadow: 0 0 8px rgba(168,118,59,0.7), 0 0 16px rgba(168,118,59,0.4);
+              position: relative;
+            }
+            /* refund child active — oxblood glow */
+            .nav-child-refund-active {
+              color: var(--color-oxblood) !important;
+              text-shadow: 0 0 8px rgba(224,92,92,0.7), 0 0 16px rgba(224,92,92,0.4);
+            }
+
+            /* logout glow */
+            .logout-btn {
+              border: 1px solid transparent;
+              transition: all 0.25s;
+            }
+            .logout-btn:hover {
+              border-color: rgba(224,92,92,0.5);
+              box-shadow: 0 0 10px rgba(224,92,92,0.4), 0 0 20px rgba(224,92,92,0.2);
             }
           `}</style>
 
-          <div className="px-6 pt-7 pb-5">
+          {/* Rain drops — 18 strands positioned across the sidebar width */}
+          {[...Array(18)].map((_, i) => (
+            <span key={i} className="sb-rain" aria-hidden="true" />
+          ))}
+
+          {/* ── Brand header ── */}
+          <div className="px-6 pt-7 pb-5 relative z-10">
             <div className="flex items-center gap-3 mb-1">
-              {/* Animated barcode brand mark */}
               <div className="flex items-end gap-[2.5px] h-7 shrink-0">
                 {[3,5,2,6,3,4,6,2,5,3].map((h, i) => (
-                  <div
-                    key={i}
-                    className="brand-bar w-[2.5px] bg-brass"
-                    style={{ height: `${h * 4}px` }}
-                  />
+                  <div key={i} className="brand-bar w-[2.5px] bg-brass" style={{ height: `${h * 4}px` }} />
                 ))}
               </div>
               <div>
@@ -2054,11 +2049,11 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Glowing gradient separator */}
-          <div className="mx-5 h-px" style={{ background: 'linear-gradient(to right, transparent, var(--color-brass), transparent)', opacity: 0.4, boxShadow: '0 0 8px rgba(168,118,59,0.5)' }} />
+          {/* Glowing separator */}
+          <div className="mx-5 h-px relative z-10" style={{ background: 'linear-gradient(to right, transparent, var(--color-brass), transparent)', opacity: 0.4, boxShadow: '0 0 8px rgba(168,118,59,0.5)' }} />
 
           {/* ── Navigation ── */}
-          <nav className="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto">
+          <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto relative z-10">
             {NAV_GROUPS.map((item: any) => {
               if (item.kind === 'single') {
                 const Icon = item.icon;
@@ -2067,10 +2062,8 @@ export default function AdminDashboard() {
                   <button
                     key={item.id}
                     onClick={() => goToTab(item.tab)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 ${
-                      isActive
-                        ? 'bg-brass text-white shadow-sm'
-                        : 'text-muted hover:text-ink hover:bg-paper-dim'
+                    className={`nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold ${
+                      isActive ? 'nav-btn-active' : 'text-muted'
                     }`}
                   >
                     <Icon className="w-[17px] h-[17px] shrink-0" />
@@ -2087,10 +2080,8 @@ export default function AdminDashboard() {
                 <div key={item.id}>
                   <button
                     onClick={() => setExpandedGroup(isExpanded ? null : item.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 ${
-                      isGroupActive
-                        ? 'text-ink bg-brass-light/60'
-                        : 'text-muted hover:text-ink hover:bg-paper-dim'
+                    className={`nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold ${
+                      isGroupActive ? 'nav-btn-group-active text-ink' : 'text-muted'
                     }`}
                   >
                     <Icon className="w-[17px] h-[17px] shrink-0" />
@@ -2099,25 +2090,23 @@ export default function AdminDashboard() {
                   </button>
 
                   {isExpanded && (
-                    <div className="mt-0.5 mb-1 ml-4 pl-4 border-l-2 border-thread space-y-0.5">
+                    <div className="mt-0.5 mb-1 ml-4 pl-4 border-l-2 border-thread/60 space-y-0.5" style={{ borderImage: 'linear-gradient(to bottom, rgba(168,118,59,0.5), rgba(168,118,59,0.1)) 1' }}>
                       {item.children.map((child: any) => {
                         const isChildActive = activeTab === child.tab;
+                        const isRefund = child.tab === 'refund';
                         return (
                           <button
                             key={child.tab}
                             onClick={() => goToTab(child.tab, item.id)}
-                            className={`anim-nav-child w-full flex items-center gap-2.5 text-left px-2.5 py-2 rounded-md text-[13px] font-semibold transition-all duration-150 ${
+                            className={`anim-nav-child nav-btn w-full flex items-center gap-2.5 text-left px-2.5 py-2 rounded-md text-[13px] font-semibold ${
                               isChildActive
-                                ? child.tab === 'refund'
-                                  ? 'text-oxblood bg-oxblood-light/50'
-                                  : 'text-brass bg-brass-light/40'
-                                : 'text-muted hover:text-ink hover:bg-paper-dim'
+                                ? isRefund ? 'nav-child-refund-active bg-oxblood-light/30' : 'nav-child-active bg-brass-light/20'
+                                : 'text-muted'
                             }`}
                           >
-                            {/* Active dot indicator */}
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-all ${
                               isChildActive
-                                ? child.tab === 'refund' ? 'bg-oxblood' : 'bg-brass'
+                                ? isRefund ? 'bg-oxblood shadow-[0_0_6px_rgba(224,92,92,0.8)]' : 'bg-brass shadow-[0_0_6px_rgba(168,118,59,0.8)]'
                                 : 'bg-transparent'
                             }`} />
                             {child.label}
@@ -2132,12 +2121,10 @@ export default function AdminDashboard() {
           </nav>
 
           {/* ── Bottom utility strip ── */}
-          <div className="px-4 pt-3 pb-5 space-y-1 border-t border-thread">
-
-            {/* Theme toggle — pill switch design */}
+          <div className="px-4 pt-3 pb-5 space-y-1 border-t border-thread relative z-10">
             <button
               onClick={toggleTheme}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-muted hover:text-ink hover:bg-paper-dim transition-all duration-150"
+              className="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-muted"
             >
               <div className={`relative w-9 h-5 rounded-full transition-colors duration-300 shrink-0 ${isDark ? 'bg-brass' : 'bg-thread-dark'}`}>
                 <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ${isDark ? 'left-[18px]' : 'left-0.5'}`} />
@@ -2156,13 +2143,12 @@ export default function AdminDashboard() {
 
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-oxblood hover:bg-oxblood-light/50 transition-all duration-150"
+              className="logout-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-oxblood"
             >
               <IconLogout className="w-[17px] h-[17px]" />
               Log Out
             </button>
 
-            {/* Version tag */}
             <p className="text-center text-[10px] font-mono text-muted/50 uppercase tracking-widest pt-2">
               CRAVE ABS v1.0
             </p>
@@ -2486,9 +2472,9 @@ export default function AdminDashboard() {
                         </div>
                       )}
 
-                      <button onClick={handleCheckout} disabled={isCheckingOut} className={`btn-shimmer btn-float w-full bg-moss text-white py-4 font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${isCheckingOut ? 'opacity-60 cursor-not-allowed' : 'hover:bg-moss/90'}`}>
+                      <button onClick={handleCheckout} className="btn-shimmer btn-float w-full bg-moss text-white py-4 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors flex items-center justify-center gap-2">
                         <IconReceipt className="w-5 h-5" />
-                        {isCheckingOut ? 'Processing…' : 'Complete Sale & Print'}
+                        Complete Sale & Print
                       </button>
                     </div>
                   )}
@@ -3648,7 +3634,7 @@ export default function AdminDashboard() {
                     {refundItemSales.map((sale) => (
                       <div key={sale.id} className="py-5 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                         <div>
-                          <h4 className="font-bold text-ink text-base">{sale.dresses?.name ?? 'Unknown item'}</h4>
+                          <h4 className="font-bold text-ink text-base">{sale.dresses.name}</h4>
                           <div className="flex flex-col gap-1 mt-2">
                             <p className="text-xs text-muted flex items-center gap-1.5">
                               <IconClock className="w-3.5 h-3.5" />
