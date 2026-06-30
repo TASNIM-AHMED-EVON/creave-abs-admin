@@ -2369,11 +2369,26 @@ export default function AdminDashboard() {
             {activeTab === 'overview' && (
               <div className="space-y-6 print:hidden">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  <div className="anim-card bg-ink p-7 text-paper relative overflow-hidden card-lift">
-                    <div className="barcode-stripe absolute top-0 right-0 h-full w-20 opacity-[0.06]" style={{ filter: 'invert(1)' }} />
-                    <p className="text-xs font-bold uppercase tracking-wider text-thread mb-2">Today&rsquo;s Revenue</p>
-                    <p className="font-mono text-3xl sm:text-4xl font-bold tracking-tight">৳{todayRevenue.toLocaleString()}</p>
-                  </div>
+                  {(() => {
+                    const today = new Date();
+                    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+                    const todaysCostTotal = dailyCosts
+                      .filter((c: any) => c.cost_date === todayStr)
+                      .reduce((s: number, c: any) => s + Number(c.amount), 0);
+                    const todayNet = todayRevenue - todaysCostTotal;
+                    return (
+                      <div className="anim-card bg-ink p-7 text-paper relative overflow-hidden card-lift">
+                        <div className="barcode-stripe absolute top-0 right-0 h-full w-20 opacity-[0.06]" style={{ filter: 'invert(1)' }} />
+                        <p className="text-xs font-bold uppercase tracking-wider text-thread mb-2">Today&rsquo;s Net</p>
+                        <p className="font-mono text-3xl sm:text-4xl font-bold tracking-tight">৳{todayNet.toLocaleString()}</p>
+                        {todaysCostTotal > 0 && (
+                          <p className="text-[11px] text-thread/70 mt-2 font-mono">
+                            ৳{todayRevenue.toLocaleString()} revenue − ৳{todaysCostTotal.toLocaleString()} cost
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="bg-canvas p-7 border border-thread">
                     <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Items Sold Today</p>
                     <div className="flex items-baseline gap-2">
