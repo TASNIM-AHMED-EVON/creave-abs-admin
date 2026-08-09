@@ -1905,7 +1905,7 @@ export default function AdminDashboard() {
                 type="email"
                 required
                 placeholder="you@example.com"
-                className="glow-input"
+                className="glow-input rounded-md"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoCapitalize="none"
@@ -1917,7 +1917,7 @@ export default function AdminDashboard() {
                 type="password"
                 required
                 placeholder="••••••••"
-                className="glow-input"
+                className="glow-input rounded-md"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
@@ -2368,82 +2368,141 @@ export default function AdminDashboard() {
             {/* TAB 0: OVERVIEW */}
             {activeTab === 'overview' && (
               <div className="space-y-6 print:hidden">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  <div className="anim-card bg-ink p-7 text-paper relative overflow-hidden card-lift">
-                    <div className="barcode-stripe absolute top-0 right-0 h-full w-20 opacity-[0.06]" style={{ filter: 'invert(1)' }} />
-                    <p className="text-xs font-bold uppercase tracking-wider text-thread mb-2">Today&rsquo;s Revenue</p>
-                    <p className="font-mono text-3xl sm:text-4xl font-bold tracking-tight">৳{todayRevenue.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-canvas p-7 border border-thread">
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Items Sold Today</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className="font-mono text-3xl sm:text-4xl font-bold text-ink">{todayItemsSold}</p>
-                      <p className="text-sm font-bold text-muted">pieces</p>
+
+                {/* Shopify-style stat cards with mini sparklines */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+                  {/* Today's Net — hero dark with brass sparkline */}
+                  {(() => {
+                    const today = new Date();
+                    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+                    const todaysCostTotal = dailyCosts
+                      .filter((c: any) => c.cost_date === todayStr)
+                      .reduce((s: number, c: any) => s + Number(c.amount), 0);
+                    const todayNet = todayRevenue - todaysCostTotal;
+                    // Mini sparkline — last 7 days revenue trend from surveyRecords
+                    const spark = surveyRecords.slice(-7).map(r => r.amount);
+                    const sparkMax = Math.max(...spark, 1);
+                    const sparkW = 80, sparkH = 32;
+                    const pts = spark.map((v, i) => {
+                      const x = spark.length < 2 ? sparkW/2 : (i / (spark.length - 1)) * sparkW;
+                      const y = sparkH - (v / sparkMax) * sparkH * 0.85;
+                      return `${x},${y}`;
+                    }).join(' ');
+                    return (
+                      <div className="anim-card p-card-hero relative" style={{ padding: '22px 24px 18px' }}>
+                        <div className="absolute bottom-0 right-6 opacity-40">
+                          {spark.length > 1 && (
+                            <svg width={sparkW} height={sparkH} className="sparkline">
+                              <polyline points={pts} stroke="#c49a4a" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="relative z-10">
+                          <p className="p-stat-card-label" style={{ color: 'rgba(220,200,165,0.65)' }}>Today&rsquo;s Net Revenue</p>
+                          <p className="font-mono text-3xl sm:text-4xl font-bold tracking-tight text-white mt-2">৳{todayNet.toLocaleString()}</p>
+                          {todaysCostTotal > 0 && (
+                            <p className="p-stat-card-sub font-mono" style={{ color: 'rgba(220,200,165,0.5)' }}>
+                              ৳{todayRevenue.toLocaleString()} − ৳{todaysCostTotal.toLocaleString()} cost
+                            </p>
+                          )}
+                          <div className="mt-4 pt-3 flex items-center gap-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                            <span className="p-stat-card-trend up" style={{ background: 'rgba(76,175,128,0.2)', color: '#6dcfa0' }}>
+                              ● Live
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Items sold today */}
+                  <div className="anim-card p-stat-card">
+                    <p className="p-stat-card-label">Items Sold Today</p>
+                    <div className="flex items-baseline gap-2 mt-2">
+                      <span className="p-stat-card-value p-stat">{todayItemsSold}</span>
+                      <span className="text-sm font-medium text-muted">pieces</span>
                     </div>
+                    <p className="p-stat-card-sub">From today&rsquo;s transactions</p>
                   </div>
+
+                  {/* Low stock alerts */}
                   <button
                     onClick={() => goToTab('products-list', 'products')}
-                    className={`text-left p-7 border transition-colors ${lowStockItems.length > 0 ? 'bg-oxblood-light/50 border-oxblood/30 hover:bg-oxblood-light' : 'bg-canvas border-thread hover:border-thread-dark'}`}
+                    className={`anim-card text-left ${lowStockItems.length > 0 ? 'p-card-danger' : 'p-stat-card'}`}
+                    style={{ padding: '20px 24px' }}
                   >
-                    <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${lowStockItems.length > 0 ? 'text-oxblood' : 'text-muted'}`}>Low Stock Alerts</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className={`font-mono text-3xl sm:text-4xl font-bold ${lowStockItems.length > 0 ? 'text-oxblood' : 'text-ink'}`}>{lowStockItems.length}</p>
-                      <p className="text-sm font-bold text-muted">{outOfStockItems.length} out of stock</p>
+                    <p className="p-stat-card-label"
+                       style={{ color: lowStockItems.length > 0 ? 'var(--color-oxblood)' : undefined }}>
+                      Low Stock Alerts
+                    </p>
+                    <div className="flex items-baseline gap-2 mt-2">
+                      <span className={`p-stat-card-value ${lowStockItems.length > 0 ? 'p-stat-danger' : 'p-stat'}`}>
+                        {lowStockItems.length}
+                      </span>
+                      <span className="text-sm font-medium text-muted">{outOfStockItems.length} out of stock</span>
                     </div>
+                    <p className="p-stat-card-sub">{lowStockItems.length > 0 ? 'Tap to manage stock →' : 'All items stocked ✓'}</p>
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-canvas border border-thread">
-                    <div className="flex items-center justify-between px-7 pt-6 pb-5">
-                      <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                {/* Lower two-column panels */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="p-card">
+                    <div className="p-card-header">
+                      <span className="p-card-header-title">
                         <IconAlertTriangle className="w-4 h-4 text-oxblood" />
                         Needs Restocking
-                      </h3>
-                      <button onClick={() => goToTab('products-list', 'products')} className="text-xs font-bold text-brass hover:text-brass-dark uppercase tracking-wide">Manage Stock</button>
+                      </span>
+                      <button onClick={() => goToTab('products-list', 'products')} className="text-xs font-semibold text-brass hover:text-brass-dark uppercase tracking-wide transition-colors">Manage →</button>
                     </div>
-                    <div className="stitch mx-7 mb-1" />
                     {lowStockItems.length === 0 ? (
-                      <p className="px-7 py-8 text-sm text-muted text-center">All active items are comfortably stocked.</p>
+                      <div className="p-empty">
+                        <div className="p-empty-icon"><IconArchive className="w-5 h-5" /></div>
+                        <p className="p-empty-title">All stocked up</p>
+                        <p className="p-empty-desc">All active items are comfortably stocked.</p>
+                      </div>
                     ) : (
-                      <div className="px-7 divide-y divide-thread">
+                      <div className="divide-y" style={{ borderColor: 'var(--card-border)' }}>
                         {lowStockItems.slice(0, 6).map(item => (
-                          <div key={item.id} className="py-3.5 flex justify-between items-center gap-3">
+                          <div key={item.id} className="p-list-item">
                             <div className="min-w-0">
-                              <p className="font-bold text-ink text-sm truncate">{item.name}</p>
-                              <p className="text-xs text-muted font-mono">{item.barcode}</p>
+                              <p className="font-semibold text-ink text-sm truncate">{item.name}</p>
+                              <p className="text-xs text-muted font-mono mt-0.5">{item.barcode}</p>
                             </div>
-                            <span className="text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide bg-oxblood-light text-oxblood shrink-0">
-                              {item.quantity} left
-                            </span>
+                            <span className="p-badge p-badge-danger shrink-0">{item.quantity} left</span>
                           </div>
                         ))}
                       </div>
                     )}
-                    <div className="pb-6" />
                   </div>
 
-                  <div className="bg-canvas border border-thread">
-                    <div className="px-7 pt-6 pb-5">
-                      <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                  <div className="p-card">
+                    <div className="p-card-header">
+                      <span className="p-card-header-title">
                         <IconTrendingUp className="w-4 h-4 text-brass" />
                         Top Sellers (All Time)
-                      </h3>
+                      </span>
                     </div>
-                    <div className="stitch mx-7 mb-1" />
                     {overviewLoading ? (
-                      <p className="px-7 py-8 text-sm text-muted text-center">Loading…</p>
+                      <div className="p-card-body space-y-3">
+                        {[...Array(4)].map((_, i) => <div key={i} className="skeleton h-10 w-full" />)}
+                      </div>
                     ) : topSellers.length === 0 ? (
-                      <p className="px-7 py-8 text-sm text-muted text-center">No completed sales yet.</p>
+                      <div className="p-empty">
+                        <div className="p-empty-icon"><IconChart className="w-5 h-5" /></div>
+                        <p className="p-empty-title">No sales yet</p>
+                        <p className="p-empty-desc">Top sellers will appear here once you start recording sales.</p>
+                      </div>
                     ) : (
-                      <div className="px-7 divide-y divide-thread">
+                      <div className="divide-y" style={{ borderColor: 'var(--card-border)' }}>
                         {topSellers.map((item, i) => (
-                          <div key={item.barcode + i} className="py-3.5 flex justify-between items-center gap-3">
+                          <div key={item.barcode + i} className="p-list-item">
                             <div className="flex items-center gap-3 min-w-0">
-                              <span className="font-mono text-xs font-bold text-thread-dark w-4 shrink-0">{String(i + 1).padStart(2, '0')}</span>
+                              <span className="font-mono text-xs font-bold text-muted w-5 shrink-0 tabular-nums">{String(i + 1).padStart(2, '0')}</span>
                               <div className="min-w-0">
-                                <p className="font-bold text-ink text-sm truncate">{item.name}</p>
-                                <p className="text-xs text-muted font-mono">{item.unitsSold} sold</p>
+                                <p className="font-semibold text-ink text-sm truncate">{item.name}</p>
+                                <p className="text-xs text-muted">{item.unitsSold} sold</p>
                               </div>
                             </div>
                             <p className="font-mono text-sm font-bold text-ink shrink-0">৳{item.revenue.toLocaleString()}</p>
@@ -2451,117 +2510,125 @@ export default function AdminDashboard() {
                         ))}
                       </div>
                     )}
-                    <div className="pb-6" />
                   </div>
                 </div>
 
-                <div className="bg-canvas border border-thread">
-                  <div className="flex items-center justify-between px-7 pt-6 pb-5">
-                    <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                {/* Recent Activity */}
+                <div className="p-card">
+                  <div className="p-card-header">
+                    <span className="p-card-header-title">
                       <IconClock className="w-4 h-4 text-brass" />
                       Recent Activity
-                    </h3>
-                    <button onClick={() => setActiveTab('reports')} className="text-xs font-bold text-brass hover:text-brass-dark uppercase tracking-wide">Full Ledger</button>
+                    </span>
+                    <button onClick={() => goToTab('reports', null)} className="text-xs font-semibold text-brass hover:text-brass-dark uppercase tracking-wide transition-colors">Full Ledger →</button>
                   </div>
-                  <div className="stitch mx-7 mb-1" />
                   {salesRecord.length === 0 ? (
-                    <p className="px-7 py-8 text-sm text-muted text-center">No transactions recorded yet.</p>
+                    <div className="p-empty">
+                      <div className="p-empty-icon"><IconReceipt className="w-5 h-5" /></div>
+                      <p className="p-empty-title">No transactions yet</p>
+                      <p className="p-empty-desc">Sales will appear here once you start recording them at the POS.</p>
+                    </div>
                   ) : (
-                    <div className="px-7 divide-y divide-thread">
+                    <div className="divide-y" style={{ borderColor: 'var(--card-border)' }}>
                       {salesRecord.slice(0, 6).map(sale => (
-                        <div key={sale.id} className="py-3.5 flex justify-between items-center gap-3">
+                        <div key={sale.id} className="p-list-item">
                           <div className="min-w-0">
-                            <p className={`font-bold text-sm truncate ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
-                            <p className="text-xs text-muted font-mono">{new Date(sale.sold_at).toLocaleString('en-BD')}</p>
+                            <p className={`font-semibold text-sm truncate ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
+                            <p className="text-xs text-muted font-mono mt-0.5">{new Date(sale.sold_at).toLocaleString('en-BD')}</p>
                           </div>
-                          <p className={`font-mono text-sm font-bold shrink-0 ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>৳{sale.amount_paid}</p>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className={sale.status === 'refunded' ? 'p-badge p-badge-muted' : 'p-badge p-badge-success'}>{sale.status}</span>
+                            <p className={`font-mono text-sm font-bold ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>৳{sale.amount_paid}</p>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
-                  <div className="pb-6" />
                 </div>
+
               </div>
             )}
 
             {/* TAB 1: POS TERMINAL */}
             {activeTab === 'pos' && (
               <div className="max-w-2xl print:hidden">
-                <div className="bg-canvas border border-thread">
-                  <div className="px-7 pt-7">
+                <div className="p-card">
+                  {/* POS scan header */}
+                  <div style={{ padding: '20px 24px 0' }}>
                     {posMessage.text && (
-                      <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${posMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
+                      <div className={`anim-alert p-alert mb-4 ${posMessage.type === 'error' ? 'text-oxblood' : 'text-moss'}`}>
                         {posMessage.text}
                       </div>
                     )}
-
-                    <form onSubmit={handleBarcodeSubmit} className="mb-7 relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted">
+                    <form onSubmit={handleBarcodeSubmit} className="relative mb-6">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none" style={{ color: 'var(--color-brass)' }}>
                         <IconScan className="h-5 w-5" />
                       </div>
                       <input
                         type="text" autoFocus
-                        placeholder="Scan barcode to add to cart..."
-                        className="w-full pl-12 pr-4 py-4 bg-paper border border-thread text-lg font-mono text-ink focus:bg-canvas focus:border-brass transition-colors outline-none placeholder-muted tracking-wider"
+                        placeholder="Scan or type barcode to add to cart..."
+                        className="pos-scan-input"
+                        style={{ paddingLeft: '46px' }}
                         value={barcodeInput} onChange={(e) => setBarcodeInput(e.target.value)}
                       />
                     </form>
                   </div>
 
                   {cart.length === 0 ? (
-                    <div className="px-7 pb-12 pt-2 text-center">
-                      <IconBag className="w-9 h-9 mx-auto text-thread-dark mb-3" />
-                      <p className="text-sm text-muted">Cart is empty — scan an item to begin a sale.</p>
+                    <div className="p-empty" style={{ paddingBottom: 40 }}>
+                      <div className="p-empty-icon">
+                        <IconBag className="w-5 h-5" />
+                      </div>
+                      <p className="p-empty-title">Cart is empty</p>
+                      <p className="p-empty-desc">Scan an item's barcode above to begin a sale.</p>
                     </div>
                   ) : (
-                    <div className="px-7 pb-7">
-                      <p className="text-[11px] font-bold text-muted uppercase tracking-widest mb-3">Current Sale</p>
-
-                      <div className="border border-thread divide-y divide-dashed divide-thread-dark mb-6">
+                    <div style={{ padding: '0 24px 24px' }}>
+                      {/* Cart items in a clean card */}
+                      <p className="p-label mb-3">Current Sale</p>
+                      <div className="p-card mb-5" style={{ overflow: 'hidden' }}>
                         {cart.map((item) => (
-                          <div key={item.id} className="anim-cart-item flex justify-between items-center gap-4 p-4 bg-paper-dim/40">
+                          <div key={item.id} className="anim-cart-item flex justify-between items-center gap-3 px-4 py-3.5 hover:bg-brass/5 transition-colors" style={{ borderBottom: '1px solid var(--card-border)' }}>
                             <div className="flex-1 min-w-0">
-                              <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                              <p className="font-semibold text-ink text-sm truncate">{item.name}</p>
                               <p className="text-xs text-muted mt-0.5 font-mono">৳{item.price} · {item.quantity} in stock</p>
                             </div>
-
-                            <div className="flex items-center bg-canvas border border-thread">
-                              <button type="button" onClick={() => updateCartItemQuantity(item.id, false)} className="w-7 h-8 text-ink font-bold hover:bg-paper-dim transition-colors">-</button>
-                              <span className="px-3 font-mono font-bold text-sm text-ink">{item.cartQty}</span>
-                              <button type="button" onClick={() => updateCartItemQuantity(item.id, true)} className="w-7 h-8 text-ink font-bold hover:bg-paper-dim transition-colors">+</button>
+                            <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid var(--card-border)', boxShadow: 'var(--shadow-xs)' }}>
+                              <button type="button" onClick={() => updateCartItemQuantity(item.id, false)} className="w-8 h-8 text-ink font-bold hover:bg-brass/10 hover:text-brass transition-colors">−</button>
+                              <span className="px-3 font-mono font-bold text-sm text-ink border-x" style={{ borderColor: 'var(--card-border)' }}>{item.cartQty}</span>
+                              <button type="button" onClick={() => updateCartItemQuantity(item.id, true)} className="w-8 h-8 text-ink font-bold hover:bg-brass/10 hover:text-brass transition-colors">+</button>
                             </div>
-
-                            <p className="font-mono font-bold text-ink text-sm min-w-[64px] text-right">৳{item.price * item.cartQty}</p>
-
-                            <button onClick={() => removeFromCart(item.id)} className="text-oxblood text-xs font-bold hover:underline shrink-0">
-                              Remove
-                            </button>
+                            <p className="font-mono font-bold text-ink text-sm min-w-[72px] text-right">৳{item.price * item.cartQty}</p>
+                            <button onClick={() => removeFromCart(item.id)} className="text-oxblood text-xs font-semibold hover:underline shrink-0 ml-1">Remove</button>
                           </div>
                         ))}
                       </div>
 
-                      <div className="space-y-2.5 mb-6 pb-6 border-b border-thread">
-                        <div className="flex justify-between items-center text-sm">
-                          <p className="font-semibold text-muted">Subtotal</p>
-                          <p className="font-mono font-semibold text-ink">৳{cartSubtotal}</p>
+                      {/* Order summary — discount / tax / total */}
+                      <div className="p-card mb-5" style={{ overflow: 'hidden' }}>
+                        <div className="px-4 py-3 flex justify-between items-center" style={{ borderBottom: '1px solid var(--card-border)' }}>
+                          <span className="text-sm text-muted font-medium">Subtotal</span>
+                          <span className="font-mono font-semibold text-ink text-sm">৳{cartSubtotal}</span>
                         </div>
-                        <div className="flex justify-between items-center gap-3">
-                          <label className="font-semibold text-muted text-sm shrink-0">Discount (৳)</label>
+                        {/* Discount row */}
+                        <div className="px-4 py-3 flex justify-between items-center gap-4" style={{ borderBottom: '1px solid var(--card-border)' }}>
+                          <span className="text-sm text-muted font-medium shrink-0">Discount (৳)</span>
                           <input
-                            type="number"
-                            min="0"
-                            max={cartSubtotal}
-                            className="w-28 px-3 py-1.5 bg-brass-light/30 border border-brass/30 focus:border-brass focus:bg-canvas outline-none text-ink font-mono font-bold text-right transition-colors"
+                            type="number" min="0" max={cartSubtotal}
+                            className="p-input text-right font-mono font-bold"
+                            style={{ width: 110, fontSize: 14 }}
                             value={discountAmount}
                             onChange={(e) => setDiscountAmount(e.target.value)}
                           />
                         </div>
-                        <div className="flex justify-between items-center gap-3">
-                          <label className="font-semibold text-muted text-sm shrink-0">Tax</label>
+                        {/* Tax row */}
+                        <div className="px-4 py-3 flex justify-between items-center gap-4" style={{ borderBottom: cartTaxValue > 0 ? '1px solid var(--card-border)' : 'none' }}>
+                          <span className="text-sm text-muted font-medium shrink-0">Tax</span>
                           <select
                             value={selectedTaxRateId}
                             onChange={(e) => setSelectedTaxRateId(e.target.value)}
-                            className="px-3 py-1.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink text-sm transition-colors cursor-pointer"
+                            className="p-input appearance-none cursor-pointer"
+                            style={{ width: 160, fontSize: 13 }}
                           >
                             <option value="">No Tax</option>
                             {taxRates.map((t: any) => (
@@ -2570,28 +2637,36 @@ export default function AdminDashboard() {
                           </select>
                         </div>
                         {cartTaxValue > 0 && (
-                          <div className="flex justify-between items-center text-sm">
-                            <p className="font-semibold text-muted">Tax Amount</p>
-                            <p className="font-mono font-semibold text-ink">৳{cartTaxValue}</p>
+                          <div className="px-4 py-3 flex justify-between items-center" style={{ borderBottom: '1px solid var(--card-border)' }}>
+                            <span className="text-sm text-muted font-medium">Tax Amount</span>
+                            <span className="font-mono font-semibold text-ink text-sm">+ ৳{cartTaxValue}</span>
                           </div>
                         )}
+                        {/* Total */}
+                        <div className="px-4 py-4 flex justify-between items-center" style={{ background: 'var(--color-paper-dim)' }}>
+                          <span className="text-sm font-bold text-ink uppercase tracking-wide">Total Due</span>
+                          <span className="font-mono text-2xl font-bold p-stat-brass">৳{cartTotal}</span>
+                        </div>
                       </div>
 
-                      <div className="flex justify-between items-baseline mb-6">
-                        <p className="text-sm font-bold text-muted uppercase tracking-wider">Total Due</p>
-                        <p className="font-mono text-3xl font-bold text-ink">৳{cartTotal}</p>
-                      </div>
-
-                      <p className="text-[11px] font-bold text-muted uppercase tracking-widest mb-3">Payment Method</p>
-                      <div className="grid grid-cols-3 gap-2 mb-6">
+                      {/* Payment Method */}
+                      <p className="p-label mb-2">Payment Method</p>
+                      <div className="grid grid-cols-3 gap-2 mb-5">
                         {PAYMENT_METHODS.map((method) => (
                           <button
                             key={method}
-                            className={`py-2.5 text-[11px] font-bold uppercase tracking-wider border transition-colors ${
+                            className={`py-2.5 text-[11px] font-bold uppercase tracking-wide rounded-xl border transition-all ${
                               paymentMethod === method
-                                ? 'bg-ink text-paper border-ink'
-                                : 'bg-canvas text-ink border-thread hover:border-thread-dark'
+                                ? 'text-white border-transparent'
+                                : 'text-muted border-thread hover:border-brass/40 hover:text-ink'
                             }`}
+                            style={paymentMethod === method ? {
+                              background: 'linear-gradient(180deg,#2a2620 0%,#1c1a17 100%)',
+                              boxShadow: 'var(--shadow-sm)'
+                            } : {
+                              background: 'var(--card-bg)',
+                              boxShadow: 'var(--shadow-xs)'
+                            }}
                             onClick={() => setPaymentMethod(method as any)}
                           >
                             {method}
@@ -2600,8 +2675,8 @@ export default function AdminDashboard() {
                       </div>
 
                       {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && (
-                        <div className="mb-6">
-                          <input type="text" placeholder="Mobile banking TrxID" className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={trxId} onChange={(e) => setTrxId(e.target.value)} />
+                        <div className="mb-5">
+                          <input type="text" placeholder="Mobile banking Transaction ID" className="p-input font-mono" value={trxId} onChange={(e) => setTrxId(e.target.value)} />
                         </div>
                       )}
 
@@ -2618,7 +2693,7 @@ export default function AdminDashboard() {
             {/* PRODUCTS: LIST PRODUCTS */}
             {activeTab === 'products-list' && (
                <div className="print:hidden">
-                  <div className="bg-canvas border border-thread">
+                  <div className="p-card">
                     <div className="flex items-center justify-between px-7 pt-7 mb-5 gap-4">
                       <h3 className="text-base font-bold text-ink flex items-center gap-2">
                         <IconCrate className="w-4 h-4 text-brass" />
@@ -2626,7 +2701,7 @@ export default function AdminDashboard() {
                       </h3>
                       <div className="flex items-center gap-4 shrink-0">
                         <span className="text-muted text-xs font-mono font-bold hidden sm:inline">{recentInventory.length} ITEMS</span>
-                        <button onClick={() => goToTab('products-add', 'products')} className="bg-ink text-paper px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5">
+                        <button onClick={() => goToTab('products-add', 'products')} className="p-btn p-btn-primary">
                           <IconPlus className="w-3.5 h-3.5" /> Add Product
                         </button>
                       </div>
@@ -2655,7 +2730,7 @@ export default function AdminDashboard() {
                       Show archived items
                     </label>
 
-                    <div className="stitch mx-7 mb-1" />
+                    <div className="p-divider mx-7 mb-2" />
 
                     <div className="px-7 py-2 divide-y divide-thread">
                       {filteredInventory.length === 0 ? (
@@ -2679,12 +2754,12 @@ export default function AdminDashboard() {
                                       value={editDraft.name}
                                       onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
                                       placeholder="Item title"
-                                      className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                                      className="p-input"
                                     />
                                     <select
                                       value={editDraft.category}
                                       onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })}
-                                      className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                                      className="p-input"
                                     >
                                       {categoryOptions.map((name: string) => (
                                         <option key={name} value={name}>{name}</option>
@@ -2695,7 +2770,7 @@ export default function AdminDashboard() {
                                     <select
                                       value={editDraft.brand}
                                       onChange={(e) => setEditDraft({ ...editDraft, brand: e.target.value })}
-                                      className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                                      className="p-input"
                                     >
                                       <option value="">No brand</option>
                                       {brands.map((b: any) => (
@@ -2705,7 +2780,7 @@ export default function AdminDashboard() {
                                     <select
                                       value={editDraft.unit}
                                       onChange={(e) => setEditDraft({ ...editDraft, unit: e.target.value })}
-                                      className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                                      className="p-input"
                                     >
                                       <option value="Piece">Piece</option>
                                       {units.filter((u: any) => u.name !== 'Piece').map((u: any) => (
@@ -2719,7 +2794,7 @@ export default function AdminDashboard() {
                                       value={editDraft.price}
                                       onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })}
                                       placeholder="Price"
-                                      className="px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink font-mono transition-colors"
+                                      className="p-input"
                                     />
                                     <input
                                       type="number"
@@ -2755,9 +2830,9 @@ export default function AdminDashboard() {
                                     <div className="text-right">
                                       <p className="font-mono font-bold text-ink text-sm">৳{item.price}</p>
                                       <span className={`text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide ${
-                                        isArchived ? 'bg-paper-dim text-muted'
-                                        : isLow || item.quantity === 0 ? 'bg-oxblood-light text-oxblood'
-                                        : 'bg-moss-light text-moss'
+                                        isArchived ? 'p-badge p-badge-muted'
+                                        : isLow || item.quantity === 0 ? 'p-badge p-badge-danger'
+                                        : 'p-badge p-badge-success'
                                       }`}>
                                         {isArchived ? 'archived' : `${item.quantity} in stock`}
                                       </span>
@@ -2794,27 +2869,27 @@ export default function AdminDashboard() {
             {/* PRODUCTS: ADD PRODUCT */}
             {activeTab === 'products-add' && (
               <div className="max-w-xl print:hidden">
-                <div className="bg-canvas p-7 border border-thread">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-6 text-ink flex items-center gap-2">
                     <IconPlus className="w-4 h-4 text-brass" />
                     Add Product
                   </h3>
 
-                  {invMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${invMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{invMessage.text}</div>}
+                  {invMessage.text && <div className={`anim-alert p-alert ${invMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{invMessage.text}</div>}
 
                   <form onSubmit={handleAddInventory} className="space-y-5">
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Barcode Tag</label>
-                      <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Scan or type..." value={invBarcode} onChange={(e) => setInvBarcode(e.target.value)} />
+                      <label className="p-label">Barcode Tag</label>
+                      <input required type="text" className="w-full p-input" placeholder="Scan or type..." value={invBarcode} onChange={(e) => setInvBarcode(e.target.value)} />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Item Title</label>
-                      <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="e.g., Premium Cotton Panjabi" value={invName} onChange={(e) => setInvName(e.target.value)} />
+                      <label className="p-label">Item Title</label>
+                      <input required type="text" className="w-full p-input" placeholder="e.g., Premium Cotton Panjabi" value={invName} onChange={(e) => setInvName(e.target.value)} />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Category</label>
+                      <label className="p-label">Category</label>
                       <div className="relative">
-                        <select required className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink appearance-none transition-colors cursor-pointer" value={invCategory} onChange={(e) => setInvCategory(e.target.value)}>
+                        <select required className="w-full px-4 py-2.5 p-input appearance-none cursor-pointer" value={invCategory} onChange={(e) => setInvCategory(e.target.value)}>
                           <option value="" disabled>Select a category...</option>
                           {(categories.length > 0 ? categories.map((c: any) => c.name) : FALLBACK_CATEGORIES).map((name: string) => (
                             <option key={name} value={name}>{name}</option>
@@ -2832,8 +2907,8 @@ export default function AdminDashboard() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Brand</label>
-                        <select className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink appearance-none transition-colors cursor-pointer" value={invBrand} onChange={(e) => setInvBrand(e.target.value)}>
+                        <label className="p-label">Brand</label>
+                        <select className="w-full px-4 py-2.5 p-input appearance-none cursor-pointer" value={invBrand} onChange={(e) => setInvBrand(e.target.value)}>
                           <option value="">No brand</option>
                           {brands.map((b: any) => (
                             <option key={b.id} value={b.name}>{b.name}</option>
@@ -2841,8 +2916,8 @@ export default function AdminDashboard() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Unit</label>
-                        <select className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink appearance-none transition-colors cursor-pointer" value={invUnit} onChange={(e) => setInvUnit(e.target.value)}>
+                        <label className="p-label">Unit</label>
+                        <select className="w-full px-4 py-2.5 p-input appearance-none cursor-pointer" value={invUnit} onChange={(e) => setInvUnit(e.target.value)}>
                           <option value="Piece">Piece</option>
                           {units.filter((u: any) => u.name !== 'Piece').map((u: any) => (
                             <option key={u.id} value={u.name}>{u.name}</option>
@@ -2852,15 +2927,15 @@ export default function AdminDashboard() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Unit Price (৳)</label>
-                        <input required type="number" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="1500" value={invPrice} onChange={(e) => setInvPrice(e.target.value)} />
+                        <label className="p-label">Unit Price (৳)</label>
+                        <input required type="number" className="w-full p-input" placeholder="1500" value={invPrice} onChange={(e) => setInvPrice(e.target.value)} />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Bundle Qty</label>
+                        <label className="p-label">Bundle Qty</label>
                         <input required type="number" min="1" className="w-full px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="Pieces" value={invQuantity} onChange={(e) => setInvQuantity(e.target.value)} />
                       </div>
                     </div>
-                    <button type="submit" className="btn-shimmer w-full mt-2 bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                    <button type="submit" className="btn-shimmer w-full mt-2 p-btn p-btn-primary">
                       Save to Database
                     </button>
                   </form>
@@ -2871,7 +2946,7 @@ export default function AdminDashboard() {
             {/* PRODUCTS: UPDATE PRICE */}
             {activeTab === 'products-price' && (
               <div className="max-w-2xl print:hidden">
-                <div className="bg-canvas border border-thread">
+                <div className="p-card">
                   <div className="px-7 pt-7 pb-5">
                     <h3 className="text-base font-bold text-ink flex items-center gap-2">
                       <IconTag className="w-4 h-4 text-brass" />
@@ -2891,17 +2966,17 @@ export default function AdminDashboard() {
                       onChange={(e) => setPriceSearchQuery(e.target.value)}
                     />
                   </div>
-                  <div className="stitch mx-7 mb-1" />
-                  <div className="px-7 py-2 divide-y divide-thread max-h-[560px] overflow-y-auto">
+                  <div className="p-divider mx-7 mb-2" />
+                  <div className="px-7 py-2 divide-y divide-thread/50 max-h-[560px] overflow-y-auto">
                     {priceSearchQuery === '' ? (
-                      <p className="text-center py-12 text-sm text-muted">Start typing to find a product.</p>
+                      <div className="p-empty"><p className="p-empty-desc">Start typing to find a product.</p></div>
                     ) : priceSearchResults.length === 0 ? (
-                      <p className="text-center py-12 text-sm text-muted">No matching products.</p>
+                      <div className="p-empty"><p className="p-empty-desc">No matching products.</p></div>
                     ) : (
                       priceSearchResults.map(item => {
                         const isEditing = priceDraftId === item.id;
                         return (
-                          <div key={item.id} className="py-4 flex items-center justify-between gap-4">
+                          <div key={item.id} className="p-list-item">
                             <div className="min-w-0">
                               <p className="font-bold text-ink text-sm truncate">{item.name}</p>
                               <p className="text-xs text-muted font-mono mt-0.5">{item.barcode}</p>
@@ -2941,7 +3016,7 @@ export default function AdminDashboard() {
             {/* PRODUCTS: CATEGORIES */}
             {activeTab === 'products-categories' && (
               <div className="max-w-xl print:hidden">
-                <div className="bg-canvas border border-thread">
+                <div className="p-card">
                   <div className="px-7 pt-7 pb-5">
                     <h3 className="text-base font-bold text-ink flex items-center gap-2">
                       <IconTag className="w-4 h-4 text-brass" />
@@ -2953,18 +3028,18 @@ export default function AdminDashboard() {
                     <input
                       type="text"
                       placeholder="New category name..."
-                      className="flex-1 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                      className="flex-1 p-input text-sm"
                       value={newCategoryName}
                       onChange={(e) => setNewCategoryName(e.target.value)}
                     />
-                    <button type="submit" className="bg-ink text-paper px-5 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5">
+                    <button type="submit" className="p-btn p-btn-primary">
                       <IconPlus className="w-3.5 h-3.5" /> Add
                     </button>
                   </form>
-                  <div className="stitch mx-7 mb-1" />
+                  <div className="p-divider mx-7 mb-2" />
                   <div className="px-7 py-2 divide-y divide-thread">
                     {categories.length === 0 ? (
-                      <p className="text-center py-12 text-sm text-muted">No categories yet — built-in defaults are used until you add your own.</p>
+                      <div className="p-empty"><p className="p-empty-desc">No categories yet — built-in defaults are used until you add your own.</p></div>
                     ) : (
                       categories.map((c: any) => (
                         <div key={c.id} className="py-3 flex items-center justify-between">
@@ -2984,7 +3059,7 @@ export default function AdminDashboard() {
             {/* PRODUCTS: UNITS */}
             {activeTab === 'products-units' && (
               <div className="max-w-xl print:hidden">
-                <div className="bg-canvas border border-thread">
+                <div className="p-card">
                   <div className="px-7 pt-7 pb-5">
                     <h3 className="text-base font-bold text-ink flex items-center gap-2">
                       <IconRuler className="w-4 h-4 text-brass" />
@@ -2996,25 +3071,25 @@ export default function AdminDashboard() {
                     <input
                       type="text"
                       placeholder="Unit name, e.g. Set"
-                      className="flex-1 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                      className="flex-1 p-input text-sm"
                       value={newUnitName}
                       onChange={(e) => setNewUnitName(e.target.value)}
                     />
                     <input
                       type="text"
                       placeholder="Code, e.g. set"
-                      className="w-28 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                      className="w-28 p-input text-sm"
                       value={newUnitCode}
                       onChange={(e) => setNewUnitCode(e.target.value)}
                     />
-                    <button type="submit" className="bg-ink text-paper px-5 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5 shrink-0">
+                    <button type="submit" className="p-btn p-btn-primary shrink-0">
                       <IconPlus className="w-3.5 h-3.5" /> Add
                     </button>
                   </form>
-                  <div className="stitch mx-7 mb-1" />
+                  <div className="p-divider mx-7 mb-2" />
                   <div className="px-7 py-2 divide-y divide-thread">
                     {units.length === 0 ? (
-                      <p className="text-center py-12 text-sm text-muted">No units yet.</p>
+                      <div className="p-empty"><p className="p-empty-desc">No units yet.</p></div>
                     ) : (
                       units.map((u: any) => (
                         <div key={u.id} className="py-3 flex items-center justify-between">
@@ -3034,7 +3109,7 @@ export default function AdminDashboard() {
             {/* PRODUCTS: BRANDS */}
             {activeTab === 'products-brands' && (
               <div className="max-w-xl print:hidden">
-                <div className="bg-canvas border border-thread">
+                <div className="p-card">
                   <div className="px-7 pt-7 pb-5">
                     <h3 className="text-base font-bold text-ink flex items-center gap-2">
                       <IconBookmark className="w-4 h-4 text-brass" />
@@ -3046,18 +3121,18 @@ export default function AdminDashboard() {
                     <input
                       type="text"
                       placeholder="New brand name..."
-                      className="flex-1 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                      className="flex-1 p-input text-sm"
                       value={newBrandName}
                       onChange={(e) => setNewBrandName(e.target.value)}
                     />
-                    <button type="submit" className="bg-ink text-paper px-5 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5">
+                    <button type="submit" className="p-btn p-btn-primary">
                       <IconPlus className="w-3.5 h-3.5" /> Add
                     </button>
                   </form>
-                  <div className="stitch mx-7 mb-1" />
+                  <div className="p-divider mx-7 mb-2" />
                   <div className="px-7 py-2 divide-y divide-thread">
                     {brands.length === 0 ? (
-                      <p className="text-center py-12 text-sm text-muted">No brands yet.</p>
+                      <div className="p-empty"><p className="p-empty-desc">No brands yet.</p></div>
                     ) : (
                       brands.map((b: any) => (
                         <div key={b.id} className="py-3 flex items-center justify-between">
@@ -3078,51 +3153,51 @@ export default function AdminDashboard() {
             {activeTab === 'purchases-requisition' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 print:hidden">
                 <div className="lg:col-span-5">
-                  <div className="bg-canvas p-7 border border-thread">
+                  <div className="p-card p-7">
                     <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                       <IconClipboard className="w-4 h-4 text-brass" />
                       New Requisition
                     </h3>
                     <p className="text-sm text-muted mb-6">Log what you need to reorder before placing an actual order.</p>
-                    {reqMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${reqMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{reqMessage.text}</div>}
+                    {reqMessage.text && <div className={`anim-alert p-alert ${reqMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{reqMessage.text}</div>}
                     <form onSubmit={handleAddRequisition} className="space-y-5">
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Item Needed</label>
-                        <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="e.g., Cotton Panjabi - Medium" value={reqDescription} onChange={(e) => setReqDescription(e.target.value)} />
+                        <label className="p-label">Item Needed</label>
+                        <input required type="text" className="w-full p-input" placeholder="e.g., Cotton Panjabi - Medium" value={reqDescription} onChange={(e) => setReqDescription(e.target.value)} />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Quantity Needed</label>
-                          <input required type="number" min="1" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" value={reqQuantity} onChange={(e) => setReqQuantity(e.target.value)} />
+                          <label className="p-label">Quantity Needed</label>
+                          <input required type="number" min="1" className="w-full p-input" value={reqQuantity} onChange={(e) => setReqQuantity(e.target.value)} />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Preferred Supplier</label>
-                          <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="Optional" value={reqSupplier} onChange={(e) => setReqSupplier(e.target.value)} />
+                          <label className="p-label">Preferred Supplier</label>
+                          <input type="text" className="w-full p-input" placeholder="Optional" value={reqSupplier} onChange={(e) => setReqSupplier(e.target.value)} />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Notes</label>
-                        <textarea rows={2} className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors resize-none" placeholder="Optional" value={reqNotes} onChange={(e) => setReqNotes(e.target.value)} />
+                        <label className="p-label">Notes</label>
+                        <textarea rows={2} className="w-full p-input resize-none" placeholder="Optional" value={reqNotes} onChange={(e) => setReqNotes(e.target.value)} />
                       </div>
-                      <button type="submit" className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                      <button type="submit" className="btn-shimmer w-full p-btn p-btn-primary">
                         Log Requisition
                       </button>
                     </form>
                   </div>
                 </div>
                 <div className="lg:col-span-7">
-                  <div className="bg-canvas border border-thread h-full flex flex-col">
+                  <div className="p-card h-full flex flex-col">
                     <div className="flex items-center justify-between px-7 pt-7 mb-5">
                       <h3 className="text-base font-bold text-ink">Requisition List</h3>
                       <span className="text-muted text-xs font-mono font-bold">{requisitions.length} LOGGED</span>
                     </div>
-                    <div className="stitch mx-7 mb-1" />
+                    <div className="p-divider mx-7 mb-2" />
                     <div className="px-7 py-2 divide-y divide-thread overflow-y-auto max-h-[560px]">
                       {requisitions.length === 0 ? (
-                        <p className="text-center py-12 text-sm text-muted">No requisitions logged yet.</p>
+                        <div className="p-empty"><p className="p-empty-desc">No requisitions logged yet.</p></div>
                       ) : (
                         requisitions.map((r: any) => (
-                          <div key={r.id} className="py-4 flex items-center justify-between gap-3">
+                          <div key={r.id} className="p-list-item">
                             <div className="min-w-0">
                               <p className="font-bold text-ink text-sm truncate">{r.item_description}</p>
                               <p className="text-xs text-muted mt-0.5">
@@ -3133,9 +3208,9 @@ export default function AdminDashboard() {
                               value={r.status}
                               onChange={(e) => updateRequisitionStatus(r.id, e.target.value)}
                               className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 border-0 outline-none cursor-pointer shrink-0 ${
-                                r.status === 'fulfilled' ? 'bg-moss-light text-moss'
-                                : r.status === 'ordered' ? 'bg-brass-light text-brass-dark'
-                                : 'bg-paper-dim text-muted'
+                                r.status === 'fulfilled' ? 'p-badge p-badge-success'
+                                : r.status === 'ordered' ? 'p-badge p-badge-brass'
+                                : 'p-badge p-badge-muted'
                               }`}
                             >
                               <option value="pending">Pending</option>
@@ -3155,52 +3230,52 @@ export default function AdminDashboard() {
             {/* PURCHASES: PURCHASE ORDER */}
             {activeTab === 'purchases-order' && (
               <div className="space-y-6 print:hidden">
-                <div className="bg-canvas p-7 border border-thread">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconFileText className="w-4 h-4 text-brass" />
                     New Purchase Order
                   </h3>
                   <p className="text-sm text-muted mb-6">Place an order with a supplier. Stock updates later, once it's received under Add Purchase.</p>
-                  {poMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${poMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{poMessage.text}</div>}
+                  {poMessage.text && <div className={`anim-alert p-alert ${poMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{poMessage.text}</div>}
                   <form onSubmit={handleCreatePurchaseOrder} className="space-y-5">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Supplier Name</label>
-                        <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={poSupplierName} onChange={(e) => setPoSupplierName(e.target.value)} />
+                        <label className="p-label">Supplier Name</label>
+                        <input required type="text" className="w-full p-input" value={poSupplierName} onChange={(e) => setPoSupplierName(e.target.value)} />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Supplier Phone</label>
-                        <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Optional" value={poSupplierPhone} onChange={(e) => setPoSupplierPhone(e.target.value)} />
+                        <label className="p-label">Supplier Phone</label>
+                        <input type="text" className="w-full p-input" placeholder="Optional" value={poSupplierPhone} onChange={(e) => setPoSupplierPhone(e.target.value)} />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Expected Date</label>
+                        <label className="p-label">Expected Date</label>
                         <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={poExpectedDate} onChange={(e) => setPoExpectedDate(e.target.value)} />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Line Items</label>
+                      <label className="p-label">Line Items</label>
                       <div className="space-y-2">
                         {poLineItems.map((li, i) => (
                           <div key={i} className="flex gap-2 items-center">
                             <input
                               type="text"
                               placeholder="Item description"
-                              className="flex-1 px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink transition-colors"
+                              className="flex-1 p-input"
                               value={li.description}
                               onChange={(e) => updatePoLineItem(i, 'description', e.target.value)}
                             />
                             <input
                               type="number"
                               placeholder="Qty"
-                              className="w-20 px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink font-mono transition-colors"
+                              className="w-20 p-input"
                               value={li.quantity}
                               onChange={(e) => updatePoLineItem(i, 'quantity', e.target.value)}
                             />
                             <input
                               type="number"
                               placeholder="Unit Cost"
-                              className="w-28 px-3 py-2 bg-paper border border-thread focus:border-brass outline-none text-sm text-ink font-mono transition-colors"
+                              className="w-28 p-input"
                               value={li.unitCost}
                               onChange={(e) => updatePoLineItem(i, 'unitCost', e.target.value)}
                             />
@@ -3216,25 +3291,25 @@ export default function AdminDashboard() {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Notes</label>
-                      <textarea rows={2} className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors resize-none" placeholder="Optional" value={poNotes} onChange={(e) => setPoNotes(e.target.value)} />
+                      <label className="p-label">Notes</label>
+                      <textarea rows={2} className="w-full p-input resize-none" placeholder="Optional" value={poNotes} onChange={(e) => setPoNotes(e.target.value)} />
                     </div>
 
-                    <button type="submit" className="bg-ink text-paper px-7 py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                    <button type="submit" className="p-btn p-btn-primary">
                       Create Purchase Order
                     </button>
                   </form>
                 </div>
 
-                <div className="bg-canvas border border-thread">
+                <div className="p-card">
                   <div className="flex items-center justify-between px-7 pt-7 mb-5">
                     <h3 className="text-base font-bold text-ink">Purchase Orders</h3>
                     <span className="text-muted text-xs font-mono font-bold">{purchaseOrders.length} ORDERS</span>
                   </div>
-                  <div className="stitch mx-7 mb-1" />
+                  <div className="p-divider mx-7 mb-2" />
                   <div className="px-7 py-2 divide-y divide-thread">
                     {purchaseOrders.length === 0 ? (
-                      <p className="text-center py-12 text-sm text-muted">No purchase orders yet.</p>
+                      <div className="p-empty"><p className="p-empty-desc">No purchase orders yet.</p></div>
                     ) : (
                       purchaseOrders.map((po: any) => (
                         <div key={po.id} className="py-4">
@@ -3249,9 +3324,9 @@ export default function AdminDashboard() {
                               value={po.status}
                               onChange={(e) => updatePurchaseOrderStatus(po.id, e.target.value)}
                               className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 border-0 outline-none cursor-pointer shrink-0 ${
-                                po.status === 'received' ? 'bg-moss-light text-moss'
-                                : po.status === 'cancelled' ? 'bg-oxblood-light text-oxblood'
-                                : 'bg-brass-light text-brass-dark'
+                                po.status === 'received' ? 'p-badge p-badge-success'
+                                : po.status === 'cancelled' ? 'p-badge p-badge-danger'
+                                : 'p-badge p-badge-brass'
                               }`}
                             >
                               <option value="ordered">Ordered</option>
@@ -3278,17 +3353,17 @@ export default function AdminDashboard() {
             {/* PURCHASES: LIST PURCHASES */}
             {activeTab === 'purchases-list' && (
               <div className="print:hidden">
-                <div className="bg-canvas border border-thread overflow-hidden">
+                <div className="p-card overflow-hidden">
                   <div className="flex items-center justify-between p-7 pb-5">
                     <h3 className="text-base font-bold text-ink">Purchase History</h3>
-                    <button onClick={() => goToTab('purchases-add', 'purchases')} className="bg-ink text-paper px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5">
+                    <button onClick={() => goToTab('purchases-add', 'purchases')} className="p-btn p-btn-primary">
                       <IconPlus className="w-3.5 h-3.5" /> Add Purchase
                     </button>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="p-table">
                       <thead>
-                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread">
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread/60 bg-paper/40">
                           <th className="p-4 font-bold">Date</th>
                           <th className="p-4 font-bold">Item</th>
                           <th className="p-4 font-bold">Supplier</th>
@@ -3315,9 +3390,9 @@ export default function AdminDashboard() {
                             <td className="p-4 text-sm font-mono font-bold text-right text-ink">৳{p.total_cost}</td>
                             <td className="p-4">
                               <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${
-                                p.payment_status === 'paid' ? 'bg-moss-light text-moss'
-                                : p.payment_status === 'due' ? 'bg-oxblood-light text-oxblood'
-                                : 'bg-brass-light text-brass-dark'
+                                p.payment_status === 'paid' ? 'p-badge p-badge-success'
+                                : p.payment_status === 'due' ? 'p-badge p-badge-danger'
+                                : 'p-badge p-badge-brass'
                               }`}>
                                 {p.payment_status}
                               </span>
@@ -3334,18 +3409,18 @@ export default function AdminDashboard() {
             {/* PURCHASES: ADD PURCHASE (the action that moves stock) */}
             {activeTab === 'purchases-add' && (
               <div className="max-w-2xl print:hidden">
-                <div className="bg-canvas p-7 border border-thread">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconTruck className="w-4 h-4 text-brass" />
                     Add Purchase (Goods Received)
                   </h3>
                   <p className="text-sm text-muted mb-6">Recording a purchase here adds stock directly to that product's quantity.</p>
 
-                  {purchaseMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${purchaseMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{purchaseMessage.text}</div>}
+                  {purchaseMessage.text && <div className={`anim-alert p-alert ${purchaseMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{purchaseMessage.text}</div>}
 
                   <form onSubmit={handlePurchaseBarcodeSearch} className="flex gap-2 mb-6">
-                    <input type="text" placeholder="Scan or type product barcode..." className="flex-1 px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" value={purchaseBarcode} onChange={(e) => setPurchaseBarcode(e.target.value)} />
-                    <button type="submit" className="bg-ink text-paper px-6 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">Find</button>
+                    <input type="text" placeholder="Scan or type product barcode..." className="flex-1 p-input" value={purchaseBarcode} onChange={(e) => setPurchaseBarcode(e.target.value)} />
+                    <button type="submit" className="p-btn p-btn-primary">Find</button>
                   </form>
 
                   {purchaseMatch && (
@@ -3358,26 +3433,26 @@ export default function AdminDashboard() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Quantity Received</label>
+                          <label className="p-label">Quantity Received</label>
                           <input type="number" min="1" className="w-full px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-ink font-mono font-bold transition-colors" value={purchaseQuantity} onChange={(e) => setPurchaseQuantity(e.target.value)} />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Unit Cost (৳)</label>
-                          <input type="number" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" value={purchaseUnitCost} onChange={(e) => setPurchaseUnitCost(e.target.value)} />
+                          <label className="p-label">Unit Cost (৳)</label>
+                          <input type="number" className="w-full p-input" value={purchaseUnitCost} onChange={(e) => setPurchaseUnitCost(e.target.value)} />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Supplier Name</label>
-                          <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="Optional" value={purchaseSupplierName} onChange={(e) => setPurchaseSupplierName(e.target.value)} />
+                          <label className="p-label">Supplier Name</label>
+                          <input type="text" className="w-full p-input" placeholder="Optional" value={purchaseSupplierName} onChange={(e) => setPurchaseSupplierName(e.target.value)} />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Supplier Phone</label>
-                          <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Optional" value={purchaseSupplierPhone} onChange={(e) => setPurchaseSupplierPhone(e.target.value)} />
+                          <label className="p-label">Supplier Phone</label>
+                          <input type="text" className="w-full p-input" placeholder="Optional" value={purchaseSupplierPhone} onChange={(e) => setPurchaseSupplierPhone(e.target.value)} />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Payment Status</label>
+                        <label className="p-label">Payment Status</label>
                         <div className="grid grid-cols-3 gap-2">
                           {(['paid', 'due', 'partial'] as const).map((s) => (
                             <button key={s} type="button" onClick={() => setPurchasePaymentStatus(s)} className={`py-2.5 text-[11px] font-bold uppercase tracking-wider border transition-colors ${purchasePaymentStatus === s ? 'bg-ink text-paper border-ink' : 'bg-canvas text-ink border-thread hover:border-thread-dark'}`}>
@@ -3386,7 +3461,7 @@ export default function AdminDashboard() {
                           ))}
                         </div>
                       </div>
-                      <button onClick={handleRecordPurchase} className="btn-shimmer w-full bg-moss text-white py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors">
+                      <button onClick={handleRecordPurchase} className="p-btn p-btn-success btn-shimmer w-full py-3.5">
                         Record Purchase & Update Stock
                       </button>
                     </div>
@@ -3405,7 +3480,7 @@ export default function AdminDashboard() {
                   </h3>
                   <p className="text-sm text-muted mb-6">Sending stock back to a supplier removes it from your active inventory.</p>
 
-                  {returnMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${returnMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{returnMessage.text}</div>}
+                  {returnMessage.text && <div className={`anim-alert p-alert ${returnMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{returnMessage.text}</div>}
 
                   <form onSubmit={handleReturnBarcodeSearch} className="flex gap-2 mb-6">
                     <input type="text" placeholder="Scan or type product barcode..." className="flex-1 px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-oxblood outline-none text-ink font-mono transition-colors" value={returnBarcode} onChange={(e) => setReturnBarcode(e.target.value)} />
@@ -3422,33 +3497,33 @@ export default function AdminDashboard() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Quantity to Return</label>
+                          <label className="p-label">Quantity to Return</label>
                           <input type="number" min="1" max={returnMatch.quantity} className="w-full px-4 py-2.5 bg-oxblood-light/40 border border-oxblood/30 focus:border-oxblood outline-none text-ink font-mono font-bold transition-colors" value={returnQuantity} onChange={(e) => setReturnQuantity(e.target.value)} />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Supplier Name</label>
-                          <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="Optional" value={returnSupplierName} onChange={(e) => setReturnSupplierName(e.target.value)} />
+                          <label className="p-label">Supplier Name</label>
+                          <input type="text" className="w-full p-input" placeholder="Optional" value={returnSupplierName} onChange={(e) => setReturnSupplierName(e.target.value)} />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Reason</label>
-                        <textarea rows={2} className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors resize-none" placeholder="e.g., defective stitching, wrong size shipped" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
+                        <label className="p-label">Reason</label>
+                        <textarea rows={2} className="w-full p-input resize-none" placeholder="e.g., defective stitching, wrong size shipped" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
                       </div>
-                      <button onClick={handleRecordReturn} className="w-full bg-oxblood text-white py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-oxblood/90 transition-colors">
+                      <button onClick={handleRecordReturn} className="p-btn p-btn-danger w-full py-3.5">
                         Log Return & Adjust Stock
                       </button>
                     </div>
                   )}
                 </div>
 
-                <div className="bg-canvas border border-thread overflow-hidden">
+                <div className="p-card overflow-hidden">
                   <div className="p-7 pb-5">
                     <h3 className="text-base font-bold text-ink">Return History</h3>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="p-table">
                       <thead>
-                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread">
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread/60 bg-paper/40">
                           <th className="p-4 font-bold">Date</th>
                           <th className="p-4 font-bold">Item</th>
                           <th className="p-4 font-bold">Supplier</th>
@@ -3483,65 +3558,65 @@ export default function AdminDashboard() {
             {activeTab === 'sell-order' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 print:hidden">
                 <div className="lg:col-span-5">
-                  <div className="bg-canvas p-7 border border-thread">
+                  <div className="p-card p-7">
                     <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                       <IconCalendar className="w-4 h-4 text-brass" />
                       New Sales Order
                     </h3>
                     <p className="text-sm text-muted mb-6">Log a customer pre-order to fulfill later — no stock is deducted until you ring it up at the till.</p>
-                    {soMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${soMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{soMessage.text}</div>}
+                    {soMessage.text && <div className={`anim-alert p-alert ${soMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{soMessage.text}</div>}
                     <form onSubmit={handleAddSalesOrder} className="space-y-5">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Customer Name</label>
-                          <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={soCustomerName} onChange={(e) => setSoCustomerName(e.target.value)} />
+                          <label className="p-label">Customer Name</label>
+                          <input required type="text" className="w-full p-input" value={soCustomerName} onChange={(e) => setSoCustomerName(e.target.value)} />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Customer Phone</label>
-                          <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Optional" value={soCustomerPhone} onChange={(e) => setSoCustomerPhone(e.target.value)} />
+                          <label className="p-label">Customer Phone</label>
+                          <input type="text" className="w-full p-input" placeholder="Optional" value={soCustomerPhone} onChange={(e) => setSoCustomerPhone(e.target.value)} />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Item Wanted</label>
-                        <input required type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" placeholder="e.g., Maroon Panjabi - Large" value={soItemDescription} onChange={(e) => setSoItemDescription(e.target.value)} />
+                        <label className="p-label">Item Wanted</label>
+                        <input required type="text" className="w-full p-input" placeholder="e.g., Maroon Panjabi - Large" value={soItemDescription} onChange={(e) => setSoItemDescription(e.target.value)} />
                       </div>
                       <div className="grid grid-cols-3 gap-4">
                         <div>
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Quantity</label>
-                          <input required type="number" min="1" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" value={soQuantity} onChange={(e) => setSoQuantity(e.target.value)} />
+                          <label className="p-label">Quantity</label>
+                          <input required type="number" min="1" className="w-full p-input" value={soQuantity} onChange={(e) => setSoQuantity(e.target.value)} />
                         </div>
                         <div className="col-span-2">
-                          <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Agreed Price (৳)</label>
-                          <input type="number" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Optional" value={soUnitPrice} onChange={(e) => setSoUnitPrice(e.target.value)} />
+                          <label className="p-label">Agreed Price (৳)</label>
+                          <input type="number" className="w-full p-input" placeholder="Optional" value={soUnitPrice} onChange={(e) => setSoUnitPrice(e.target.value)} />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Needed By</label>
+                        <label className="p-label">Needed By</label>
                         <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={soExpectedDate} onChange={(e) => setSoExpectedDate(e.target.value)} />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Notes</label>
-                        <textarea rows={2} className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors resize-none" placeholder="Optional" value={soNotes} onChange={(e) => setSoNotes(e.target.value)} />
+                        <label className="p-label">Notes</label>
+                        <textarea rows={2} className="w-full p-input resize-none" placeholder="Optional" value={soNotes} onChange={(e) => setSoNotes(e.target.value)} />
                       </div>
-                      <button type="submit" className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                      <button type="submit" className="btn-shimmer w-full p-btn p-btn-primary">
                         Log Sales Order
                       </button>
                     </form>
                   </div>
                 </div>
                 <div className="lg:col-span-7">
-                  <div className="bg-canvas border border-thread h-full flex flex-col">
+                  <div className="p-card h-full flex flex-col">
                     <div className="flex items-center justify-between px-7 pt-7 mb-5">
                       <h3 className="text-base font-bold text-ink">Sales Orders</h3>
                       <span className="text-muted text-xs font-mono font-bold">{salesOrders.length} LOGGED</span>
                     </div>
-                    <div className="stitch mx-7 mb-1" />
+                    <div className="p-divider mx-7 mb-2" />
                     <div className="px-7 py-2 divide-y divide-thread overflow-y-auto max-h-[560px]">
                       {salesOrders.length === 0 ? (
-                        <p className="text-center py-12 text-sm text-muted">No sales orders logged yet.</p>
+                        <div className="p-empty"><p className="p-empty-desc">No sales orders logged yet.</p></div>
                       ) : (
                         salesOrders.map((so: any) => (
-                          <div key={so.id} className="py-4 flex items-center justify-between gap-3">
+                          <div key={so.id} className="p-list-item">
                             <div className="min-w-0">
                               <p className="font-bold text-ink text-sm truncate">{so.item_description}</p>
                               <p className="text-xs text-muted mt-0.5">
@@ -3552,9 +3627,9 @@ export default function AdminDashboard() {
                               value={so.status}
                               onChange={(e) => updateSalesOrderStatus(so.id, e.target.value)}
                               className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 border-0 outline-none cursor-pointer shrink-0 ${
-                                so.status === 'fulfilled' ? 'bg-moss-light text-moss'
-                                : so.status === 'cancelled' ? 'bg-oxblood-light text-oxblood'
-                                : 'bg-brass-light text-brass-dark'
+                                so.status === 'fulfilled' ? 'p-badge p-badge-success'
+                                : so.status === 'cancelled' ? 'p-badge p-badge-danger'
+                                : 'p-badge p-badge-brass'
                               }`}
                             >
                               <option value="pending">Pending</option>
@@ -3574,7 +3649,7 @@ export default function AdminDashboard() {
             {/* SELL: ALL SALES */}
             {activeTab === 'sell-all' && (
               <div className="print:hidden">
-                <div className="bg-canvas border border-thread overflow-hidden">
+                <div className="p-card overflow-hidden">
                   <div className="flex items-center justify-between p-7 pb-5 gap-4">
                     <h3 className="text-base font-bold text-ink">All Sales</h3>
                     <div className="relative w-64">
@@ -3591,9 +3666,9 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="p-table">
                       <thead>
-                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread">
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread/60 bg-paper/40">
                           <th className="p-4 font-bold">Date & Time</th>
                           <th className="p-4 font-bold">Item Details</th>
                           <th className="p-4 font-bold">Method</th>
@@ -3606,7 +3681,7 @@ export default function AdminDashboard() {
                           <tr><td colSpan={5} className="p-8 text-center text-muted font-medium">No matching sales.</td></tr>
                         )}
                         {allSalesFiltered.map((sale) => (
-                          <tr key={sale.id} className={sale.status === 'refunded' ? 'opacity-50' : ''}>
+                          <tr key={sale.id} className={`${sale.status === 'refunded' ? 'opacity-50' : 'hover:bg-brass/5'} transition-colors`}>
                             <td className="p-4 text-sm text-muted whitespace-nowrap font-mono">{new Date(sale.sold_at).toLocaleString('en-BD')}</td>
                             <td className="p-4">
                               <p className={`text-sm font-bold ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
@@ -3618,7 +3693,7 @@ export default function AdminDashboard() {
                               </span>
                             </td>
                             <td className="p-4">
-                              <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${sale.status === 'refunded' ? 'bg-paper-dim text-muted' : 'bg-moss-light text-moss'}`}>
+                              <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${sale.status === 'refunded' ? 'p-badge p-badge-muted' : 'p-badge p-badge-success'}`}>
                                 {sale.status}
                               </span>
                             </td>
@@ -3637,14 +3712,14 @@ export default function AdminDashboard() {
             {/* SELL: ADD SALE (search-based quick sale, no scanner needed) */}
             {activeTab === 'sell-add' && (
               <div className="max-w-xl print:hidden">
-                <div className="bg-canvas p-7 border border-thread">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconBag className="w-4 h-4 text-brass" />
                     Add Sale
                   </h3>
                   <p className="text-sm text-muted mb-6">Find a product by name when there's no barcode to scan, then complete the sale directly.</p>
 
-                  {addSaleMessage.text && <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${addSaleMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{addSaleMessage.text}</div>}
+                  {addSaleMessage.text && <div className={`anim-alert p-alert ${addSaleMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{addSaleMessage.text}</div>}
 
                   {!addSaleSelectedItem ? (
                     <>
@@ -3661,7 +3736,7 @@ export default function AdminDashboard() {
                           onChange={(e) => setAddSaleSearchQuery(e.target.value)}
                         />
                       </div>
-                      <div className="divide-y divide-thread max-h-[400px] overflow-y-auto">
+                      <div className="divide-y divide-thread/50 max-h-[400px] overflow-y-auto">
                         {addSaleSearchQuery !== '' && addSaleResults.length === 0 && (
                           <p className="text-center py-8 text-sm text-muted">No in-stock items match that search.</p>
                         )}
@@ -3701,10 +3776,10 @@ export default function AdminDashboard() {
                           ))}
                         </div>
                         {(addSalePaymentMethod !== 'cash' && addSalePaymentMethod !== 'bank/card') && (
-                          <input type="text" placeholder="Mobile banking TrxID" className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors mb-4" value={addSaleTrxId} onChange={(e) => setAddSaleTrxId(e.target.value)} />
+                          <input type="text" placeholder="Mobile banking TrxID" className="w-full p-input mb-4" value={addSaleTrxId} onChange={(e) => setAddSaleTrxId(e.target.value)} />
                         )}
                       </div>
-                      <button onClick={handleCompleteAddSale} className="btn-shimmer w-full bg-moss text-white py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors">
+                      <button onClick={handleCompleteAddSale} className="p-btn p-btn-success btn-shimmer w-full py-3.5">
                         Complete Sale
                       </button>
                     </div>
@@ -3716,17 +3791,17 @@ export default function AdminDashboard() {
             {/* SELL: LIST POS (recent terminal activity, compact view) */}
             {activeTab === 'sell-list-pos' && (
               <div className="print:hidden">
-                <div className="bg-canvas border border-thread">
+                <div className="p-card">
                   <div className="flex items-center justify-between px-7 pt-7 pb-5">
                     <h3 className="text-base font-bold text-ink">Recent POS Activity</h3>
-                    <button onClick={() => goToTab('pos', 'sell')} className="bg-ink text-paper px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5">
+                    <button onClick={() => goToTab('pos', 'sell')} className="p-btn p-btn-primary">
                       <IconScan className="w-3.5 h-3.5" /> Open POS
                     </button>
                   </div>
-                  <div className="stitch mx-7 mb-1" />
+                  <div className="p-divider mx-7 mb-2" />
                   <div className="px-7 py-2 divide-y divide-thread">
                     {salesRecord.length === 0 ? (
-                      <p className="text-center py-12 text-sm text-muted">No sales recorded yet.</p>
+                      <div className="p-empty"><p className="p-empty-desc">No sales recorded yet.</p></div>
                     ) : (
                       salesRecord.slice(0, 30).map(sale => (
                         <div key={sale.id} className="py-3.5 flex items-center justify-between gap-3">
@@ -3756,11 +3831,11 @@ export default function AdminDashboard() {
                     <p className="text-muted mt-2 text-sm">Scan an item to pull up its completed sales history.</p>
                   </div>
 
-                  {refundMessage.text && <div className={`px-4 py-3 mb-6 text-sm font-semibold border text-center ${refundMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>{refundMessage.text}</div>}
+                  {refundMessage.text && <div className={`px-4 py-3 mb-6 text-sm font-semibold border text-center ${refundMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{refundMessage.text}</div>}
 
                   <form onSubmit={handleRefundSearch} className="mb-9 max-w-xl mx-auto flex gap-2">
                     <input type="text" autoFocus placeholder="Scan barcode..." className="flex-1 px-5 py-3.5 bg-paper border border-thread focus:bg-canvas focus:border-oxblood outline-none text-ink font-mono transition-colors text-lg" value={refundBarcode} onChange={(e) => setRefundBarcode(e.target.value)} />
-                    <button type="submit" className="bg-oxblood text-white px-7 font-bold text-sm uppercase tracking-wider hover:bg-oxblood/90 transition-colors">Search</button>
+                    <button type="submit" className="p-btn p-btn-danger px-7">Search</button>
                   </form>
 
                   <div className="divide-y divide-dashed divide-thread-dark max-w-2xl mx-auto">
@@ -3784,7 +3859,7 @@ export default function AdminDashboard() {
                         </div>
                         <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3">
                           <p className="font-mono text-lg font-bold text-ink">৳{sale.amount_paid}</p>
-                          <button onClick={() => processRefund(sale)} className="bg-oxblood-light text-oxblood px-4 py-2 text-xs font-bold uppercase tracking-wide hover:bg-oxblood hover:text-white transition-colors border border-oxblood/20 flex items-center gap-2">
+                          <button onClick={() => processRefund(sale)} className="p-badge p-badge-danger px-4 py-2 text-xs font-bold uppercase tracking-wide hover:bg-oxblood hover:text-white transition-colors border border-oxblood/20 flex items-center gap-2">
                             <IconUndo className="w-3.5 h-3.5" />
                             Approve Refund
                           </button>
@@ -3794,7 +3869,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <div className="bg-canvas border border-thread mt-6">
+                <div className="p-card mt-6">
                   <div className="p-6 border-b border-thread">
                     <h3 className="text-base font-bold text-ink">Recent Returns</h3>
                   </div>
@@ -3803,7 +3878,7 @@ export default function AdminDashboard() {
                       <p className="text-center py-10 text-sm text-muted">No returns recorded yet.</p>
                     ) : (
                       salesRecord.filter(s => s.status === 'refunded').slice(0, 10).map(sale => (
-                        <div key={sale.id} className="py-4 flex items-center justify-between gap-3">
+                        <div key={sale.id} className="p-list-item">
                           <div className="min-w-0">
                             <p className="font-bold text-ink text-sm truncate">{sale.dresses?.name}</p>
                             <p className="text-xs text-muted font-mono mt-0.5">{new Date(sale.sold_at).toLocaleString('en-BD')}</p>
@@ -3821,7 +3896,7 @@ export default function AdminDashboard() {
             {/* MEMBERSHIP: MEMBERS LIST */}
             {activeTab === 'membership-list' && (
               <div className="print:hidden">
-                <div className="bg-canvas border border-thread">
+                <div className="p-card">
                   <div className="flex items-center justify-between px-7 pt-7 pb-5 gap-4 flex-wrap">
                     <div>
                       <h3 className="text-base font-bold text-ink flex items-center gap-2">
@@ -3852,9 +3927,9 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="p-table">
                       <thead>
-                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread">
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread/60 bg-paper/40">
                           <th className="p-4 font-bold">Mobile Number</th>
                           <th className="p-4 font-bold">Note</th>
                           <th className="p-4 font-bold">Start Date</th>
@@ -3891,10 +3966,10 @@ export default function AdminDashboard() {
                                 </td>
                                 <td className="p-4">
                                   <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${
-                                    m.status === 'revoked' ? 'bg-paper-dim text-muted'
-                                    : isExpired ? 'bg-oxblood-light text-oxblood'
-                                    : isExpiringSoon ? 'bg-brass-light text-brass-dark'
-                                    : 'bg-moss-light text-moss'
+                                    m.status === 'revoked' ? 'p-badge p-badge-muted'
+                                    : isExpired ? 'p-badge p-badge-danger'
+                                    : isExpiringSoon ? 'p-badge p-badge-brass'
+                                    : 'p-badge p-badge-success'
                                   }`}>
                                     {m.status === 'revoked' ? 'Revoked' : isExpired ? 'Expired' : isExpiringSoon ? 'Expiring' : 'Active'}
                                   </span>
@@ -3925,7 +4000,7 @@ export default function AdminDashboard() {
             {/* MEMBERSHIP: ADD MEMBER */}
             {activeTab === 'membership-add' && (
               <div className="max-w-lg print:hidden">
-                <div className="bg-canvas p-7 border border-thread">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconUserPlus className="w-4 h-4 text-brass" />
                     Enroll New Member
@@ -3936,14 +4011,14 @@ export default function AdminDashboard() {
                   </p>
 
                   {memberMessage.text && (
-                    <div className={`anim-alert px-4 py-3 mb-5 text-sm font-semibold border ${memberMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
+                    <div className={`anim-alert p-alert ${memberMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>
                       {memberMessage.text}
                     </div>
                   )}
 
                   <form onSubmit={handleAddMember} className="space-y-5">
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Mobile Number</label>
+                      <label className="p-label">Mobile Number</label>
                       <input
                         required
                         type="tel"
@@ -3956,13 +4031,13 @@ export default function AdminDashboard() {
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">
+                      <label className="p-label">
                         Note <span className="text-muted font-normal normal-case">(optional)</span>
                       </label>
                       <input
                         type="text"
                         placeholder="e.g. VIP customer, referred by..."
-                        className="w-full px-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors"
+                        className="w-full p-input"
                         value={memberNote}
                         onChange={(e) => setMemberNote(e.target.value)}
                       />
@@ -3984,7 +4059,7 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    <button type="submit" className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                    <button type="submit" className="btn-shimmer w-full p-btn p-btn-primary">
                       Enroll Member
                     </button>
                   </form>
@@ -4011,7 +4086,7 @@ export default function AdminDashboard() {
             {activeTab === 'membership-settings' && (
               <div className="max-w-xl print:hidden space-y-6">
                 {/* Discount control */}
-                <div className="bg-canvas p-7 border border-thread">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconSettingsGear className="w-4 h-4 text-brass" />
                     Membership Discount
@@ -4021,7 +4096,7 @@ export default function AdminDashboard() {
                   </p>
                   <form onSubmit={saveMembershipSettings} className="space-y-5">
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Discount Percentage (%)</label>
+                      <label className="p-label">Discount Percentage (%)</label>
                       <div className="flex items-center gap-5">
                         <input
                           type="number"
@@ -4048,7 +4123,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Quick stats */}
-                <div className="bg-canvas p-7 border border-thread">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-5 text-ink">Membership Overview</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {[
@@ -4083,7 +4158,7 @@ export default function AdminDashboard() {
                         color: 'text-oxblood',
                       },
                     ].map((stat) => (
-                      <div key={stat.label} className="bg-paper-dim p-4 border border-thread text-center">
+                      <div key={stat.label} className="p-card p-4 text-center hover:border-brass/30">
                         <p className={`font-mono text-3xl font-bold ${stat.color}`}>{stat.value}</p>
                         <p className="text-[10px] font-bold text-muted uppercase tracking-wider mt-1 leading-tight">{stat.label}</p>
                       </div>
@@ -4109,17 +4184,17 @@ export default function AdminDashboard() {
                   const allTimeTotal = dailyCosts.reduce((s: number, c: any) => s + Number(c.amount), 0);
                   return (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="bg-canvas border border-thread p-5">
+                      <div className="p-card p-5">
                         <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Today's cost</p>
                         <p className="font-mono text-2xl font-bold text-oxblood">৳{todaysTotal.toLocaleString()}</p>
                         <p className="text-xs text-muted mt-1">{todaysCosts.length} entr{todaysCosts.length === 1 ? 'y' : 'ies'}</p>
                       </div>
-                      <div className="bg-canvas border border-thread p-5">
+                      <div className="p-card p-5">
                         <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">This month</p>
                         <p className="font-mono text-2xl font-bold text-oxblood">৳{monthTotal.toLocaleString()}</p>
                         <p className="text-xs text-muted mt-1">{monthCosts.length} entr{monthCosts.length === 1 ? 'y' : 'ies'}</p>
                       </div>
-                      <div className="bg-canvas border border-thread p-5">
+                      <div className="p-card p-5">
                         <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">All time</p>
                         <p className="font-mono text-2xl font-bold text-ink">৳{allTimeTotal.toLocaleString()}</p>
                         <p className="text-xs text-muted mt-1">{dailyCosts.length} total entries</p>
@@ -4129,7 +4204,7 @@ export default function AdminDashboard() {
                 })()}
 
                 {/* Add entry form */}
-                <div className="bg-canvas border border-thread p-6">
+                <div className="p-card p-6">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconWallet className="w-4 h-4 text-oxblood" />
                     Add Daily Cost
@@ -4140,7 +4215,7 @@ export default function AdminDashboard() {
                   </p>
 
                   {dailyCostMessage.text && (
-                    <div className={`anim-alert px-4 py-3 mb-4 text-sm font-semibold border ${dailyCostMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
+                    <div className={`anim-alert p-alert ${dailyCostMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>
                       {dailyCostMessage.text}
                     </div>
                   )}
@@ -4148,16 +4223,16 @@ export default function AdminDashboard() {
                   <form onSubmit={handleAddDailyCost} className="space-y-4">
                     <div className="flex flex-wrap gap-3">
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Date</label>
+                        <label className="p-label">Date</label>
                         <input
                           type="date"
-                          className="px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors"
+                          className="p-input"
                           value={dailyCostDate}
                           onChange={e => setDailyCostDate(e.target.value)}
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Amount (৳)</label>
+                        <label className="p-label">Amount (৳)</label>
                         <input
                           type="number" min="0" step="1" placeholder="e.g. 10"
                           className="w-36 px-4 py-2.5 bg-oxblood-light/30 border border-oxblood/25 focus:border-oxblood outline-none text-ink font-mono font-bold transition-colors"
@@ -4167,27 +4242,27 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Note — what was this for?</label>
+                      <label className="p-label">Note — what was this for?</label>
                       <input
                         type="text" placeholder="e.g. Tea for staff, rickshaw fare to bank"
-                        className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors"
+                        className="w-full p-input"
                         value={dailyCostNote}
                         onChange={e => setDailyCostNote(e.target.value)}
                       />
                     </div>
-                    <button type="submit" className="btn-shimmer bg-oxblood text-white px-6 py-2.5 font-bold text-sm uppercase tracking-wider hover:bg-oxblood/90 transition-colors">
+                    <button type="submit" className="p-btn p-btn-danger btn-shimmer px-6 py-2.5">
                       Record Cost
                     </button>
                   </form>
                 </div>
 
                 {/* Entry log */}
-                <div className="bg-canvas border border-thread overflow-hidden">
+                <div className="p-card overflow-hidden">
                   <div className="px-6 py-4 border-b border-thread">
                     <h3 className="text-base font-bold text-ink">Recorded costs</h3>
                   </div>
                   {dailyCosts.length === 0 ? (
-                    <p className="text-center py-12 text-sm text-muted">No costs logged yet.</p>
+                    <div className="p-empty"><p className="p-empty-desc">No costs logged yet.</p></div>
                   ) : (
                     <div className="divide-y divide-thread">
                       {dailyCosts.map((c: any) => (
@@ -4215,16 +4290,16 @@ export default function AdminDashboard() {
             {/* TAB 4: REPORTS */}
             {activeTab === 'reports' && (
               <div className="space-y-6 print:hidden">
-                <div className="bg-canvas p-5 border border-thread flex flex-wrap items-end gap-5">
+                <div className="p-card p-5 flex flex-wrap items-end gap-5">
                   <div className="flex-1 min-w-[180px]">
-                    <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Filter Start Date</label>
+                    <label className="p-label">Filter Start Date</label>
                     <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                   </div>
                   <div className="flex-1 min-w-[180px]">
-                    <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Filter End Date</label>
+                    <label className="p-label">Filter End Date</label>
                     <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                   </div>
-                  <button onClick={clearDateFilters} className="px-5 py-2.5 border border-thread text-ink hover:border-thread-dark font-bold text-xs uppercase tracking-wider transition-colors bg-canvas whitespace-nowrap">
+                  <button onClick={clearDateFilters} className="p-btn p-btn-ghost">
                     Clear Filters
                   </button>
                   <button
@@ -4237,16 +4312,22 @@ export default function AdminDashboard() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-ink p-8 text-paper relative overflow-hidden">
-                    <div className="barcode-stripe absolute top-0 right-0 h-full w-24 opacity-[0.06]" style={{ filter: 'invert(1)' }} />
-                    <p className="text-xs font-bold uppercase tracking-wider text-thread mb-2">Gross Revenue {startDate ? '(Filtered Period)' : '(All Time)'}</p>
-                    <p className="font-mono text-4xl sm:text-5xl font-bold tracking-tight">৳{totalRevenue.toLocaleString()}</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Gross Revenue */}
+                  <div className="anim-card p-card-hero relative" style={{ padding: '22px 24px 18px' }}>
+                    <div className="barcode-stripe absolute top-0 right-0 h-full w-20 opacity-[0.04]" style={{ filter: 'invert(1)' }} />
+                    <div className="relative z-10">
+                      <p className="p-stat-card-label" style={{ color: 'rgba(220,200,165,0.6)' }}>Gross Revenue {startDate ? '(Filtered)' : '(All Time)'}</p>
+                      <p className="font-mono font-bold tracking-tight text-white mt-2" style={{ fontSize: 36 }}>৳{totalRevenue.toLocaleString()}</p>
+                      <div className="mt-4 pt-3 flex items-center gap-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                        <IconTrendingUp className="w-3.5 h-3.5 text-brass/70" />
+                        <span className="text-[11px] uppercase tracking-wide" style={{ color: 'rgba(220,200,165,0.45)' }}>Total collected</span>
+                      </div>
+                    </div>
                   </div>
 
+                  {/* Daily Costs + Net Profit */}
                   {(() => {
-                    // Daily costs within the same date window as the sales filter above,
-                    // so "Net Profit" always reflects the same period the admin is viewing.
                     const filteredCosts = dailyCosts.filter((c: any) => {
                       if (startDate && c.cost_date < startDate) return false;
                       if (endDate && c.cost_date > endDate) return false;
@@ -4256,54 +4337,65 @@ export default function AdminDashboard() {
                     const netProfit = totalRevenue - totalCosts;
                     return (
                       <>
-                        <div className="anim-card bg-oxblood-light/40 border border-oxblood/20 p-8 flex flex-col justify-center card-lift">
-                          <p className="text-xs font-bold uppercase tracking-wider text-oxblood mb-2">Daily Costs {startDate ? '(Filtered Period)' : '(All Time)'}</p>
-                          <p className="font-mono text-4xl sm:text-5xl font-bold text-oxblood">৳{totalCosts.toLocaleString()}</p>
-                          <p className="text-xs text-muted mt-2">{filteredCosts.length} entr{filteredCosts.length === 1 ? 'y' : 'ies'} logged</p>
+                        <div className="anim-card p-card-danger" style={{ padding: '22px 24px 18px' }}>
+                          <p className="p-stat-card-label" style={{ color: 'var(--color-oxblood)', opacity: 0.75 }}>Daily Costs {startDate ? '(Filtered)' : '(All Time)'}</p>
+                          <p className="font-mono font-bold p-stat-danger mt-2" style={{ fontSize: 36 }}>৳{totalCosts.toLocaleString()}</p>
+                          <p className="p-stat-card-sub">{filteredCosts.length} entr{filteredCosts.length === 1 ? 'y' : 'ies'} recorded</p>
                         </div>
-                        <div className="anim-card bg-moss-light/50 border border-moss/20 p-8 flex flex-col justify-center card-lift">
-                          <p className="text-xs font-bold uppercase tracking-wider text-moss mb-2">Net Profit {startDate ? '(Filtered Period)' : '(All Time)'}</p>
-                          <p className={`font-mono text-4xl sm:text-5xl font-bold ${netProfit < 0 ? 'text-oxblood' : 'text-moss'}`}>৳{netProfit.toLocaleString()}</p>
-                          <p className="text-xs text-muted mt-2">Revenue minus daily costs</p>
+                        <div className={`anim-card ${netProfit < 0 ? 'p-card-danger' : 'p-card-success'}`} style={{ padding: '22px 24px 18px' }}>
+                          <p className="p-stat-card-label" style={{ color: netProfit < 0 ? 'var(--color-oxblood)' : 'var(--color-moss)', opacity: 0.75 }}>Net Profit {startDate ? '(Filtered)' : '(All Time)'}</p>
+                          <p className={`font-mono font-bold mt-2 ${netProfit < 0 ? 'p-stat-danger' : 'p-stat-success'}`} style={{ fontSize: 36 }}>৳{netProfit.toLocaleString()}</p>
+                          <p className="p-stat-card-sub">Revenue minus daily costs</p>
                         </div>
                       </>
                     );
                   })()}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
-                  <div className="bg-canvas p-8 border border-thread flex flex-col justify-center card-lift">
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Total Successful Sales</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className="font-mono text-4xl sm:text-5xl font-bold text-ink">{salesRecord.filter(s => s.status === 'completed').length}</p>
-                      <p className="text-base font-bold text-muted">Items</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="anim-card p-stat-card">
+                    <p className="p-stat-card-label">Successful Transactions</p>
+                    <div className="flex items-baseline gap-2 mt-2">
+                      <span className="p-stat-card-value p-stat">{salesRecord.filter(s => s.status === 'completed').length}</span>
+                      <span className="text-sm font-medium text-muted">items sold</span>
+                    </div>
+                  </div>
+                  <div className="anim-card p-stat-card">
+                    <p className="p-stat-card-label">Returns / Refunds</p>
+                    <div className="flex items-baseline gap-2 mt-2">
+                      <span className="p-stat-card-value p-stat-danger">{salesRecord.filter(s => s.status === 'refunded').length}</span>
+                      <span className="text-sm font-medium text-muted">items returned</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-canvas p-7 border border-thread">
-                  <h3 className="text-base font-bold mb-6 text-ink flex items-center gap-2">
-                    <IconChart className="w-4 h-4 text-brass" />
-                    Revenue by Payment Method
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-                    {Object.entries(revenueByMethod).map(([method, amount]) => (
-                      <div key={method} className="bg-paper-dim p-4 border border-thread text-center">
-                        <p className="uppercase text-[10px] font-bold text-muted tracking-wider mb-1.5 whitespace-nowrap">{method}</p>
-                        <p className="font-mono text-sm font-bold text-ink">৳{amount.toLocaleString()}</p>
-                      </div>
-                    ))}
+                <div className="p-card">
+                  <div className="p-card-header">
+                    <span className="p-card-header-title">
+                      <IconChart className="w-4 h-4 text-brass" />
+                      Revenue by Payment Method
+                    </span>
+                  </div>
+                  <div className="p-card-body">
+                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                      {Object.entries(revenueByMethod).map(([method, amount]) => (
+                        <div key={method} className="p-stat-card hover:border-brass/30 cursor-default" style={{ padding: '14px 16px' }}>
+                          <p className="uppercase text-[10px] font-bold text-muted tracking-wider mb-2 whitespace-nowrap">{method}</p>
+                          <p className="font-mono text-sm font-bold text-ink">৳{amount.toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                <div className="bg-canvas border border-thread overflow-hidden">
+                <div className="p-card overflow-hidden">
                   <div className="p-6 border-b border-thread">
                     <h3 className="text-base font-bold text-ink">Master Transaction Ledger</h3>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="p-table">
                       <thead>
-                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread">
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread/60 bg-paper/40">
                           <th className="p-4 font-bold">Date & Time</th>
                           <th className="p-4 font-bold">Item Details</th>
                           <th className="p-4 font-bold">Method</th>
@@ -4316,7 +4408,7 @@ export default function AdminDashboard() {
                           <tr><td colSpan={5} className="p-8 text-center text-muted font-medium">No transactions found for this period.</td></tr>
                         )}
                         {salesRecord.map((sale) => (
-                          <tr key={sale.id} className={sale.status === 'refunded' ? 'opacity-50' : ''}>
+                          <tr key={sale.id} className={`${sale.status === 'refunded' ? 'opacity-50' : 'hover:bg-brass/5'} transition-colors`}>
                             <td className="p-4 text-sm text-muted whitespace-nowrap font-mono">{new Date(sale.sold_at).toLocaleString('en-BD')}</td>
                             <td className="p-4">
                               <p className={`text-sm font-bold ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
@@ -4328,7 +4420,7 @@ export default function AdminDashboard() {
                               </span>
                             </td>
                             <td className="p-4">
-                              <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${sale.status === 'refunded' ? 'bg-paper-dim text-muted' : 'bg-moss-light text-moss'}`}>
+                              <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${sale.status === 'refunded' ? 'p-badge p-badge-muted' : 'p-badge p-badge-success'}`}>
                                 {sale.status}
                               </span>
                             </td>
@@ -4347,30 +4439,30 @@ export default function AdminDashboard() {
             {/* SETTINGS: BUSINESS SETTINGS */}
             {activeTab === 'settings-business' && (
               <div className="max-w-xl print:hidden">
-                <div className="bg-canvas p-7 border border-thread">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconSettingsGear className="w-4 h-4 text-brass" />
                     Business Settings
                   </h3>
                   <p className="text-sm text-muted mb-6">Your shop's address and phone — shown on the login screen and printed on every receipt.</p>
-                  {settingsSaved === 'business' && <div className="px-4 py-3 mb-5 text-sm font-semibold border bg-moss-light text-moss border-moss/20">Saved.</div>}
+                  {settingsSaved === 'business' && <div className="px-4 py-3 mb-5 text-sm font-semibold border p-badge p-badge-success">Saved.</div>}
                   <div className="space-y-5">
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Business Name</label>
-                      <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={businessSettings.business_name} onChange={(e) => setBusinessSettings({ ...businessSettings, business_name: e.target.value })} />
+                      <label className="p-label">Business Name</label>
+                      <input type="text" className="w-full p-input" value={businessSettings.business_name} onChange={(e) => setBusinessSettings({ ...businessSettings, business_name: e.target.value })} />
                       <p className="text-xs text-muted mt-1.5">Stored for your records — the sidebar wordmark stays "CRAVE ABS" by design.</p>
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Address</label>
-                      <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={businessSettings.address} onChange={(e) => setBusinessSettings({ ...businessSettings, address: e.target.value })} />
+                      <label className="p-label">Address</label>
+                      <input type="text" className="w-full p-input" value={businessSettings.address} onChange={(e) => setBusinessSettings({ ...businessSettings, address: e.target.value })} />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Phone</label>
-                      <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors" placeholder="Optional — printed on receipts if set" value={businessSettings.phone} onChange={(e) => setBusinessSettings({ ...businessSettings, phone: e.target.value })} />
+                      <label className="p-label">Phone</label>
+                      <input type="text" className="w-full p-input" placeholder="Optional — printed on receipts if set" value={businessSettings.phone} onChange={(e) => setBusinessSettings({ ...businessSettings, phone: e.target.value })} />
                     </div>
                     <button
                       onClick={() => saveBusinessSettings({ business_name: businessSettings.business_name, address: businessSettings.address, phone: businessSettings.phone }, 'business')}
-                      className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
+                      className="btn-shimmer w-full p-btn p-btn-primary"
                     >
                       Save Changes
                     </button>
@@ -4382,21 +4474,21 @@ export default function AdminDashboard() {
             {/* SETTINGS: INVOICE SETTINGS */}
             {activeTab === 'settings-invoice' && (
               <div className="max-w-xl print:hidden">
-                <div className="bg-canvas p-7 border border-thread">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconReceipt className="w-4 h-4 text-brass" />
                     Invoice Settings
                   </h3>
                   <p className="text-sm text-muted mb-6">The two footer lines printed at the bottom of every receipt.</p>
-                  {settingsSaved === 'invoice' && <div className="px-4 py-3 mb-5 text-sm font-semibold border bg-moss-light text-moss border-moss/20">Saved.</div>}
+                  {settingsSaved === 'invoice' && <div className="px-4 py-3 mb-5 text-sm font-semibold border p-badge p-badge-success">Saved.</div>}
                   <div className="space-y-5">
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Footer Line 1</label>
-                      <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={businessSettings.receipt_footer_line1} onChange={(e) => setBusinessSettings({ ...businessSettings, receipt_footer_line1: e.target.value })} />
+                      <label className="p-label">Footer Line 1</label>
+                      <input type="text" className="w-full p-input" value={businessSettings.receipt_footer_line1} onChange={(e) => setBusinessSettings({ ...businessSettings, receipt_footer_line1: e.target.value })} />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Footer Line 2</label>
-                      <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors" value={businessSettings.receipt_footer_line2} onChange={(e) => setBusinessSettings({ ...businessSettings, receipt_footer_line2: e.target.value })} />
+                      <label className="p-label">Footer Line 2</label>
+                      <input type="text" className="w-full p-input" value={businessSettings.receipt_footer_line2} onChange={(e) => setBusinessSettings({ ...businessSettings, receipt_footer_line2: e.target.value })} />
                     </div>
                     <div className="bg-paper-dim border border-thread p-4">
                       <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-2">Receipt Preview</p>
@@ -4405,7 +4497,7 @@ export default function AdminDashboard() {
                     </div>
                     <button
                       onClick={() => saveBusinessSettings({ receipt_footer_line1: businessSettings.receipt_footer_line1, receipt_footer_line2: businessSettings.receipt_footer_line2 }, 'invoice')}
-                      className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
+                      className="btn-shimmer w-full p-btn p-btn-primary"
                     >
                       Save Changes
                     </button>
@@ -4417,22 +4509,22 @@ export default function AdminDashboard() {
             {/* SETTINGS: BARCODE SETTINGS */}
             {activeTab === 'settings-barcode' && (
               <div className="max-w-xl print:hidden">
-                <div className="bg-canvas p-7 border border-thread">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconScan className="w-4 h-4 text-brass" />
                     Barcode Settings
                   </h3>
                   <p className="text-sm text-muted mb-6">A short prefix for barcodes you write yourself on items without a manufacturer tag.</p>
-                  {settingsSaved === 'barcode' && <div className="px-4 py-3 mb-5 text-sm font-semibold border bg-moss-light text-moss border-moss/20">Saved.</div>}
+                  {settingsSaved === 'barcode' && <div className="px-4 py-3 mb-5 text-sm font-semibold border p-badge p-badge-success">Saved.</div>}
                   <div className="space-y-5">
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Barcode Prefix</label>
+                      <label className="p-label">Barcode Prefix</label>
                       <input type="text" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono uppercase transition-colors" maxLength={10} value={businessSettings.barcode_prefix} onChange={(e) => setBusinessSettings({ ...businessSettings, barcode_prefix: e.target.value.toUpperCase() })} />
                       <p className="text-xs text-muted mt-1.5">e.g. a tag reading <span className="font-mono font-bold text-ink">{businessSettings.barcode_prefix || 'CRV'}-0142</span> for the 142nd hand-tagged item.</p>
                     </div>
                     <button
                       onClick={() => saveBusinessSettings({ barcode_prefix: businessSettings.barcode_prefix }, 'barcode')}
-                      className="btn-shimmer w-full bg-ink text-paper py-3.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors"
+                      className="btn-shimmer w-full p-btn p-btn-primary"
                     >
                       Save Changes
                     </button>
@@ -4444,7 +4536,7 @@ export default function AdminDashboard() {
             {/* SETTINGS: TAX RATES */}
             {activeTab === 'settings-tax' && (
               <div className="max-w-xl print:hidden">
-                <div className="bg-canvas border border-thread">
+                <div className="p-card">
                   <div className="px-7 pt-7 pb-5">
                     <h3 className="text-base font-bold text-ink flex items-center gap-2">
                       <IconFileText className="w-4 h-4 text-brass" />
@@ -4456,7 +4548,7 @@ export default function AdminDashboard() {
                     <input
                       type="text"
                       placeholder="Name, e.g. VAT"
-                      className="flex-1 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
+                      className="flex-1 p-input text-sm"
                       value={newTaxName}
                       onChange={(e) => setNewTaxName(e.target.value)}
                     />
@@ -4464,18 +4556,18 @@ export default function AdminDashboard() {
                       type="number"
                       placeholder="%"
                       step="0.01"
-                      className="w-24 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors text-sm"
+                      className="w-24 p-input text-sm"
                       value={newTaxRate}
                       onChange={(e) => setNewTaxRate(e.target.value)}
                     />
-                    <button type="submit" className="bg-ink text-paper px-5 text-[11px] font-bold uppercase tracking-wider hover:bg-brass-dark transition-colors flex items-center gap-1.5 shrink-0">
+                    <button type="submit" className="p-btn p-btn-primary shrink-0">
                       <IconPlus className="w-3.5 h-3.5" /> Add
                     </button>
                   </form>
-                  <div className="stitch mx-7 mb-1" />
+                  <div className="p-divider mx-7 mb-2" />
                   <div className="px-7 py-2 divide-y divide-thread">
                     {taxRates.length === 0 ? (
-                      <p className="text-center py-12 text-sm text-muted">No tax rates yet.</p>
+                      <div className="p-empty"><p className="p-empty-desc">No tax rates yet.</p></div>
                     ) : (
                       taxRates.map((t: any) => (
                         <div key={t.id} className="py-3 flex items-center justify-between">
@@ -4511,20 +4603,20 @@ export default function AdminDashboard() {
                   const lowDay  = surveyRecords.find(r => r.amount === low);
                   return (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      <div className="bg-canvas border border-thread p-5">
+                      <div className="p-card p-5">
                         <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">10-day total</p>
                         <p className="font-mono text-2xl font-bold text-ink">৳{total.toLocaleString()}</p>
                       </div>
-                      <div className="bg-canvas border border-thread p-5">
+                      <div className="p-card p-5">
                         <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Daily average</p>
                         <p className="font-mono text-2xl font-bold text-ink">{surveyRecords.length ? `৳${avg.toLocaleString()}` : '—'}</p>
                       </div>
-                      <div className="bg-canvas border border-thread p-5">
+                      <div className="p-card p-5">
                         <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Best day</p>
                         <p className="font-mono text-2xl font-bold text-moss">{best > 0 ? `৳${best.toLocaleString()}` : '—'}</p>
                         <p className="text-xs text-muted mt-1 font-mono">{bestDay?.date ?? ''}</p>
                       </div>
-                      <div className="bg-canvas border border-thread p-5">
+                      <div className="p-card p-5">
                         <p className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Lowest day</p>
                         <p className="font-mono text-2xl font-bold text-oxblood">{low > 0 ? `৳${low.toLocaleString()}` : '—'}</p>
                         <p className="text-xs text-muted mt-1 font-mono">{lowDay?.date ?? ''}</p>
@@ -4534,7 +4626,7 @@ export default function AdminDashboard() {
                 })()}
 
                 {/* Chart.js bar chart */}
-                <div className="bg-canvas border border-thread p-6">
+                <div className="p-card p-6">
                   <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                     <div className="flex items-center gap-2">
                       <IconSurvey className="w-4 h-4 text-brass" />
@@ -4581,37 +4673,37 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Manual entry form */}
-                <div className="bg-canvas border border-thread p-6">
+                <div className="p-card p-6">
                   <h3 className="text-base font-bold mb-1 text-ink">Manual entry</h3>
                   <p className="text-sm text-muted mb-5">
                     Add or override a day's total — useful for cash-only sales not yet in the system.
                     "Sync from real sales" will replace manual entries with calculated figures from your actual transactions.
                   </p>
                   {surveyMessage.text && (
-                    <div className={`anim-alert px-4 py-3 mb-4 text-sm font-semibold border ${surveyMessage.type === 'error' ? 'bg-oxblood-light text-oxblood border-oxblood/20' : 'bg-moss-light text-moss border-moss/20'}`}>
+                    <div className={`anim-alert p-alert ${surveyMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>
                       {surveyMessage.text}
                     </div>
                   )}
                   <form onSubmit={handleAddSurveyEntry} className="flex flex-wrap gap-3 items-end">
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Date</label>
+                      <label className="p-label">Date</label>
                       <input
                         type="date"
-                        className="px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors"
+                        className="p-input"
                         value={surveyDateInput}
                         onChange={e => setSurveyDateInput(e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Total sales (৳)</label>
+                      <label className="p-label">Total sales (৳)</label>
                       <input
                         type="number" min="0" step="1" placeholder="e.g. 18500"
-                        className="w-44 px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono transition-colors"
+                        className="w-44 p-input"
                         value={surveyAmountInput}
                         onChange={e => setSurveyAmountInput(e.target.value)}
                       />
                     </div>
-                    <button type="submit" className="bg-ink text-paper px-6 py-2.5 font-bold text-sm uppercase tracking-wider hover:bg-brass-dark transition-colors">
+                    <button type="submit" className="p-btn p-btn-primary">
                       Save Entry
                     </button>
                   </form>
@@ -4619,7 +4711,7 @@ export default function AdminDashboard() {
 
                 {/* Entry log */}
                 {surveyRecords.length > 0 && (
-                  <div className="bg-canvas border border-thread overflow-hidden">
+                  <div className="p-card overflow-hidden">
                     <div className="px-6 py-4 border-b border-thread">
                       <h3 className="text-base font-bold text-ink">Recorded entries</h3>
                     </div>
@@ -4706,5 +4798,7 @@ export default function AdminDashboard() {
           <div className="text-center text-[10px] mt-1">{businessSettings.receipt_footer_line2}</div>
         </div>
       )}
+
     </div>
-  );}
+  );
+}
