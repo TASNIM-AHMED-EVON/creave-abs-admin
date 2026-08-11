@@ -1940,16 +1940,26 @@ export default function AdminDashboard() {
 
   // --- MAIN DASHBOARD ---
   return (
-    <div className="min-h-screen bg-paper text-ink font-sans print:bg-white">
+    <div className="min-h-screen bg-paper text-ink font-sans print:bg-white print:min-h-0">
 
       <style jsx global>{`
         @media print {
-          @page { margin: 0; }
-          body { margin: 1.6cm 1cm; }
+          /* Force a single compact page — no blank second sheet */
+          @page {
+            margin: 8mm 10mm;
+            size: 80mm auto;
+          }
+          /* Hide every UI element except the receipt */
+          body > * { display: none !important; }
+          .print-receipt { display: block !important; }
+
+          /* Reset all spacing that inflates page height */
+          body { margin: 0; padding: 0; background: white; }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       `}</style>
 
-      <div className="lg:flex">
+      <div className="lg:flex print:hidden">
 
         {/* ---- Sidebar (desktop) ---- */}
         <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 bg-canvas border-r border-thread print:hidden" style={{ transition: 'background 0.25s', overflow: 'hidden', position: 'relative' }}>
@@ -4739,65 +4749,84 @@ export default function AdminDashboard() {
 
           </div>
         </div>
-      </div>
+      </div>{/* end lg:flex print:hidden */}
 
-      {/* RECEIPT PRINT LAYOUT */}
-      {cart.length > 0 && activeTab === 'pos' && (
-        <div className="hidden print:block w-[80mm] text-black font-mono text-sm p-2 mx-auto">
-          <div className="text-center font-bold text-xl mb-1 tracking-widest">CRAVE ABS</div>
-          <div className="text-center text-xs mb-4 uppercase">{businessSettings.address}{businessSettings.phone ? ` · ${businessSettings.phone}` : ''}</div>
-          <div className="border-b border-dashed border-black my-2"></div>
-          <div className="flex justify-between text-xs">
-            <span>Date: {new Date().toLocaleDateString()}</span>
-            <span>Time: {new Date().toLocaleTimeString()}</span>
-          </div>
-          <div className="border-b border-dashed border-black my-2"></div>
+      {/* ── RECEIPT PRINT LAYOUT ──
+          Rendered outside the print:hidden wrapper so it's always in the DOM.
+          display:none normally; only shown when printing via the print-receipt
+          class that the @media print rule above targets.
+          Using a fixed-width 80mm column matches thermal receipt printers. */}
+      <div className="print-receipt" style={{ display: 'none' }}>
+        {cart.length > 0 && (
+          <div style={{ width: '80mm', fontFamily: 'monospace', fontSize: '12px', color: '#000', padding: '4px', margin: '0 auto', lineHeight: 1.5 }}>
 
-          <div className="my-2">
+            {/* Header */}
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', letterSpacing: '0.15em', marginBottom: 2 }}>CRAVE ABS</div>
+            <div style={{ textAlign: 'center', fontSize: '10px', textTransform: 'uppercase', color: '#444', marginBottom: 8 }}>
+              {businessSettings.address}{businessSettings.phone ? ` · ${businessSettings.phone}` : ''}
+            </div>
+            <div style={{ borderBottom: '1px dashed #000', marginBottom: 6 }} />
+
+            {/* Date / time */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: 6 }}>
+              <span>Date: {new Date().toLocaleDateString()}</span>
+              <span>Time: {new Date().toLocaleTimeString()}</span>
+            </div>
+            <div style={{ borderBottom: '1px dashed #000', marginBottom: 8 }} />
+
+            {/* Items */}
             {cart.map((item, index) => (
-              <div key={index} className="mb-2">
-                <div className="font-bold text-base leading-tight">{item.name}</div>
-                <div className="text-xs text-gray-600 mt-1">CAT: {item.category}</div>
-                <div className="flex justify-between font-bold mt-1">
+              <div key={index} style={{ marginBottom: 8 }}>
+                <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{item.name}</div>
+                <div style={{ fontSize: '10px', color: '#555' }}>CAT: {item.category}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', marginTop: 2 }}>
                   <span>{item.cartQty}x Item</span>
                   <span>Tk {item.price * item.cartQty}</span>
                 </div>
               </div>
-            ))
-            }
-          </div>
+            ))}
 
-          <div className="border-b border-dashed border-black my-2"></div>
-          {(cartDiscountValue > 0 || cartTaxValue > 0) && (
-            <div className="flex justify-between text-xs">
-              <span>Subtotal:</span>
-              <span>Tk {cartSubtotal}</span>
-            </div>
-          )}
-          {cartDiscountValue > 0 && (
-            <div className="flex justify-between text-xs">
-              <span>Discount:</span>
-              <span>- Tk {cartDiscountValue}</span>
-            </div>
-          )}
-          {cartTaxValue > 0 && (
-            <div className="flex justify-between text-xs">
-              <span>Tax{cartActiveTaxRate ? ` (${cartActiveTaxRate.name} ${cartActiveTaxRate.rate_percent}%)` : ''}:</span>
-              <span>+ Tk {cartTaxValue}</span>
-            </div>
-          )}
-          <div className="flex justify-between font-black text-lg uppercase">
-            <span>Total:</span>
+            <div style={{ borderBottom: '1px dashed #000', margin: '6px 0' }} />
 
-            <span>Tk {cartTotal}</span>
+            {/* Subtotal / discount / tax */}
+            {(cartDiscountValue > 0 || cartTaxValue > 0) && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+                <span>Subtotal:</span><span>Tk {cartSubtotal}</span>
+              </div>
+            )}
+            {cartDiscountValue > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#c00' }}>
+                <span>Discount:</span><span>- Tk {cartDiscountValue}</span>
+              </div>
+            )}
+            {cartTaxValue > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#060' }}>
+                <span>Tax{cartActiveTaxRate ? ` (${cartActiveTaxRate.name} ${cartActiveTaxRate.rate_percent}%)` : ''}:</span>
+                <span>+ Tk {cartTaxValue}</span>
+              </div>
+            )}
+
+            {/* Total */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '15px', textTransform: 'uppercase', marginTop: 4 }}>
+              <span>TOTAL:</span><span>TK {cartTotal}</span>
+            </div>
+
+            {/* Payment */}
+            <div style={{ fontSize: '10px', marginTop: 4, textTransform: 'uppercase' }}>
+              Paid via: <strong>{paymentMethod}</strong>
+            </div>
+            {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && (
+              <div style={{ fontSize: '10px', fontFamily: 'monospace' }}>TrxID: {trxId}</div>
+            )}
+
+            <div style={{ borderBottom: '1px dashed #000', margin: '8px 0 6px' }} />
+
+            {/* Footer */}
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11px' }}>{businessSettings.receipt_footer_line1}</div>
+            <div style={{ textAlign: 'center', fontSize: '10px', marginTop: 2 }}>{businessSettings.receipt_footer_line2}</div>
           </div>
-          <div className="text-xs mt-2 uppercase">Paid via: <span className="font-bold">{paymentMethod}</span></div>
-          {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && <div className="text-xs font-mono mt-1">TrxID: {trxId}</div>}
-          <div className="border-b border-dashed border-black my-2 mt-4"></div>
-          <div className="text-center text-xs font-bold mt-2">{businessSettings.receipt_footer_line1}</div>
-          <div className="text-center text-[10px] mt-1">{businessSettings.receipt_footer_line2}</div>
-        </div>
-      )}
+        )}
+      </div>
 
     </div>
   );
