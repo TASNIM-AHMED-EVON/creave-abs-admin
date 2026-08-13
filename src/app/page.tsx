@@ -1944,18 +1944,22 @@ export default function AdminDashboard() {
 
       <style jsx global>{`
         @media print {
-          /* Force a single compact page — no blank second sheet */
+          /* Compact 80mm thermal receipt — auto height so no blank second page */
           @page {
-            margin: 8mm 10mm;
             size: 80mm auto;
+            margin: 6mm 8mm;
           }
-          /* Hide every UI element except the receipt */
-          body > * { display: none !important; }
-          .print-receipt { display: block !important; }
-
-          /* Reset all spacing that inflates page height */
-          body { margin: 0; padding: 0; background: white; }
-          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body {
+            margin: 0;
+            padding: 0;
+            background: white;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          /* Show only the receipt block — everything else hidden via print:hidden below */
+          .print-receipt {
+            display: block !important;
+          }
         }
       `}</style>
 
