@@ -2295,11 +2295,35 @@ export default function AdminDashboard() {
         {/* ---- Main content ---- */}
         <div className="lg:pl-64 flex-1 print:pl-0 relative">
 
-          {/* ── Ambient falling dust & thread motes ── */}
+          {/* ── VIDEO BACKGROUND ──
+              Fixed behind the main content only. Stays to the right of the
+              sidebar on desktop (left: 16rem). A dark overlay keeps text readable.
+              Place your video file in /public/bg.mp4 in the Next.js project. */}
           <style>{`
-            /* Pinned to the viewport, but offset past the sidebar on desktop
-               (lg:left-64) so it never overlaps the sidebar's own rain effect.
-               On mobile the sidebar is hidden, so it spans full width there. */
+            .video-bg-wrap {
+              position: fixed;
+              top: 0; right: 0; bottom: 0; left: 0;
+              z-index: -2;
+              overflow: hidden;
+              pointer-events: none;
+            }
+            @media (min-width: 1024px) {
+              .video-bg-wrap { left: 16rem; }
+            }
+            .video-bg-wrap video {
+              width: 100%; height: 100%;
+              object-fit: cover;
+              object-position: center;
+            }
+            /* Dark overlay — tune opacity to taste.
+               0.72 keeps the video visible but text stays sharp. */
+            .video-bg-overlay {
+              position: absolute;
+              inset: 0;
+              background: rgba(6, 11, 22, 0.72);
+            }
+
+            /* ── Ambient falling dust (kept on top of video) ── */
             .dust-layer {
               position: fixed;
               top: 0; right: 0; bottom: 0; left: 0;
@@ -2310,58 +2334,69 @@ export default function AdminDashboard() {
             @media (min-width: 1024px) {
               .dust-layer { left: 16rem; }
             }
-
-            /* Round dust specks — slow drifting fall with gentle side-sway */
             .dust-mote {
               position: absolute;
               top: -5%;
               border-radius: 50%;
-              background: radial-gradient(circle, var(--color-brass) 0%, transparent 75%);
+              background: radial-gradient(circle, rgba(196,154,74,0.9) 0%, transparent 75%);
               opacity: 0;
             }
-            @keyframes dust-fall-a { 0% { transform: translate(0,0); opacity:0; } 8% { opacity:0.5; } 92% { opacity:0.5; } 100% { transform: translate(18px,112vh); opacity:0; } }
-            @keyframes dust-fall-b { 0% { transform: translate(0,0); opacity:0; } 8% { opacity:0.4; } 92% { opacity:0.4; } 100% { transform: translate(-22px,112vh); opacity:0; } }
-            @keyframes dust-fall-c { 0% { transform: translate(0,0); opacity:0; } 8% { opacity:0.55; } 92% { opacity:0.55; } 100% { transform: translate(12px,112vh); opacity:0; } }
-
-            /* Thin fabric-thread snippets — fall with a lazy rotation,
-               a nod to the .stitch motif used elsewhere in the design. */
+            @keyframes dust-fall-a { 0% { transform:translate(0,0); opacity:0; } 8% { opacity:0.45; } 92% { opacity:0.45; } 100% { transform:translate(18px,112vh); opacity:0; } }
+            @keyframes dust-fall-b { 0% { transform:translate(0,0); opacity:0; } 8% { opacity:0.35; } 92% { opacity:0.35; } 100% { transform:translate(-22px,112vh); opacity:0; } }
+            @keyframes dust-fall-c { 0% { transform:translate(0,0); opacity:0; } 8% { opacity:0.50; } 92% { opacity:0.50; } 100% { transform:translate(12px,112vh); opacity:0; } }
             .dust-thread {
               position: absolute;
               top: -5%;
               width: 1px;
-              background: linear-gradient(to bottom, transparent, var(--color-thread-dark) 40%, transparent);
+              background: linear-gradient(to bottom, transparent, rgba(196,154,74,0.5) 40%, transparent);
               opacity: 0;
               transform-origin: center;
             }
-            @keyframes thread-fall-a { 0% { transform: translateY(0) rotate(0deg); opacity:0; } 8% { opacity:0.45; } 92% { opacity:0.45; } 100% { transform: translateY(112vh) rotate(140deg); opacity:0; } }
-            @keyframes thread-fall-b { 0% { transform: translateY(0) rotate(0deg); opacity:0; } 8% { opacity:0.35; } 92% { opacity:0.35; } 100% { transform: translateY(112vh) rotate(-160deg); opacity:0; } }
+            @keyframes thread-fall-a { 0% { transform:translateY(0) rotate(0deg); opacity:0; } 8% { opacity:0.4; } 92% { opacity:0.4; } 100% { transform:translateY(112vh) rotate(140deg); opacity:0; } }
+            @keyframes thread-fall-b { 0% { transform:translateY(0) rotate(0deg); opacity:0; } 8% { opacity:0.3; } 92% { opacity:0.3; } 100% { transform:translateY(112vh) rotate(-160deg); opacity:0; } }
 
-            .dust-mote:nth-of-type(1)  { left:3%;  width:5px; height:5px; animation: dust-fall-a 22s 0s   linear infinite; }
-            .dust-mote:nth-of-type(2)  { left:9%;  width:3px; height:3px; animation: dust-fall-b 26s 3s   linear infinite; }
-            .dust-mote:nth-of-type(3)  { left:16%; width:4px; height:4px; animation: dust-fall-c 19s 6s   linear infinite; }
-            .dust-mote:nth-of-type(4)  { left:24%; width:6px; height:6px; animation: dust-fall-a 28s 1.5s linear infinite; }
-            .dust-mote:nth-of-type(5)  { left:31%; width:3px; height:3px; animation: dust-fall-b 21s 8s   linear infinite; }
-            .dust-mote:nth-of-type(6)  { left:39%; width:5px; height:5px; animation: dust-fall-c 25s 4s   linear infinite; }
-            .dust-mote:nth-of-type(7)  { left:47%; width:4px; height:4px; animation: dust-fall-a 23s 10s  linear infinite; }
-            .dust-mote:nth-of-type(8)  { left:55%; width:3px; height:3px; animation: dust-fall-b 27s 2s   linear infinite; }
-            .dust-mote:nth-of-type(9)  { left:63%; width:6px; height:6px; animation: dust-fall-c 20s 7s   linear infinite; }
-            .dust-mote:nth-of-type(10) { left:71%; width:4px; height:4px; animation: dust-fall-a 24s 5s   linear infinite; }
-            .dust-mote:nth-of-type(11) { left:79%; width:3px; height:3px; animation: dust-fall-b 29s 11s  linear infinite; }
-            .dust-mote:nth-of-type(12) { left:87%; width:5px; height:5px; animation: dust-fall-c 22s 9s   linear infinite; }
-            .dust-mote:nth-of-type(13) { left:94%; width:4px; height:4px; animation: dust-fall-a 26s 13s  linear infinite; }
-            .dust-mote:nth-of-type(14) { left:13%; width:3px; height:3px; animation: dust-fall-b 30s 15s  linear infinite; }
-            .dust-mote:nth-of-type(15) { left:58%; width:5px; height:5px; animation: dust-fall-c 18s 12s  linear infinite; }
-
-            .dust-thread:nth-of-type(16) { left:20%; height:22px; animation: thread-fall-a 17s 2s  linear infinite; }
-            .dust-thread:nth-of-type(17) { left:44%; height:18px; animation: thread-fall-b 20s 9s  linear infinite; }
-            .dust-thread:nth-of-type(18) { left:68%; height:24px; animation: thread-fall-a 16s 5s  linear infinite; }
-            .dust-thread:nth-of-type(19) { left:84%; height:16px; animation: thread-fall-b 19s 14s linear infinite; }
-            .dust-thread:nth-of-type(20) { left:36%; height:20px; animation: thread-fall-a 21s 7s  linear infinite; }
+            .dust-mote:nth-of-type(1)  { left:3%;  width:5px; height:5px; animation:dust-fall-a 22s 0s   linear infinite; }
+            .dust-mote:nth-of-type(2)  { left:9%;  width:3px; height:3px; animation:dust-fall-b 26s 3s   linear infinite; }
+            .dust-mote:nth-of-type(3)  { left:16%; width:4px; height:4px; animation:dust-fall-c 19s 6s   linear infinite; }
+            .dust-mote:nth-of-type(4)  { left:24%; width:6px; height:6px; animation:dust-fall-a 28s 1.5s linear infinite; }
+            .dust-mote:nth-of-type(5)  { left:31%; width:3px; height:3px; animation:dust-fall-b 21s 8s   linear infinite; }
+            .dust-mote:nth-of-type(6)  { left:39%; width:5px; height:5px; animation:dust-fall-c 25s 4s   linear infinite; }
+            .dust-mote:nth-of-type(7)  { left:47%; width:4px; height:4px; animation:dust-fall-a 23s 10s  linear infinite; }
+            .dust-mote:nth-of-type(8)  { left:55%; width:3px; height:3px; animation:dust-fall-b 27s 2s   linear infinite; }
+            .dust-mote:nth-of-type(9)  { left:63%; width:6px; height:6px; animation:dust-fall-c 20s 7s   linear infinite; }
+            .dust-mote:nth-of-type(10) { left:71%; width:4px; height:4px; animation:dust-fall-a 24s 5s   linear infinite; }
+            .dust-mote:nth-of-type(11) { left:79%; width:3px; height:3px; animation:dust-fall-b 29s 11s  linear infinite; }
+            .dust-mote:nth-of-type(12) { left:87%; width:5px; height:5px; animation:dust-fall-c 22s 9s   linear infinite; }
+            .dust-mote:nth-of-type(13) { left:94%; width:4px; height:4px; animation:dust-fall-a 26s 13s  linear infinite; }
+            .dust-mote:nth-of-type(14) { left:13%; width:3px; height:3px; animation:dust-fall-b 30s 15s  linear infinite; }
+            .dust-mote:nth-of-type(15) { left:58%; width:5px; height:5px; animation:dust-fall-c 18s 12s  linear infinite; }
+            .dust-thread:nth-of-type(16) { left:20%; height:22px; animation:thread-fall-a 17s 2s  linear infinite; }
+            .dust-thread:nth-of-type(17) { left:44%; height:18px; animation:thread-fall-b 20s 9s  linear infinite; }
+            .dust-thread:nth-of-type(18) { left:68%; height:24px; animation:thread-fall-a 16s 5s  linear infinite; }
+            .dust-thread:nth-of-type(19) { left:84%; height:16px; animation:thread-fall-b 19s 14s linear infinite; }
+            .dust-thread:nth-of-type(20) { left:36%; height:20px; animation:thread-fall-a 21s 7s  linear infinite; }
 
             @media (prefers-reduced-motion: reduce) {
-              .dust-mote, .dust-thread { animation: none !important; opacity: 0 !important; }
+              .dust-mote, .dust-thread { animation:none !important; opacity:0 !important; }
+              .video-bg-wrap video { display: none; }
             }
           `}</style>
+
+          {/* Video background — z-index: -2, behind everything */}
+          <div className="video-bg-wrap print:hidden" aria-hidden="true">
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              src="/bg.mp4"
+            />
+            {/* Dark overlay for readability */}
+            <div className="video-bg-overlay" />
+          </div>
+
+          {/* Floating dust particles — z-index: 0, above video */}
           <div className="dust-layer print:hidden" aria-hidden="true">
             {[...Array(15)].map((_, i) => <span key={`mote-${i}`} className="dust-mote" />)}
             {[...Array(5)].map((_, i) => <span key={`thread-${i}`} className="dust-thread" />)}
