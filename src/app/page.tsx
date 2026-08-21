@@ -1940,7 +1940,7 @@ export default function AdminDashboard() {
 
   // --- MAIN DASHBOARD ---
   return (
-    <div className="min-h-screen bg-paper text-ink font-sans print:bg-white print:min-h-0">
+    <div className="min-h-screen text-ink font-sans print:bg-white print:min-h-0">
 
       <style jsx global>{`
         @media print {
@@ -2383,7 +2383,7 @@ export default function AdminDashboard() {
           `}</style>
 
           {/* Video background — z-index: -2, behind everything */}
-          <div className="video-bg-wrap print:hidden" aria-hidden="true">
+          <div className="video-bg-wrap print:hidden" aria-hidden="true" style={{ backgroundColor: '#050c18' }}>
             <video
               autoPlay
               loop
