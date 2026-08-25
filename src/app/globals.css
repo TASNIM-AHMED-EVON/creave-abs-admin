@@ -205,8 +205,8 @@ html.dark .p-card-hero {
 
 /* Danger card */
 .p-card-danger {
-  background: linear-gradient(145deg, rgba(122,46,42,0.07) 0%, rgba(122,46,42,0.03) 100%);
-  border: 1px solid rgba(122,46,42,0.2);
+  background: var(--card-bg);
+  border: 1px solid rgba(122,46,42,0.3);
   border-radius: var(--card-radius);
   box-shadow: var(--shadow-sm);
   position: relative;
@@ -218,18 +218,18 @@ html.dark .p-card-hero {
   position: absolute;
   top: 0; left: 0; right: 0; height: 2px;
   background: linear-gradient(90deg, transparent 0%, var(--color-oxblood) 30%, var(--color-oxblood) 70%, transparent 100%);
-  opacity: 0.6;
+  opacity: 0.8;
 }
 html.dark .p-card-danger {
-  background: linear-gradient(145deg, rgba(224,92,92,0.08) 0%, rgba(224,92,92,0.03) 100%);
-  border-color: rgba(224,92,92,0.18);
+  background: var(--card-bg);
+  border-color: rgba(224,92,92,0.3);
 }
 .p-card-danger:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 
 /* Success card */
 .p-card-success {
-  background: linear-gradient(145deg, rgba(58,99,73,0.08) 0%, rgba(58,99,73,0.03) 100%);
-  border: 1px solid rgba(58,99,73,0.2);
+  background: var(--card-bg);
+  border: 1px solid rgba(58,99,73,0.3);
   border-radius: var(--card-radius);
   box-shadow: var(--shadow-sm);
   position: relative;
@@ -241,11 +241,11 @@ html.dark .p-card-danger {
   position: absolute;
   top: 0; left: 0; right: 0; height: 2px;
   background: linear-gradient(90deg, transparent 0%, var(--color-moss) 30%, var(--color-moss) 70%, transparent 100%);
-  opacity: 0.6;
+  opacity: 0.8;
 }
 html.dark .p-card-success {
-  background: linear-gradient(145deg, rgba(76,175,128,0.08) 0%, rgba(76,175,128,0.03) 100%);
-  border-color: rgba(76,175,128,0.18);
+  background: var(--card-bg);
+  border-color: rgba(76,175,128,0.3);
 }
 .p-card-success:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 
