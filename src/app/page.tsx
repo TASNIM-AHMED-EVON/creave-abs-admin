@@ -382,6 +382,8 @@ export default function AdminDashboard() {
   const [invMessage, setInvMessage] = useState({ type: '', text: '' });
   const [recentInventory, setRecentInventory] = useState<any[]>([]);
   const [stockSearchQuery, setStockSearchQuery] = useState('');
+  const [stockPage, setStockPage] = useState(1);
+  const STOCK_PAGE_SIZE = 20;
 
   // Refund State
   const [refundBarcode, setRefundBarcode] = useState('');
@@ -472,6 +474,8 @@ export default function AdminDashboard() {
 
   // All Sales (searchable read-only ledger, separate from the Reports view)
   const [allSalesSearchQuery, setAllSalesSearchQuery] = useState('');
+  const [allSalesPage, setAllSalesPage] = useState(1);
+  const ALL_SALES_PAGE_SIZE = 20;
 
   // Add Sale (search-based single-item quick sale, no scanner needed)
   const [addSaleSearchQuery, setAddSaleSearchQuery] = useState('');
@@ -1653,6 +1657,14 @@ export default function AdminDashboard() {
     const matchesArchiveView = showArchived ? true : item.status !== 'archived';
     return matchesSearch && matchesArchiveView;
   });
+  // Search/filter above runs against the full inventory first, so a match on
+  // any page is found — pagination below only slices what's already matched.
+  const stockTotalPages = Math.max(1, Math.ceil(filteredInventory.length / STOCK_PAGE_SIZE));
+  const stockPageClamped = Math.min(stockPage, stockTotalPages);
+  const paginatedInventory = filteredInventory.slice(
+    (stockPageClamped - 1) * STOCK_PAGE_SIZE,
+    stockPageClamped * STOCK_PAGE_SIZE
+  );
 
   const priceSearchResults = recentInventory.filter(item =>
     item.status !== 'archived' &&
@@ -1669,6 +1681,14 @@ export default function AdminDashboard() {
   const allSalesFiltered = allSalesSearchQuery === '' ? salesRecord : salesRecord.filter(sale =>
     (sale.dresses?.name ?? '').toLowerCase().includes(allSalesSearchQuery.toLowerCase()) ||
     (sale.dresses?.barcode ?? '').toLowerCase().includes(allSalesSearchQuery.toLowerCase())
+  );
+  // Search always runs against the full filtered list above, so a match on
+  // any page is found — pagination below only slices what's already matched.
+  const allSalesTotalPages = Math.max(1, Math.ceil(allSalesFiltered.length / ALL_SALES_PAGE_SIZE));
+  const allSalesPageClamped = Math.min(allSalesPage, allSalesTotalPages);
+  const allSalesPaginated = allSalesFiltered.slice(
+    (allSalesPageClamped - 1) * ALL_SALES_PAGE_SIZE,
+    allSalesPageClamped * ALL_SALES_PAGE_SIZE
   );
 
   const activeStock = recentInventory.filter(item => item.status !== 'archived');
@@ -2765,7 +2785,7 @@ export default function AdminDashboard() {
                         placeholder="Search by title or barcode..."
                         className="w-full pl-10 pr-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
                         value={stockSearchQuery}
-                        onChange={(e) => setStockSearchQuery(e.target.value)}
+                        onChange={(e) => { setStockSearchQuery(e.target.value); setStockPage(1); }}
                       />
                     </div>
 
@@ -2773,7 +2793,7 @@ export default function AdminDashboard() {
                       <input
                         type="checkbox"
                         checked={showArchived}
-                        onChange={(e) => setShowArchived(e.target.checked)}
+                        onChange={(e) => { setShowArchived(e.target.checked); setStockPage(1); }}
                         className="accent-brass w-3.5 h-3.5"
                       />
                       Show archived items
@@ -2788,7 +2808,7 @@ export default function AdminDashboard() {
                           <p className="text-sm font-medium">No items found matching your search.</p>
                         </div>
                       ) : (
-                        filteredInventory.map(item => {
+                        paginatedInventory.map(item => {
                           const isEditing = editingId === item.id;
                           const isArchived = item.status === 'archived';
                           const isLow = !isArchived && item.quantity > 0 && item.quantity <= LOW_STOCK_THRESHOLD;
@@ -2910,6 +2930,35 @@ export default function AdminDashboard() {
                         })
                       )}
                     </div>
+                    {filteredInventory.length > 0 && (
+                      <div className="flex items-center justify-between px-7 pt-5 pb-2 gap-4 border-t border-thread/60 mt-2">
+                        <p className="text-xs text-muted font-medium">
+                          Showing {(stockPageClamped - 1) * STOCK_PAGE_SIZE + 1}
+                          –{Math.min(stockPageClamped * STOCK_PAGE_SIZE, filteredInventory.length)} of {filteredInventory.length}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setStockPage(p => Math.max(1, p - 1))}
+                            disabled={stockPageClamped <= 1}
+                            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider border border-thread text-ink disabled:opacity-40 disabled:cursor-not-allowed hover:bg-paper-dim transition-colors"
+                          >
+                            Prev
+                          </button>
+                          <span className="text-xs text-muted font-mono">
+                            Page {stockPageClamped} / {stockTotalPages}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setStockPage(p => Math.min(stockTotalPages, p + 1))}
+                            disabled={stockPageClamped >= stockTotalPages}
+                            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider border border-thread text-ink disabled:opacity-40 disabled:cursor-not-allowed hover:bg-paper-dim transition-colors"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <div className="pb-7" />
                   </div>
                </div>
@@ -3710,7 +3759,7 @@ export default function AdminDashboard() {
                         placeholder="Search item or barcode..."
                         className="w-full pl-9 pr-3 py-2 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors text-sm"
                         value={allSalesSearchQuery}
-                        onChange={(e) => setAllSalesSearchQuery(e.target.value)}
+                        onChange={(e) => { setAllSalesSearchQuery(e.target.value); setAllSalesPage(1); }}
                       />
                     </div>
                   </div>
@@ -3729,7 +3778,7 @@ export default function AdminDashboard() {
                         {allSalesFiltered.length === 0 && (
                           <tr><td colSpan={5} className="p-8 text-center text-muted font-medium">No matching sales.</td></tr>
                         )}
-                        {allSalesFiltered.map((sale) => (
+                        {allSalesPaginated.map((sale) => (
                           <tr key={sale.id} className={`${sale.status === 'refunded' ? 'opacity-50' : 'hover:bg-brass/5'} transition-colors`}>
                             <td className="p-4 text-sm text-muted whitespace-nowrap font-mono">{new Date(sale.sold_at).toLocaleString('en-BD')}</td>
                             <td className="p-4">
@@ -3754,6 +3803,35 @@ export default function AdminDashboard() {
                       </tbody>
                     </table>
                   </div>
+                  {allSalesFiltered.length > 0 && (
+                    <div className="flex items-center justify-between p-7 pt-5 gap-4 border-t border-thread/60">
+                      <p className="text-xs text-muted font-medium">
+                        Showing {(allSalesPageClamped - 1) * ALL_SALES_PAGE_SIZE + 1}
+                        –{Math.min(allSalesPageClamped * ALL_SALES_PAGE_SIZE, allSalesFiltered.length)} of {allSalesFiltered.length}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setAllSalesPage(p => Math.max(1, p - 1))}
+                          disabled={allSalesPageClamped <= 1}
+                          className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider border border-thread text-ink disabled:opacity-40 disabled:cursor-not-allowed hover:bg-paper-dim transition-colors"
+                        >
+                          Prev
+                        </button>
+                        <span className="text-xs text-muted font-mono">
+                          Page {allSalesPageClamped} / {allSalesTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setAllSalesPage(p => Math.min(allSalesTotalPages, p + 1))}
+                          disabled={allSalesPageClamped >= allSalesTotalPages}
+                          className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider border border-thread text-ink disabled:opacity-40 disabled:cursor-not-allowed hover:bg-paper-dim transition-colors"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
