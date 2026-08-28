@@ -354,6 +354,7 @@ function SurveyChart({ canvasId, records, isDark }: {
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [userRole, setUserRole] = useState<'admin' | 'salesman' | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -880,6 +881,13 @@ export default function AdminDashboard() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setIsAuthenticated(true);
+        // Role lives in app_metadata (NOT user_metadata) because only the
+        // Admin API / SQL editor can write app_metadata — a signed-in user
+        // can never call supabase.auth.updateUser() to grant themselves
+        // 'admin'. Any account without a role set is treated as admin, so
+        // the existing single-admin login keeps working unchanged.
+        const role = session.user.app_metadata?.role === 'salesman' ? 'salesman' : 'admin';
+        setUserRole(role);
         loadAuthenticatedData();
       }
       setAuthChecked(true);
@@ -888,10 +896,13 @@ export default function AdminDashboard() {
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         setIsAuthenticated(true);
+        const role = session.user.app_metadata?.role === 'salesman' ? 'salesman' : 'admin';
+        setUserRole(role);
         loadAuthenticatedData();
       }
       if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false);
+        setUserRole(null);
       }
     });
 
@@ -1742,6 +1753,35 @@ export default function AdminDashboard() {
     if (groupId) setExpandedGroup(groupId);
   };
 
+  // --- ROLE-BASED ACCESS (salesman accounts) ---
+  // Salesman accounts get: all of Sell, Products -> List Products only,
+  // Daily Cost, all of Membership, Reports, and Daily Sales Survey.
+  // Everything else (Overview, Purchases, Settings, and every other
+  // Products sub-page) is hidden from nav AND blocked even if reached
+  // directly, so this is the single place that definition lives.
+  const SALESMAN_ALLOWED_IDS = new Set(['sell', 'daily-cost', 'membership', 'reports', 'survey']);
+  const visibleNavGroups = userRole === 'salesman'
+    ? NAV_GROUPS
+        .filter((item: any) => SALESMAN_ALLOWED_IDS.has(item.id) || item.id === 'products')
+        .map((item: any) => item.id === 'products'
+          ? { ...item, children: item.children.filter((c: any) => c.tab === 'products-list') }
+          : item)
+    : NAV_GROUPS;
+  const allowedTabsForRole = new Set<string>(
+    visibleNavGroups.flatMap((item: any) => item.kind === 'single' ? [item.tab] : item.children.map((c: any) => c.tab))
+  );
+
+  // If a salesman ever ends up on a tab outside that set (default landing
+  // tab, a stale link, a button that isn't hidden, browser back/forward),
+  // bounce them to POS rather than showing restricted content.
+  useEffect(() => {
+    if (userRole === 'salesman' && !allowedTabsForRole.has(activeTab)) {
+      setActiveTab('pos');
+      setExpandedGroup('sell');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRole, activeTab]);
+
   // Which group's children to show in the mobile sub-tab strip, based on
   // the currently active tab's prefix.
   const mobileSubGroupId =
@@ -1751,7 +1791,7 @@ export default function AdminDashboard() {
     : activeTab.startsWith('membership-') ? 'membership'
     : activeTab.startsWith('settings-') ? 'settings'
     : null;
-  const mobileSubGroup: any = mobileSubGroupId ? NAV_GROUPS.find((g: any) => g.id === mobileSubGroupId) : null;
+  const mobileSubGroup: any = mobileSubGroupId ? visibleNavGroups.find((g: any) => g.id === mobileSubGroupId) : null;
 
   // --- AUTH CHECK GATE ---
   // Avoids flashing the login screen while we ask Supabase whether a
@@ -2148,7 +2188,7 @@ export default function AdminDashboard() {
 
           {/* ── Navigation ── */}
           <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto relative z-10">
-            {NAV_GROUPS.map((item: any) => {
+            {visibleNavGroups.map((item: any) => {
               if (item.kind === 'single') {
                 const Icon = item.icon;
                 const isActive = activeTab === item.tab;
@@ -2276,7 +2316,7 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex overflow-x-auto px-2 pb-2 gap-1">
-            {NAV_GROUPS.map((item: any) => {
+            {visibleNavGroups.map((item: any) => {
               const Icon = item.icon;
               const isActive = item.kind === 'single' ? activeTab === item.tab : item.children.some((c: any) => c.tab === activeTab);
               return (
@@ -2770,9 +2810,11 @@ export default function AdminDashboard() {
                       </h3>
                       <div className="flex items-center gap-4 shrink-0">
                         <span className="text-muted text-xs font-mono font-bold hidden sm:inline">{recentInventory.length} ITEMS</span>
-                        <button onClick={() => goToTab('products-add', 'products')} className="p-btn p-btn-primary">
-                          <IconPlus className="w-3.5 h-3.5" /> Add Product
-                        </button>
+                        {userRole !== 'salesman' && (
+                          <button onClick={() => goToTab('products-add', 'products')} className="p-btn p-btn-primary">
+                            <IconPlus className="w-3.5 h-3.5" /> Add Product
+                          </button>
+                        )}
                       </div>
                     </div>
 
