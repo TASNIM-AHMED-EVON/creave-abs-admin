@@ -1955,12 +1955,6 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(url);
   };
 
-  // Flat lookup across single items and group children for the page header
-  // and for deciding which sidebar group should render expanded.
-  const flatNav = NAV_GROUPS.flatMap((g: any) => (g.kind === 'group' ? g.children.map((c: any) => ({ tab: c.tab, label: c.label, group: g.label })) : [{ tab: g.tab, label: g.label, group: null }]));
-  const activeNavEntry = flatNav.find(n => n.tab === activeTab);
-  const activeLabel = activeNavEntry ? (activeNavEntry.group ? `${activeNavEntry.group} — ${activeNavEntry.label}` : activeNavEntry.label) : '';
-
   // Reports: Master Transaction Ledger pagination (salesRecord is already
   // date-filtered by fetchSalesData, so this only paginates what's already
   // been filtered — same pattern as the other paginated lists).
@@ -2694,8 +2688,13 @@ export default function AdminDashboard() {
 
           <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 sm:py-10 pb-16 print:p-0 relative z-10">
 
-            <div className="hidden lg:flex items-baseline justify-between mb-8 print:hidden">
-              <h2 className="font-display text-2xl text-ink">{activeLabel}</h2>
+            <div className="flex items-center justify-between mb-8 print:hidden flex-wrap gap-3">
+              <button
+                onClick={() => goToTab('pos', 'sell')}
+                className="p-btn p-btn-primary btn-shimmer"
+              >
+                <IconScan className="w-3.5 h-3.5" /> POS
+              </button>
               <p className="text-xs font-mono text-muted uppercase tracking-wider">
                 {new Date().toLocaleDateString('en-BD', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
