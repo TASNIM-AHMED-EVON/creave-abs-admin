@@ -897,6 +897,22 @@ export default function AdminDashboard() {
     }
   };
 
+  // --- PRINT MODE ---
+  // Both the receipt block and the label-sheet block live in the DOM at all
+  // times (see the two blocks at the bottom of this file); a body class set
+  // right before window.print() decides which one the @media print rule
+  // actually shows, so printing one never also renders a blank page for the
+  // other. The class is cleared once the print dialog closes.
+  useEffect(() => {
+    const clearPrintMode = () => document.body.classList.remove('printing-receipt', 'printing-labels');
+    window.addEventListener('afterprint', clearPrintMode);
+    return () => window.removeEventListener('afterprint', clearPrintMode);
+  }, []);
+  const triggerPrint = (mode: 'receipt' | 'labels') => {
+    document.body.classList.add(mode === 'receipt' ? 'printing-receipt' : 'printing-labels');
+    window.print();
+  };
+
   // Business name/address are shown on the login screen too, before any
   // session exists, so fetch them unconditionally on first mount. (The RLS
   // policy on business_settings allows public SELECT for exactly this
@@ -1098,7 +1114,7 @@ export default function AdminDashboard() {
     setPosMessage({ type: 'success', text: 'Sale recorded! Printing receipt...' });
 
     setTimeout(() => {
-      window.print();
+      triggerPrint('receipt');
       setCart([]);
       setTrxId('');
       setDiscountAmount('0');
@@ -2126,14 +2142,21 @@ export default function AdminDashboard() {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          /* Show only the relevant printable block — everything else is
-             hidden via print:hidden below. Only one of these is ever
-             populated at a time (cart vs. label queue), so no conflict. */
-          .print-receipt {
+          /* Both blocks stay in the DOM at all times, but only ONE of them
+             is ever shown per print action — gated by a body class set
+             right before window.print() is called (see triggerPrint below).
+             Previously both were forced visible unconditionally, which is
+             what produced a blank first page: the browser always allocated
+             a page for the (empty) receipt block before the real labels
+             page, because each has its own named @page size. */
+          .print-receipt, .print-labels {
+            display: none !important;
+          }
+          body.printing-receipt .print-receipt {
             display: block !important;
             page: receipt;
           }
-          .print-labels {
+          body.printing-labels .print-labels {
             display: block !important;
             page: labels;
           }
@@ -3298,7 +3321,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-muted font-medium">{totalLabelCount} label{totalLabelCount === 1 ? '' : 's'} across {labelQueue.length} product{labelQueue.length === 1 ? '' : 's'}</p>
                         <div className="flex gap-2">
                           <button onClick={clearLabelQueue} className="p-btn p-btn-ghost">Clear Batch</button>
-                          <button onClick={() => window.print()} className="p-btn p-btn-primary btn-shimmer">
+                          <button onClick={() => triggerPrint('labels')} className="p-btn p-btn-primary btn-shimmer">
                             <IconPrinter className="w-3.5 h-3.5" /> Print {totalLabelCount} Label{totalLabelCount === 1 ? '' : 's'}
                           </button>
                         </div>
