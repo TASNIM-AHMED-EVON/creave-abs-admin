@@ -5529,17 +5529,17 @@ export default function AdminDashboard() {
           Using a fixed-width 80mm column matches thermal receipt printers. */}
       <div className="print-receipt" style={{ display: 'none' }}>
         {cart.length > 0 && (
-          <div style={{ width: '80mm', fontFamily: 'monospace', fontSize: '12px', color: '#000', padding: '4px', margin: '0 auto', lineHeight: 1.5 }}>
+          <div style={{ width: '80mm', fontFamily: 'monospace', fontSize: '12px', color: '#000', padding: '4px', margin: '0 auto', lineHeight: 1.5, fontWeight: 'bold' }}>
 
             {/* Header */}
             <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', letterSpacing: '0.15em', marginBottom: 2 }}>CRAVE ABS</div>
-            <div style={{ textAlign: 'center', fontSize: '10px', textTransform: 'uppercase', color: '#444', marginBottom: 8 }}>
+            <div style={{ textAlign: 'center', fontSize: '10px', textTransform: 'uppercase', color: '#000', fontWeight: 'bold', marginBottom: 8 }}>
               {businessSettings.address}{businessSettings.phone ? ` · ${businessSettings.phone}` : ''}
             </div>
             <div style={{ borderBottom: '1px dashed #000', marginBottom: 6 }} />
 
             {/* Date / time */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 'bold', marginBottom: 6 }}>
               <span>Date: {new Date().toLocaleDateString()}</span>
               <span>Time: {new Date().toLocaleTimeString()}</span>
             </div>
@@ -5549,7 +5549,7 @@ export default function AdminDashboard() {
             {cart.map((item, index) => (
               <div key={index} style={{ marginBottom: 8 }}>
                 <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{item.name}</div>
-                <div style={{ fontSize: '10px', color: '#555' }}>CAT: {item.category}</div>
+                <div style={{ fontSize: '10px', color: '#000', fontWeight: 'bold' }}>CAT: {item.category}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', marginTop: 2 }}>
                   <span>{item.cartQty}x Item</span>
                   <span>Tk {item.price * item.cartQty}</span>
@@ -5561,17 +5561,17 @@ export default function AdminDashboard() {
 
             {/* Subtotal / discount / tax */}
             {(cartDiscountValue > 0 || cartTaxValue > 0) && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold' }}>
                 <span>Subtotal:</span><span>Tk {cartSubtotal}</span>
               </div>
             )}
             {cartDiscountValue > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#c00' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold', color: '#c00' }}>
                 <span>Discount:</span><span>- Tk {cartDiscountValue}</span>
               </div>
             )}
             {cartTaxValue > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#060' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold', color: '#060' }}>
                 <span>Tax{cartActiveTaxRate ? ` (${cartActiveTaxRate.name} ${cartActiveTaxRate.rate_percent}%)` : ''}:</span>
                 <span>+ Tk {cartTaxValue}</span>
               </div>
@@ -5583,18 +5583,18 @@ export default function AdminDashboard() {
             </div>
 
             {/* Payment */}
-            <div style={{ fontSize: '10px', marginTop: 4, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', marginTop: 4, textTransform: 'uppercase' }}>
               Paid via: <strong>{paymentMethod}</strong>
             </div>
             {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && (
-              <div style={{ fontSize: '10px', fontFamily: 'monospace' }}>TrxID: {trxId}</div>
+              <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace' }}>TrxID: {trxId}</div>
             )}
 
             <div style={{ borderBottom: '1px dashed #000', margin: '8px 0 6px' }} />
 
             {/* Footer */}
             <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11px' }}>{businessSettings.receipt_footer_line1}</div>
-            <div style={{ textAlign: 'center', fontSize: '10px', marginTop: 2 }}>{businessSettings.receipt_footer_line2}</div>
+            <div style={{ textAlign: 'center', fontSize: '10px', fontWeight: 'bold', marginTop: 2 }}>{businessSettings.receipt_footer_line2}</div>
           </div>
         )}
       </div>
