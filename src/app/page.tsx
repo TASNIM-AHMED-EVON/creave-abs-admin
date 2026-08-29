@@ -291,6 +291,26 @@ const NAV_GROUPS = [
   { kind: 'single', id: 'survey', tab: 'survey', label: 'Daily Sales Survey', icon: IconSurvey },
 ] as const;
 
+// ---------------------------------------------------------------------------
+// Global header toolbar — shown above every page (see the header block right
+// after the tab-switch key in the main render). This is where quick-access
+// buttons live, separate from the sidebar. To add another one later, just
+// add an entry here — nothing else needs to change. Each entry needs:
+//   id       — unique key
+//   label    — button text
+//   icon     — one of the Icon* components defined above
+//   tab      — the tab it should jump to (goToTab's first argument)
+//   group    — the parent group id to expand in the sidebar, or null for a
+//              top-level single tab (goToTab's second argument)
+//   variant  — 'primary' | 'ghost' — controls button styling
+// A button is automatically hidden for a role that can't reach its tab (see
+// visibleHeaderActions below), so a salesman never sees a shortcut to a page
+// they don't have access to.
+const HEADER_ACTIONS: { id: string; label: string; icon: any; tab: string; group: string | null; variant: 'primary' | 'ghost' }[] = [
+  { id: 'pos', label: 'POS', icon: IconScan, tab: 'pos', group: 'sell', variant: 'primary' },
+  // { id: 'add-sale', label: 'Add Sale', icon: IconPlus, tab: 'sell-add', group: 'sell', variant: 'ghost' },
+];
+
 const PAYMENT_METHODS = ['cash', 'bkash', 'nagad', 'upay', 'rocket', 'bank/card'] as const;
 
 // Items at or below this remaining quantity surface as "Low Stock" on the
@@ -1987,6 +2007,7 @@ export default function AdminDashboard() {
   const allowedTabsForRole = new Set<string>(
     visibleNavGroups.flatMap((item: any) => item.kind === 'single' ? [item.tab] : item.children.map((c: any) => c.tab))
   );
+  const visibleHeaderActions = HEADER_ACTIONS.filter(a => allowedTabsForRole.has(a.tab));
 
   // If a salesman ever ends up on a tab outside that set (default landing
   // tab, a stale link, a button that isn't hidden, browser back/forward),
@@ -2688,13 +2709,25 @@ export default function AdminDashboard() {
 
           <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 sm:py-10 pb-16 print:p-0 relative z-10">
 
-            <div className="flex items-center justify-between mb-8 print:hidden flex-wrap gap-3">
-              <button
-                onClick={() => goToTab('pos', 'sell')}
-                className="p-btn p-btn-primary btn-shimmer"
-              >
-                <IconScan className="w-3.5 h-3.5" /> POS
-              </button>
+            {/* ── GLOBAL HEADER TOOLBAR ──
+                Shown above every page. Buttons come from HEADER_ACTIONS near
+                the top of this file — add an entry there to add a button
+                here, nothing in this block needs to change. */}
+            <div className="flex items-center justify-between mb-8 print:hidden flex-wrap gap-3 px-4 py-3 bg-canvas/70 backdrop-blur-sm border border-thread/60 rounded-lg">
+              <div className="flex items-center gap-2 flex-wrap">
+                {visibleHeaderActions.map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <button
+                      key={action.id}
+                      onClick={() => goToTab(action.tab, action.group)}
+                      className={`p-btn ${action.variant === 'ghost' ? 'p-btn-ghost' : 'p-btn-primary btn-shimmer'}`}
+                    >
+                      <Icon className="w-3.5 h-3.5" /> {action.label}
+                    </button>
+                  );
+                })}
+              </div>
               <p className="text-xs font-mono text-muted uppercase tracking-wider">
                 {new Date().toLocaleDateString('en-BD', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
