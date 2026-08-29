@@ -3399,8 +3399,20 @@ export default function AdminDashboard() {
                       </div>
 
                       <div className="p-4 bg-paper-dim border border-thread flex items-center justify-center">
-                        <BarcodeSVG value={labelQueue[labelQueue.length - 1].barcode} height={50} barWidth={1.8} fontSize={13} />
+                        <div className="bg-white border border-thread rounded p-3 text-center" style={{ width: '62mm' }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/logo-ac.png" alt="" className="h-[9mm] w-auto mx-auto mb-1" />
+                          <p className="text-[12px] font-bold text-black leading-tight truncate">{labelQueue[labelQueue.length - 1].name}</p>
+                          {labelQueue[labelQueue.length - 1].brand && (
+                            <p className="text-[9px] text-neutral-600 uppercase tracking-wide">{labelQueue[labelQueue.length - 1].brand}</p>
+                          )}
+                          <p className="text-[15px] font-bold text-black my-0.5">৳{labelQueue[labelQueue.length - 1].price}</p>
+                          <div className="flex justify-center">
+                            <BarcodeSVG value={labelQueue[labelQueue.length - 1].barcode} height={40} barWidth={1.4} fontSize={11} />
+                          </div>
+                        </div>
                       </div>
+                      <p className="text-[11px] text-muted text-center -mt-2">Preview of the last item added — this is exactly what prints, one per tag.</p>
 
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-xs text-muted font-medium">{totalLabelCount} label{totalLabelCount === 1 ? '' : 's'} across {labelQueue.length} product{labelQueue.length === 1 ? '' : 's'}</p>
@@ -5474,6 +5486,8 @@ export default function AdminDashboard() {
                   textAlign: 'center',
                 }}
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo-ac.png" alt="" style={{ height: '9mm', width: 'auto', margin: '0 auto 1mm', display: 'block' }} />
                 <div style={{ fontWeight: 700, fontSize: '12px', lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {item.name}
                 </div>
