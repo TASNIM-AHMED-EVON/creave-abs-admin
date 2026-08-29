@@ -125,6 +125,13 @@ const IconCalculator = (p: React.SVGProps<SVGSVGElement>) => (
     <path strokeLinecap="round" d="M7.5 6.5h9M7.75 11h.01M12 11h.01M16.25 11h.01M7.75 14.5h.01M12 14.5h.01M16.25 14.5v3.25M7.75 18h.01M12 18h.01" />
   </svg>
 );
+const IconImage = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="8.5" cy="9.5" r="1.5" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 16l-5.5-5.5a1.5 1.5 0 00-2.12 0L4 19" />
+  </svg>
+);
 const IconRuler = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 15.5l5-5 11 11-5 5-11-11z" />
@@ -447,11 +454,15 @@ export default function AdminDashboard() {
   const [invUnit, setInvUnit] = useState('Piece');
   const [invPrice, setInvPrice] = useState('');
   const [invQuantity, setInvQuantity] = useState('1');
+  const [invImageFile, setInvImageFile] = useState<File | null>(null);
+  const [invImagePreview, setInvImagePreview] = useState('');
+  const [invImageUploading, setInvImageUploading] = useState(false);
   const [invMessage, setInvMessage] = useState({ type: '', text: '' });
   const [recentInventory, setRecentInventory] = useState<any[]>([]);
   const [stockSearchQuery, setStockSearchQuery] = useState('');
   const [stockPage, setStockPage] = useState(1);
   const STOCK_PAGE_SIZE = 20;
+  const [photoUploadingId, setPhotoUploadingId] = useState<any>(null);
 
   // Refund State
   const [refundBarcode, setRefundBarcode] = useState('');
@@ -1309,10 +1320,44 @@ export default function AdminDashboard() {
     }
   };
 
+  // Uploads to the "product-images" Storage bucket and returns the public
+  // URL to store on the row. Path is prefixed with the barcode so re-running
+  // this for the same product overwrites cleanly rather than piling up.
+  const uploadProductImage = async (file: File, barcode: string): Promise<string | null> => {
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${barcode}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('product-images').upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+    if (error) return null;
+    const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  const handleInvImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setInvImageFile(file);
+    setInvImagePreview(URL.createObjectURL(file));
+  };
+
   const handleAddInventory = async (e: React.FormEvent) => {
     e.preventDefault();
     setInvMessage({ type: '', text: '' });
     const qty = parseInt(invQuantity);
+
+    let imageUrl: string | null = null;
+    if (invImageFile) {
+      setInvImageUploading(true);
+      imageUrl = await uploadProductImage(invImageFile, invBarcode);
+      setInvImageUploading(false);
+      if (!imageUrl) {
+        setInvMessage({ type: 'error', text: 'Photo upload failed. Make sure the "product-images" storage bucket exists (see setup note), then try again.' });
+        return;
+      }
+    }
+
     const { error } = await supabase.from('dresses').insert([
       {
         barcode: invBarcode,
@@ -1322,7 +1367,8 @@ export default function AdminDashboard() {
         unit: invUnit || 'Piece',
         price: parseFloat(invPrice),
         quantity: qty,
-        status: qty > 0 ? 'available' : 'sold'
+        status: qty > 0 ? 'available' : 'sold',
+        image_url: imageUrl,
       }
     ]);
     if (error) {
@@ -1331,6 +1377,26 @@ export default function AdminDashboard() {
       setInvMessage({ type: 'success', text: `Successfully stocked ${qty} item(s)!` });
       setInvBarcode(''); setInvName(''); setInvCategory(''); setInvBrand('');
       setInvUnit('Piece'); setInvPrice(''); setInvQuantity('1');
+      setInvImageFile(null); setInvImagePreview('');
+      fetchRecentInventory();
+    }
+  };
+
+  // Replaces the photo on an existing product directly from the List
+  // Products row — no need to open a separate edit form just for this.
+  const handleReplacePhoto = async (item: any, file: File) => {
+    setPhotoUploadingId(item.id);
+    const imageUrl = await uploadProductImage(file, item.barcode);
+    if (!imageUrl) {
+      alert('Photo upload failed. Make sure the "product-images" storage bucket exists (see setup note).');
+      setPhotoUploadingId(null);
+      return;
+    }
+    const { error } = await supabase.from('dresses').update({ image_url: imageUrl }).eq('id', item.id);
+    setPhotoUploadingId(null);
+    if (error) {
+      alert('Failed to save the new photo. Please try again.');
+    } else {
       fetchRecentInventory();
     }
   };
@@ -3290,15 +3356,47 @@ export default function AdminDashboard() {
                                 </div>
                               ) : (
                                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                                  <div className="min-w-0">
-                                    <p className="font-bold text-ink text-sm truncate">{item.name}</p>
-                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                      <span className="text-xs text-muted font-mono">{item.barcode}</span>
-                                      <span className="text-xs text-thread-dark">·</span>
-                                      <span className="text-xs text-muted">{item.category}</span>
-                                      {item.brand && (<><span className="text-xs text-thread-dark">·</span><span className="text-xs text-muted">{item.brand}</span></>)}
-                                      <span className="text-xs text-thread-dark">·</span>
-                                      <span className="text-xs text-muted">{item.unit || 'Piece'}</span>
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <label className="relative shrink-0 w-11 h-11 rounded border border-thread bg-paper-dim overflow-hidden cursor-pointer group" title="Click to add/change photo">
+                                      {item.image_url ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-muted">
+                                          <IconImage className="w-4 h-4" />
+                                        </div>
+                                      )}
+                                      {photoUploadingId === item.id ? (
+                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                          <span className="text-[8px] text-white font-bold uppercase">Saving…</span>
+                                        </div>
+                                      ) : (
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                          <IconPencil className="w-3.5 h-3.5 text-white" />
+                                        </div>
+                                      )}
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        disabled={photoUploadingId === item.id}
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleReplacePhoto(item, file);
+                                          e.target.value = '';
+                                        }}
+                                      />
+                                    </label>
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                        <span className="text-xs text-muted font-mono">{item.barcode}</span>
+                                        <span className="text-xs text-thread-dark">·</span>
+                                        <span className="text-xs text-muted">{item.category}</span>
+                                        {item.brand && (<><span className="text-xs text-thread-dark">·</span><span className="text-xs text-muted">{item.brand}</span></>)}
+                                        <span className="text-xs text-thread-dark">·</span>
+                                        <span className="text-xs text-muted">{item.unit || 'Piece'}</span>
+                                      </div>
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-3 shrink-0">
@@ -3403,6 +3501,20 @@ export default function AdminDashboard() {
                       )}
                     </div>
                     <div>
+                      <label className="p-label">Product Photo</label>
+                      <div className="flex items-center gap-4">
+                        <label className="p-btn p-btn-ghost cursor-pointer">
+                          <IconImage className="w-3.5 h-3.5" /> {invImagePreview ? 'Change Photo' : 'Choose Photo'}
+                          <input type="file" accept="image/*" className="hidden" onChange={handleInvImageChange} />
+                        </label>
+                        {invImagePreview && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={invImagePreview} alt="Preview" className="w-16 h-16 object-cover border border-thread rounded" />
+                        )}
+                      </div>
+                      <p className="text-xs text-muted mt-1.5">Optional — shown on List Products. Uploads when you save.</p>
+                    </div>
+                    <div>
                       <label className="p-label">Item Title</label>
                       <input required type="text" className="w-full p-input" placeholder="e.g., Premium Cotton Panjabi" value={invName} onChange={(e) => setInvName(e.target.value)} />
                     </div>
@@ -3455,8 +3567,8 @@ export default function AdminDashboard() {
                         <input required type="number" min="1" className="w-full px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="Pieces" value={invQuantity} onChange={(e) => setInvQuantity(e.target.value)} />
                       </div>
                     </div>
-                    <button type="submit" className="btn-shimmer w-full mt-2 p-btn p-btn-primary">
-                      Save to Database
+                    <button type="submit" disabled={invImageUploading} className="btn-shimmer w-full mt-2 p-btn p-btn-primary disabled:opacity-60">
+                      {invImageUploading ? 'Uploading Photo…' : 'Save to Database'}
                     </button>
                   </form>
                 </div>
