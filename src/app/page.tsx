@@ -119,6 +119,12 @@ const IconPrinter = (p: React.SVGProps<SVGSVGElement>) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V3.75A.75.75 0 016.75 3h10.5a.75.75 0 01.75.75V9M6 18H4.5A1.5 1.5 0 013 16.5v-5A1.5 1.5 0 014.5 10h15a1.5 1.5 0 011.5 1.5v5a1.5 1.5 0 01-1.5 1.5H18m-12 0v3.25c0 .414.336.75.75.75h10.5a.75.75 0 00.75-.75V18m-12 0h12" />
   </svg>
 );
+const IconCalculator = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <rect x="4.5" y="2.75" width="15" height="18.5" rx="2" />
+    <path strokeLinecap="round" d="M7.5 6.5h9M7.75 11h.01M12 11h.01M16.25 11h.01M7.75 14.5h.01M12 14.5h.01M16.25 14.5v3.25M7.75 18h.01M12 18h.01" />
+  </svg>
+);
 const IconRuler = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 15.5l5-5 11 11-5 5-11-11z" />
@@ -968,6 +974,97 @@ export default function AdminDashboard() {
     document.head.appendChild(pageStyle);
     window.print();
   };
+
+  // --- CALCULATOR ---
+  // A quick-access popup, not a page — available from the header on every
+  // tab and to both roles (admin and salesman), since it's a plain utility
+  // with no data of its own to restrict.
+  const [showCalculator, setShowCalculator] = useState(false);
+  const [calcDisplay, setCalcDisplay] = useState('0');
+  const [calcOperand, setCalcOperand] = useState<number | null>(null);
+  const [calcOperator, setCalcOperator] = useState<'+' | '-' | '×' | '÷' | null>(null);
+  const [calcWaitingForOperand, setCalcWaitingForOperand] = useState(false);
+
+  const calcCompute = (a: number, b: number, op: '+' | '-' | '×' | '÷'): number => {
+    switch (op) {
+      case '+': return a + b;
+      case '-': return a - b;
+      case '×': return a * b;
+      case '÷': return b === 0 ? NaN : a / b;
+    }
+  };
+
+  const calcInputDigit = (digit: string) => {
+    if (calcDisplay === 'Error' || calcWaitingForOperand) {
+      setCalcDisplay(digit);
+      setCalcWaitingForOperand(false);
+    } else {
+      setCalcDisplay(calcDisplay === '0' ? digit : calcDisplay + digit);
+    }
+  };
+
+  const calcInputDecimal = () => {
+    if (calcDisplay === 'Error' || calcWaitingForOperand) {
+      setCalcDisplay('0.');
+      setCalcWaitingForOperand(false);
+      return;
+    }
+    if (!calcDisplay.includes('.')) setCalcDisplay(calcDisplay + '.');
+  };
+
+  const calcClear = () => {
+    setCalcDisplay('0');
+    setCalcOperand(null);
+    setCalcOperator(null);
+    setCalcWaitingForOperand(false);
+  };
+
+  const calcBackspace = () => {
+    if (calcDisplay === 'Error' || calcWaitingForOperand) return;
+    setCalcDisplay(calcDisplay.length > 1 ? calcDisplay.slice(0, -1) : '0');
+  };
+
+  const calcToggleSign = () => {
+    if (calcDisplay === 'Error') return;
+    setCalcDisplay(String(parseFloat(calcDisplay) * -1));
+  };
+
+  const calcPercent = () => {
+    if (calcDisplay === 'Error') return;
+    setCalcDisplay(String(parseFloat(calcDisplay) / 100));
+  };
+
+  const calcInputOperator = (nextOp: '+' | '-' | '×' | '÷') => {
+    if (calcDisplay === 'Error') return;
+    const inputValue = parseFloat(calcDisplay);
+    if (calcOperand === null) {
+      setCalcOperand(inputValue);
+    } else if (calcOperator && !calcWaitingForOperand) {
+      const result = calcCompute(calcOperand, inputValue, calcOperator);
+      setCalcDisplay(Number.isFinite(result) ? String(result) : 'Error');
+      setCalcOperand(Number.isFinite(result) ? result : null);
+    }
+    setCalcWaitingForOperand(true);
+    setCalcOperator(nextOp);
+  };
+
+  const calcEquals = () => {
+    if (calcDisplay === 'Error' || calcOperator === null || calcOperand === null) return;
+    const inputValue = parseFloat(calcDisplay);
+    const result = calcCompute(calcOperand, inputValue, calcOperator);
+    setCalcDisplay(Number.isFinite(result) ? String(result) : 'Error');
+    setCalcOperand(null);
+    setCalcOperator(null);
+    setCalcWaitingForOperand(true);
+  };
+
+  // Close on Escape, and reset to a fresh calculation each time it's reopened.
+  useEffect(() => {
+    if (!showCalculator) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowCalculator(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showCalculator]);
 
   // Business name/address are shown on the login screen too, before any
   // session exists, so fetch them unconditionally on first mount. (The RLS
@@ -2727,6 +2824,11 @@ export default function AdminDashboard() {
                     </button>
                   );
                 })}
+                {/* Calculator is a popup, not a page, so it lives outside
+                    HEADER_ACTIONS and opens a modal instead of navigating. */}
+                <button onClick={() => setShowCalculator(true)} className="p-btn p-btn-ghost">
+                  <IconCalculator className="w-3.5 h-3.5" /> Calculator
+                </button>
               </div>
               <p className="text-xs font-mono text-muted uppercase tracking-wider">
                 {new Date().toLocaleDateString('en-BD', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -5538,6 +5640,65 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {/* ── CALCULATOR MODAL ──
+          Plain popup utility, available from the header on every page for
+          both roles. Closes on Escape, the backdrop, or the × button. */}
+      {showCalculator && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 print:hidden"
+          onClick={() => setShowCalculator(false)}
+        >
+          <div
+            className="bg-canvas border border-thread rounded-xl shadow-2xl w-[280px] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-thread">
+              <h3 className="text-sm font-bold text-ink flex items-center gap-2">
+                <IconCalculator className="w-4 h-4 text-brass" /> Calculator
+              </h3>
+              <button onClick={() => setShowCalculator(false)} className="text-muted hover:text-ink transition-colors text-lg leading-none">
+                ×
+              </button>
+            </div>
+
+            <div className="px-4 pt-4 pb-3 bg-paper-dim text-right">
+              <p className="font-mono font-bold text-ink text-[28px] leading-tight truncate">{calcDisplay}</p>
+              {calcOperator && (
+                <p className="text-xs text-muted font-mono mt-0.5">{calcOperand} {calcOperator}</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-4 gap-px bg-thread p-px">
+              <button onClick={calcClear} className="col-span-2 py-3.5 bg-canvas text-oxblood font-bold text-sm hover:bg-oxblood-light/30 transition-colors">C</button>
+              <button onClick={calcToggleSign} className="py-3.5 bg-canvas text-ink font-bold text-sm hover:bg-paper-dim transition-colors">±</button>
+              <button onClick={calcPercent} className="py-3.5 bg-canvas text-ink font-bold text-sm hover:bg-paper-dim transition-colors">%</button>
+
+              <button onClick={() => calcInputDigit('7')} className="py-3.5 bg-canvas text-ink font-mono font-bold hover:bg-paper-dim transition-colors">7</button>
+              <button onClick={() => calcInputDigit('8')} className="py-3.5 bg-canvas text-ink font-mono font-bold hover:bg-paper-dim transition-colors">8</button>
+              <button onClick={() => calcInputDigit('9')} className="py-3.5 bg-canvas text-ink font-mono font-bold hover:bg-paper-dim transition-colors">9</button>
+              <button onClick={() => calcInputOperator('÷')} className="py-3.5 bg-brass-light/40 text-brass-dark font-bold hover:bg-brass-light/60 transition-colors">÷</button>
+
+              <button onClick={() => calcInputDigit('4')} className="py-3.5 bg-canvas text-ink font-mono font-bold hover:bg-paper-dim transition-colors">4</button>
+              <button onClick={() => calcInputDigit('5')} className="py-3.5 bg-canvas text-ink font-mono font-bold hover:bg-paper-dim transition-colors">5</button>
+              <button onClick={() => calcInputDigit('6')} className="py-3.5 bg-canvas text-ink font-mono font-bold hover:bg-paper-dim transition-colors">6</button>
+              <button onClick={() => calcInputOperator('×')} className="py-3.5 bg-brass-light/40 text-brass-dark font-bold hover:bg-brass-light/60 transition-colors">×</button>
+
+              <button onClick={() => calcInputDigit('1')} className="py-3.5 bg-canvas text-ink font-mono font-bold hover:bg-paper-dim transition-colors">1</button>
+              <button onClick={() => calcInputDigit('2')} className="py-3.5 bg-canvas text-ink font-mono font-bold hover:bg-paper-dim transition-colors">2</button>
+              <button onClick={() => calcInputDigit('3')} className="py-3.5 bg-canvas text-ink font-mono font-bold hover:bg-paper-dim transition-colors">3</button>
+              <button onClick={() => calcInputOperator('-')} className="py-3.5 bg-brass-light/40 text-brass-dark font-bold hover:bg-brass-light/60 transition-colors">−</button>
+
+              <button onClick={() => calcInputDigit('0')} className="py-3.5 bg-canvas text-ink font-mono font-bold hover:bg-paper-dim transition-colors">0</button>
+              <button onClick={calcInputDecimal} className="py-3.5 bg-canvas text-ink font-mono font-bold hover:bg-paper-dim transition-colors">.</button>
+              <button onClick={calcBackspace} className="py-3.5 bg-canvas text-ink font-bold hover:bg-paper-dim transition-colors">⌫</button>
+              <button onClick={() => calcInputOperator('+')} className="py-3.5 bg-brass-light/40 text-brass-dark font-bold hover:bg-brass-light/60 transition-colors">+</button>
+
+              <button onClick={calcEquals} className="col-span-4 py-3.5 bg-brass text-white font-bold text-sm hover:bg-brass-dark transition-colors">=</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
