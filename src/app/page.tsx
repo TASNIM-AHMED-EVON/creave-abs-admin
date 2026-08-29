@@ -921,13 +921,31 @@ export default function AdminDashboard() {
   // right before window.print() decides which one the @media print rule
   // actually shows, so printing one never also renders a blank page for the
   // other. The class is cleared once the print dialog closes.
+  //
+  // The @page size is injected as its own <style> tag rather than declared
+  // as a named CSS page (e.g. "@page labels {}" + "page: labels;") because
+  // named pages force a page-break wherever the page context switches away
+  // from the default unnamed page — which produced a blank first page every
+  // time, even with the content itself correctly hidden. A single unnamed
+  // @page, resized right before each print, has no such transition to break on.
+  const PRINT_PAGE_STYLE_ID = 'dynamic-print-page-size';
   useEffect(() => {
-    const clearPrintMode = () => document.body.classList.remove('printing-receipt', 'printing-labels');
+    const clearPrintMode = () => {
+      document.body.classList.remove('printing-receipt', 'printing-labels');
+      document.getElementById(PRINT_PAGE_STYLE_ID)?.remove();
+    };
     window.addEventListener('afterprint', clearPrintMode);
     return () => window.removeEventListener('afterprint', clearPrintMode);
   }, []);
   const triggerPrint = (mode: 'receipt' | 'labels') => {
     document.body.classList.add(mode === 'receipt' ? 'printing-receipt' : 'printing-labels');
+    document.getElementById(PRINT_PAGE_STYLE_ID)?.remove();
+    const pageStyle = document.createElement('style');
+    pageStyle.id = PRINT_PAGE_STYLE_ID;
+    pageStyle.textContent = mode === 'receipt'
+      ? '@media print { @page { size: 80mm auto; margin: 6mm 8mm; } }'
+      : '@media print { @page { size: A4; margin: 10mm; } }';
+    document.head.appendChild(pageStyle);
     window.print();
   };
 
@@ -2209,17 +2227,6 @@ export default function AdminDashboard() {
 
       <style jsx global>{`
         @media print {
-          /* Named pages: the receipt keeps its narrow 80mm thermal-roll size,
-             while label sheets print on a normal A4 page. Each printable
-             block below opts into its own size via the "page" property. */
-          @page receipt {
-            size: 80mm auto;
-            margin: 6mm 8mm;
-          }
-          @page labels {
-            size: A4;
-            margin: 10mm;
-          }
           body {
             margin: 0;
             padding: 0;
@@ -2229,21 +2236,15 @@ export default function AdminDashboard() {
           }
           /* Both blocks stay in the DOM at all times, but only ONE of them
              is ever shown per print action — gated by a body class set
-             right before window.print() is called (see triggerPrint below).
-             Previously both were forced visible unconditionally, which is
-             what produced a blank first page: the browser always allocated
-             a page for the (empty) receipt block before the real labels
-             page, because each has its own named @page size. */
+             right before window.print() is called (see triggerPrint below). */
           .print-receipt, .print-labels {
             display: none !important;
           }
           body.printing-receipt .print-receipt {
             display: block !important;
-            page: receipt;
           }
           body.printing-labels .print-labels {
             display: block !important;
-            page: labels;
           }
           .print-label-tag {
             break-inside: avoid;
@@ -3404,7 +3405,7 @@ export default function AdminDashboard() {
                           <img src="/logo-ac.png" alt="" className="h-[9mm] w-auto mx-auto mb-1" />
                           <p className="text-[12px] font-bold text-black leading-tight truncate">{labelQueue[labelQueue.length - 1].name}</p>
                           {labelQueue[labelQueue.length - 1].brand && (
-                            <p className="text-[9px] text-neutral-600 uppercase tracking-wide">{labelQueue[labelQueue.length - 1].brand}</p>
+                            <p className="text-[10px] font-bold text-black uppercase tracking-wide">{labelQueue[labelQueue.length - 1].brand}</p>
                           )}
                           <p className="text-[15px] font-bold text-black my-0.5">৳{labelQueue[labelQueue.length - 1].price}</p>
                           <div className="flex justify-center">
@@ -5492,7 +5493,7 @@ export default function AdminDashboard() {
                   {item.name}
                 </div>
                 {item.brand && (
-                  <div style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: '10px', color: '#000', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 1 }}>
                     {item.brand}
                   </div>
                 )}
