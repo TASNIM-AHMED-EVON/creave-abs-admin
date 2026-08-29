@@ -266,6 +266,7 @@ const NAV_GROUPS = [
       { tab: 'purchases-list', label: 'List Purchases' },
       { tab: 'purchases-add', label: 'Add Purchase' },
       { tab: 'purchases-return', label: 'List Purchase Return' },
+      { tab: 'purchases-suppliers', label: 'Suppliers' },
     ],
   },
   { kind: 'single', id: 'daily-cost', tab: 'daily-cost', label: 'Daily Cost', icon: IconWallet },
@@ -509,6 +510,18 @@ export default function AdminDashboard() {
   const [returnMessage, setReturnMessage] = useState({ type: '', text: '' });
   const [purchaseReturns, setPurchaseReturns] = useState<any[]>([]);
 
+  // Suppliers (standalone contact book — name/place/phone plus a free-text
+  // note on what they supply, written by the owner in their own words)
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
+  const [supplierName, setSupplierName] = useState('');
+  const [supplierPlace, setSupplierPlace] = useState('');
+  const [supplierPhone, setSupplierPhone] = useState('');
+  const [supplierProductDetails, setSupplierProductDetails] = useState('');
+  const [supplierMessage, setSupplierMessage] = useState({ type: '', text: '' });
+  const [editingSupplierId, setEditingSupplierId] = useState<any>(null);
+  const [editSupplierDraft, setEditSupplierDraft] = useState({ name: '', place: '', phone: '', product_details: '' });
+
   // Sales Order (customer pre-orders, fulfilled later)
   const [soCustomerName, setSoCustomerName] = useState('');
   const [soCustomerPhone, setSoCustomerPhone] = useState('');
@@ -694,6 +707,11 @@ export default function AdminDashboard() {
   const fetchBrands = useCallback(async () => {
     const { data } = await supabase.from('brands').select('*').order('name', { ascending: true });
     if (data) setBrands(data);
+  }, []);
+
+  const fetchSuppliers = useCallback(async () => {
+    const { data } = await supabase.from('suppliers').select('*').order('name', { ascending: true });
+    if (data) setSuppliers(data);
   }, []);
 
   // --- PURCHASES DATA ---
@@ -928,12 +946,13 @@ export default function AdminDashboard() {
     fetchCategories();
     fetchUnits();
     fetchBrands();
+    fetchSuppliers();
     fetchBusinessSettings();
     fetchTaxRates();
     fetchMembers();
     fetchMembershipSettings();
     fetchDailyCosts();
-  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchDailyCosts]);
+  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchSuppliers, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchDailyCosts]);
 
   // --- REAL SUPABASE AUTH SESSION HANDLING ---
   // Replaces the old localStorage timer: Supabase's own client keeps the
@@ -1343,6 +1362,72 @@ export default function AdminDashboard() {
     const { error } = await supabase.from('brands').delete().eq('id', id);
     if (!error) fetchBrands();
   };
+
+  // --- SUPPLIERS CRUD ---
+  const addSupplier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSupplierMessage({ type: '', text: '' });
+    if (!supplierName.trim() || !supplierPhone.trim()) {
+      setSupplierMessage({ type: 'error', text: 'Name and phone number are required.' });
+      return;
+    }
+    const { error } = await supabase.from('suppliers').insert([{
+      name: supplierName.trim(),
+      place: supplierPlace.trim() || null,
+      phone: supplierPhone.trim(),
+      product_details: supplierProductDetails.trim() || null,
+    }]);
+    if (error) {
+      setSupplierMessage({ type: 'error', text: 'Failed to save. Make sure the suppliers table has been created (see setup note).' });
+    } else {
+      setSupplierMessage({ type: 'success', text: 'Supplier saved.' });
+      setSupplierName(''); setSupplierPlace(''); setSupplierPhone(''); setSupplierProductDetails('');
+      fetchSuppliers();
+    }
+  };
+
+  const startEditSupplier = (s: any) => {
+    setEditingSupplierId(s.id);
+    setEditSupplierDraft({
+      name: s.name,
+      place: s.place || '',
+      phone: s.phone,
+      product_details: s.product_details || '',
+    });
+  };
+
+  const cancelEditSupplier = () => setEditingSupplierId(null);
+
+  const saveEditSupplier = async (id: any) => {
+    if (!editSupplierDraft.name.trim() || !editSupplierDraft.phone.trim()) {
+      alert('Name and phone number are required.');
+      return;
+    }
+    const { error } = await supabase.from('suppliers').update({
+      name: editSupplierDraft.name.trim(),
+      place: editSupplierDraft.place.trim() || null,
+      phone: editSupplierDraft.phone.trim(),
+      product_details: editSupplierDraft.product_details.trim() || null,
+    }).eq('id', id);
+    if (error) {
+      alert('Failed to save changes. Please try again.');
+    } else {
+      setEditingSupplierId(null);
+      fetchSuppliers();
+    }
+  };
+
+  const deleteSupplier = async (id: any, name: string) => {
+    if (!window.confirm(`Remove supplier "${name}"? This can't be undone.`)) return;
+    const { error } = await supabase.from('suppliers').delete().eq('id', id);
+    if (!error) fetchSuppliers();
+  };
+
+  const filteredSuppliers = supplierSearchQuery === '' ? suppliers : suppliers.filter((s: any) =>
+    s.name.toLowerCase().includes(supplierSearchQuery.toLowerCase()) ||
+    (s.phone || '').toLowerCase().includes(supplierSearchQuery.toLowerCase()) ||
+    (s.place || '').toLowerCase().includes(supplierSearchQuery.toLowerCase())
+  );
 
   // --- PURCHASE REQUISITION ---
   const handleAddRequisition = async (e: React.FormEvent) => {
@@ -3938,6 +4023,108 @@ export default function AdminDashboard() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PURCHASES: SUPPLIERS */}
+            {activeTab === 'purchases-suppliers' && (
+              <div className="max-w-2xl print:hidden">
+                <div className="p-card p-7 mb-6">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconUsers className="w-4 h-4 text-brass" />
+                    Add Supplier
+                  </h3>
+                  <p className="text-sm text-muted mb-6">A contact book of who supplies what — separate from any single purchase order or return.</p>
+
+                  {supplierMessage.text && <div className={`anim-alert p-alert ${supplierMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{supplierMessage.text}</div>}
+
+                  <form onSubmit={addSupplier} className="space-y-5">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="p-label">Supplier Name</label>
+                        <input required type="text" className="w-full p-input" placeholder="e.g., Hexa Textiles" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="p-label">Phone Number</label>
+                        <input required type="text" className="w-full p-input font-mono" placeholder="01XXXXXXXXX" value={supplierPhone} onChange={(e) => setSupplierPhone(e.target.value)} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="p-label">Place</label>
+                      <input type="text" className="w-full p-input" placeholder="e.g., Mirpur, Dhaka" value={supplierPlace} onChange={(e) => setSupplierPlace(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="p-label">Product Details</label>
+                      <textarea rows={3} className="w-full p-input resize-none" placeholder="Write freely — what they supply, pricing notes, lead times, anything worth remembering..." value={supplierProductDetails} onChange={(e) => setSupplierProductDetails(e.target.value)} />
+                    </div>
+                    <button type="submit" className="btn-shimmer w-full p-btn p-btn-primary">
+                      Save Supplier
+                    </button>
+                  </form>
+                </div>
+
+                <div className="p-card overflow-hidden">
+                  <div className="p-7 pb-5">
+                    <h3 className="text-base font-bold text-ink">Supplier Directory</h3>
+                    <div className="relative mt-4">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted">
+                        <IconSearch className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search by name, place, or phone..."
+                        className="w-full pl-11 pr-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink text-sm transition-colors"
+                        value={supplierSearchQuery}
+                        onChange={(e) => setSupplierSearchQuery(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="divide-y divide-thread">
+                    {filteredSuppliers.length === 0 && (
+                      <div className="p-empty"><p className="p-empty-desc">{suppliers.length === 0 ? 'No suppliers saved yet.' : 'No suppliers match that search.'}</p></div>
+                    )}
+                    {filteredSuppliers.map((s: any) => (
+                      <div key={s.id} className="p-5">
+                        {editingSupplierId === s.id ? (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <input type="text" className="w-full p-input text-sm" placeholder="Name" value={editSupplierDraft.name} onChange={(e) => setEditSupplierDraft({ ...editSupplierDraft, name: e.target.value })} />
+                              <input type="text" className="w-full p-input text-sm font-mono" placeholder="Phone" value={editSupplierDraft.phone} onChange={(e) => setEditSupplierDraft({ ...editSupplierDraft, phone: e.target.value })} />
+                            </div>
+                            <input type="text" className="w-full p-input text-sm" placeholder="Place" value={editSupplierDraft.place} onChange={(e) => setEditSupplierDraft({ ...editSupplierDraft, place: e.target.value })} />
+                            <textarea rows={3} className="w-full p-input text-sm resize-none" placeholder="Product details" value={editSupplierDraft.product_details} onChange={(e) => setEditSupplierDraft({ ...editSupplierDraft, product_details: e.target.value })} />
+                            <div className="flex gap-2">
+                              <button onClick={() => saveEditSupplier(s.id)} className="flex-1 bg-ink text-paper text-[11px] font-bold uppercase tracking-wide py-2 hover:bg-brass-dark transition-colors">
+                                Save
+                              </button>
+                              <button onClick={cancelEditSupplier} className="flex-1 border border-thread text-ink text-[11px] font-bold uppercase tracking-wide py-2 hover:border-thread-dark transition-colors">
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="font-bold text-ink text-sm">{s.name}</p>
+                              <p className="text-xs text-muted font-mono mt-0.5">{s.phone}{s.place ? ` · ${s.place}` : ''}</p>
+                              {s.product_details && (
+                                <p className="text-sm text-ink mt-2 whitespace-pre-wrap">{s.product_details}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button onClick={() => startEditSupplier(s)} title="Edit" className="w-7 h-7 flex items-center justify-center border border-thread text-ink hover:border-brass hover:text-brass transition-colors">
+                                <IconPencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => deleteSupplier(s.id, s.name)} title="Remove" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
+                                <IconTrash className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
