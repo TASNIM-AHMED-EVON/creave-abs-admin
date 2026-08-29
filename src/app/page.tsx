@@ -397,6 +397,8 @@ export default function AdminDashboard() {
   const [revenueByMethod, setRevenueByMethod] = useState<Record<string, number>>({});
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [reportsPage, setReportsPage] = useState(1);
+  const REPORTS_PAGE_SIZE = 10;
 
   // Overview State
   const [todayRevenue, setTodayRevenue] = useState(0);
@@ -1633,7 +1635,7 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    if (activeTab === 'reports' && isAuthenticated) fetchSalesData();
+    if (activeTab === 'reports' && isAuthenticated) { fetchSalesData(); setReportsPage(1); }
   }, [activeTab, fetchSalesData, isAuthenticated]);
 
   useEffect(() => {
@@ -1659,7 +1661,7 @@ export default function AdminDashboard() {
     if (activeTab === 'daily-cost') fetchDailyCosts();
   }, [activeTab, isAuthenticated, fetchSalesOrders, fetchSalesData, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchSurveyData, fetchDailyCosts]);
 
-  const clearDateFilters = () => { setStartDate(''); setEndDate(''); };
+  const clearDateFilters = () => { setStartDate(''); setEndDate(''); setReportsPage(1); };
 
   const filteredInventory = recentInventory.filter(item => {
     const matchesSearch =
@@ -1748,6 +1750,16 @@ export default function AdminDashboard() {
   const activeNavEntry = flatNav.find(n => n.tab === activeTab);
   const activeLabel = activeNavEntry ? (activeNavEntry.group ? `${activeNavEntry.group} — ${activeNavEntry.label}` : activeNavEntry.label) : '';
 
+  // Reports: Master Transaction Ledger pagination (salesRecord is already
+  // date-filtered by fetchSalesData, so this only paginates what's already
+  // been filtered — same pattern as the other paginated lists).
+  const reportsTotalPages = Math.max(1, Math.ceil(salesRecord.length / REPORTS_PAGE_SIZE));
+  const reportsPageClamped = Math.min(reportsPage, reportsTotalPages);
+  const reportsPaginated = salesRecord.slice(
+    (reportsPageClamped - 1) * REPORTS_PAGE_SIZE,
+    reportsPageClamped * REPORTS_PAGE_SIZE
+  );
+
   const goToTab = (tab: string, groupId: string | null = null) => {
     setActiveTab(tab);
     if (groupId) setExpandedGroup(groupId);
@@ -1759,7 +1771,7 @@ export default function AdminDashboard() {
   // Everything else (Overview, Purchases, Settings, and every other
   // Products sub-page) is hidden from nav AND blocked even if reached
   // directly, so this is the single place that definition lives.
-  const SALESMAN_ALLOWED_IDS = new Set(['sell', 'daily-cost', 'membership', 'reports', 'survey']);
+  const SALESMAN_ALLOWED_IDS = new Set(['overview', 'sell', 'daily-cost', 'membership', 'reports', 'survey']);
   const visibleNavGroups = userRole === 'salesman'
     ? NAV_GROUPS
         .filter((item: any) => SALESMAN_ALLOWED_IDS.has(item.id) || item.id === 'products')
@@ -4462,11 +4474,11 @@ export default function AdminDashboard() {
                 <div className="p-card p-5 flex flex-wrap items-end gap-5">
                   <div className="flex-1 min-w-[180px]">
                     <label className="p-label">Filter Start Date</label>
-                    <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                    <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={startDate} onChange={(e) => { setStartDate(e.target.value); setReportsPage(1); }} />
                   </div>
                   <div className="flex-1 min-w-[180px]">
                     <label className="p-label">Filter End Date</label>
-                    <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                    <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={endDate} onChange={(e) => { setEndDate(e.target.value); setReportsPage(1); }} />
                   </div>
                   <button onClick={clearDateFilters} className="p-btn p-btn-ghost">
                     Clear Filters
@@ -4576,7 +4588,7 @@ export default function AdminDashboard() {
                         {salesRecord.length === 0 && (
                           <tr><td colSpan={5} className="p-8 text-center text-muted font-medium">No transactions found for this period.</td></tr>
                         )}
-                        {salesRecord.map((sale) => (
+                        {reportsPaginated.map((sale) => (
                           <tr key={sale.id} className={`${sale.status === 'refunded' ? 'opacity-50' : 'hover:bg-brass/5'} transition-colors`}>
                             <td className="p-4 text-sm text-muted whitespace-nowrap font-mono">{new Date(sale.sold_at).toLocaleString('en-BD')}</td>
                             <td className="p-4">
@@ -4601,6 +4613,35 @@ export default function AdminDashboard() {
                       </tbody>
                     </table>
                   </div>
+                  {salesRecord.length > 0 && (
+                    <div className="flex items-center justify-between p-6 pt-4 gap-4 border-t border-thread/60">
+                      <p className="text-xs text-muted font-medium">
+                        Showing {(reportsPageClamped - 1) * REPORTS_PAGE_SIZE + 1}
+                        –{Math.min(reportsPageClamped * REPORTS_PAGE_SIZE, salesRecord.length)} of {salesRecord.length}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setReportsPage(p => Math.max(1, p - 1))}
+                          disabled={reportsPageClamped <= 1}
+                          className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider border border-thread text-ink disabled:opacity-40 disabled:cursor-not-allowed hover:bg-paper-dim transition-colors"
+                        >
+                          Prev
+                        </button>
+                        <span className="text-xs text-muted font-mono">
+                          Page {reportsPageClamped} / {reportsTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setReportsPage(p => Math.min(reportsTotalPages, p + 1))}
+                          disabled={reportsPageClamped >= reportsTotalPages}
+                          className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider border border-thread text-ink disabled:opacity-40 disabled:cursor-not-allowed hover:bg-paper-dim transition-colors"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
