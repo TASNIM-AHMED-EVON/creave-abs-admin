@@ -1,6 +1,7 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import JsBarcode from 'jsbarcode';
 
 // ---------------------------------------------------------------------------
 // Icons — a single consistent line-icon set (1.5px stroke), drawn locally so
@@ -113,6 +114,11 @@ const IconTag = (p: React.SVGProps<SVGSVGElement>) => (
     <circle cx="7.5" cy="7.5" r="1.25" />
   </svg>
 );
+const IconPrinter = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V3.75A.75.75 0 016.75 3h10.5a.75.75 0 01.75.75V9M6 18H4.5A1.5 1.5 0 013 16.5v-5A1.5 1.5 0 014.5 10h15a1.5 1.5 0 011.5 1.5v5a1.5 1.5 0 01-1.5 1.5H18m-12 0v3.25c0 .414.336.75.75.75h10.5a.75.75 0 00.75-.75V18m-12 0h12" />
+  </svg>
+);
 const IconRuler = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 15.5l5-5 11 11-5 5-11-11z" />
@@ -195,6 +201,38 @@ const IconWallet = (p: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+// ---------------------------------------------------------------------------
+// Real, scannable barcode. Renders CODE128 bars (not a decorative stripe) via
+// jsbarcode, so codes of any length between 8–12 digits work — unlike
+// EAN/UPC, CODE128 has no fixed digit-length requirement. Used for the Add
+// Product preview and for every tag on the Print Labels sheet.
+// ---------------------------------------------------------------------------
+function BarcodeSVG({ value, height = 55, barWidth = 2, fontSize = 14 }: {
+  value: string; height?: number; barWidth?: number; fontSize?: number;
+}) {
+  const ref = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    if (!value) { ref.current.innerHTML = ''; return; }
+    try {
+      JsBarcode(ref.current, value, {
+        format: 'CODE128',
+        displayValue: true,
+        height,
+        width: barWidth,
+        fontSize,
+        fontOptions: 'bold',
+        margin: 8,
+        background: '#ffffff',
+        lineColor: '#000000',
+      });
+    } catch {
+      ref.current.innerHTML = '';
+    }
+  }, [value, height, barWidth, fontSize]);
+  return <svg ref={ref} />;
+}
+
 const NAV_GROUPS = [
   { kind: 'single', id: 'overview', tab: 'overview', label: 'Overview', icon: IconHome },
   {
@@ -213,6 +251,7 @@ const NAV_GROUPS = [
     children: [
       { tab: 'products-list', label: 'List Products' },
       { tab: 'products-add', label: 'Add Product' },
+      { tab: 'products-labels', label: 'Print Labels' },
       { tab: 'products-price', label: 'Update Price' },
       { tab: 'products-units', label: 'Units' },
       { tab: 'products-categories', label: 'Categories' },
@@ -374,6 +413,7 @@ export default function AdminDashboard() {
 
   // Inventory State
   const [invBarcode, setInvBarcode] = useState('');
+  const [invBarcodeGenerating, setInvBarcodeGenerating] = useState(false);
   const [invName, setInvName] = useState('');
   const [invCategory, setInvCategory] = useState('');
   const [invBrand, setInvBrand] = useState('');
@@ -424,6 +464,11 @@ export default function AdminDashboard() {
   const [priceSearchQuery, setPriceSearchQuery] = useState('');
   const [priceDraftId, setPriceDraftId] = useState<any>(null);
   const [priceDraftValue, setPriceDraftValue] = useState('');
+
+  // Print Labels (search a product, queue it with a quantity, print the batch)
+  const [labelSearchQuery, setLabelSearchQuery] = useState('');
+  const [labelQueue, setLabelQueue] = useState<{ id: any; barcode: string; name: string; brand: string; price: number; qty: number }[]>([]);
+  const [labelQtyDraft, setLabelQtyDraft] = useState<Record<string, string>>({});
 
   // Purchase Requisition
   const [reqDescription, setReqDescription] = useState('');
@@ -1072,6 +1117,28 @@ export default function AdminDashboard() {
   const cartTotal = cartSubtotalAfterDiscount + cartTaxValue;
 
   // --- INVENTORY ADD FUNCTIONS ---
+  // Random 8–12 digit barcode, checked against the live table so it can never
+  // collide with an existing product (owner never has to make one up by hand).
+  const generateUniqueBarcode = async () => {
+    setInvBarcodeGenerating(true);
+    setInvMessage({ type: '', text: '' });
+    try {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const length = 8 + Math.floor(Math.random() * 5); // 8..12 digits
+        let code = '';
+        for (let i = 0; i < length; i++) code += Math.floor(Math.random() * 10).toString();
+        const { data, error } = await supabase.from('dresses').select('barcode').eq('barcode', code).maybeSingle();
+        if (!error && !data) {
+          setInvBarcode(code);
+          return;
+        }
+      }
+      setInvMessage({ type: 'error', text: 'Could not find a free code after several tries — please click Generate again.' });
+    } finally {
+      setInvBarcodeGenerating(false);
+    }
+  };
+
   const handleAddInventory = async (e: React.FormEvent) => {
     e.preventDefault();
     setInvMessage({ type: '', text: '' });
@@ -1097,6 +1164,24 @@ export default function AdminDashboard() {
       fetchRecentInventory();
     }
   };
+
+  // --- PRINT LABELS ---
+  const addToLabelQueue = (item: any) => {
+    setLabelQueue(prev => {
+      if (prev.some(l => l.id === item.id)) return prev;
+      return [...prev, { id: item.id, barcode: item.barcode, name: item.name, brand: item.brand || '', price: item.price, qty: 1 }];
+    });
+    setLabelQtyDraft(prev => ({ ...prev, [item.id]: '1' }));
+    setLabelSearchQuery('');
+  };
+  const setLabelQueueQty = (id: any, qtyStr: string) => {
+    setLabelQtyDraft(prev => ({ ...prev, [id]: qtyStr }));
+    const qty = Math.max(1, parseInt(qtyStr) || 1);
+    setLabelQueue(prev => prev.map(l => (l.id === id ? { ...l, qty } : l)));
+  };
+  const removeFromLabelQueue = (id: any) => setLabelQueue(prev => prev.filter(l => l.id !== id));
+  const clearLabelQueue = () => { setLabelQueue([]); setLabelQtyDraft({}); };
+  const totalLabelCount = labelQueue.reduce((sum, l) => sum + l.qty, 0);
 
   // --- INVENTORY EDIT / ARCHIVE FUNCTIONS ---
   // Barcode is left out of the editable fields since it's the lookup key
@@ -1691,6 +1776,13 @@ export default function AdminDashboard() {
       item.barcode.toLowerCase().includes(addSaleSearchQuery.toLowerCase()))
   );
 
+  const labelResults = labelSearchQuery === '' ? [] : recentInventory.filter(item =>
+    item.status !== 'archived' &&
+    !labelQueue.some(l => l.id === item.id) &&
+    (item.name.toLowerCase().includes(labelSearchQuery.toLowerCase()) ||
+      item.barcode.toLowerCase().includes(labelSearchQuery.toLowerCase()))
+  );
+
   const allSalesFiltered = allSalesSearchQuery === '' ? salesRecord : salesRecord.filter(sale =>
     (sale.dresses?.name ?? '').toLowerCase().includes(allSalesSearchQuery.toLowerCase()) ||
     (sale.dresses?.barcode ?? '').toLowerCase().includes(allSalesSearchQuery.toLowerCase())
@@ -2016,10 +2108,16 @@ export default function AdminDashboard() {
 
       <style jsx global>{`
         @media print {
-          /* Compact 80mm thermal receipt — auto height so no blank second page */
-          @page {
+          /* Named pages: the receipt keeps its narrow 80mm thermal-roll size,
+             while label sheets print on a normal A4 page. Each printable
+             block below opts into its own size via the "page" property. */
+          @page receipt {
             size: 80mm auto;
             margin: 6mm 8mm;
+          }
+          @page labels {
+            size: A4;
+            margin: 10mm;
           }
           body {
             margin: 0;
@@ -2028,9 +2126,20 @@ export default function AdminDashboard() {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          /* Show only the receipt block — everything else hidden via print:hidden below */
+          /* Show only the relevant printable block — everything else is
+             hidden via print:hidden below. Only one of these is ever
+             populated at a time (cart vs. label queue), so no conflict. */
           .print-receipt {
             display: block !important;
+            page: receipt;
+          }
+          .print-labels {
+            display: block !important;
+            page: labels;
+          }
+          .print-label-tag {
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
         }
       `}</style>
@@ -3032,7 +3141,23 @@ export default function AdminDashboard() {
                   <form onSubmit={handleAddInventory} className="space-y-5">
                     <div>
                       <label className="p-label">Barcode Tag</label>
-                      <input required type="text" className="w-full p-input" placeholder="Scan or type..." value={invBarcode} onChange={(e) => setInvBarcode(e.target.value)} />
+                      <div className="flex gap-2">
+                        <input required type="text" className="flex-1 p-input font-mono" placeholder="Scan, type, or generate..." value={invBarcode} onChange={(e) => setInvBarcode(e.target.value)} />
+                        <button
+                          type="button"
+                          onClick={generateUniqueBarcode}
+                          disabled={invBarcodeGenerating}
+                          className="p-btn p-btn-ghost whitespace-nowrap disabled:opacity-60"
+                        >
+                          {invBarcodeGenerating ? 'Generating…' : 'Generate'}
+                        </button>
+                      </div>
+                      <p className="text-xs text-muted mt-1.5">Generates a random unique 8–12 digit code — only type one by hand for an item that already carries a manufacturer barcode.</p>
+                      {invBarcode && (
+                        <div className="mt-3 p-3 bg-white border border-thread inline-block">
+                          <BarcodeSVG value={invBarcode} height={45} barWidth={1.6} fontSize={12} />
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="p-label">Item Title</label>
@@ -3091,6 +3216,95 @@ export default function AdminDashboard() {
                       Save to Database
                     </button>
                   </form>
+                </div>
+              </div>
+            )}
+
+            {/* PRODUCTS: PRINT LABELS */}
+            {activeTab === 'products-labels' && (
+              <div className="max-w-2xl print:hidden">
+                <div className="p-card p-7">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconPrinter className="w-4 h-4 text-brass" />
+                    Print Labels
+                  </h3>
+                  <p className="text-sm text-muted mb-6">Search for a product, add it to the batch with how many tags you need, then print the whole batch at once.</p>
+
+                  <div className="relative mb-2">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted">
+                      <IconSearch className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search by title or barcode..."
+                      className="w-full pl-11 pr-4 py-3 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink transition-colors"
+                      value={labelSearchQuery}
+                      onChange={(e) => setLabelSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  {labelSearchQuery !== '' && (
+                    <div className="divide-y divide-thread/50 max-h-[260px] overflow-y-auto mb-6 border border-thread bg-paper-dim/40">
+                      {labelResults.length === 0 && (
+                        <p className="text-center py-6 text-sm text-muted">No matching products.</p>
+                      )}
+                      {labelResults.map(item => (
+                        <button key={item.id} onClick={() => addToLabelQueue(item)} className="w-full py-3 flex items-center justify-between gap-3 text-left hover:bg-paper-dim transition-colors px-3">
+                          <div className="min-w-0">
+                            <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                            <p className="text-xs text-muted font-mono">{item.barcode}{item.brand ? ` · ${item.brand}` : ''}</p>
+                          </div>
+                          <p className="font-mono font-bold text-ink text-sm shrink-0">৳{item.price}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {labelQueue.length === 0 ? (
+                    <div className="p-empty">
+                      <IconTag className="w-6 h-6 text-muted mx-auto mb-2" />
+                      <p className="p-empty-desc">Search above and pick a product to start a print batch.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="divide-y divide-thread border border-thread">
+                        {labelQueue.map(item => (
+                          <div key={item.id} className="p-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                              <p className="text-xs text-muted font-mono">{item.barcode} · ৳{item.price}{item.brand ? ` · ${item.brand}` : ''}</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <label className="text-[11px] font-bold text-muted uppercase tracking-wide">Tags</label>
+                              <input
+                                type="number"
+                                min="1"
+                                className="w-16 px-2 py-1.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm text-center"
+                                value={labelQtyDraft[item.id] ?? String(item.qty)}
+                                onChange={(e) => setLabelQueueQty(item.id, e.target.value)}
+                              />
+                              <button onClick={() => removeFromLabelQueue(item.id)} className="text-muted hover:text-oxblood transition-colors p-1">
+                                <IconTrash className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="p-4 bg-paper-dim border border-thread flex items-center justify-center">
+                        <BarcodeSVG value={labelQueue[labelQueue.length - 1].barcode} height={50} barWidth={1.8} fontSize={13} />
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs text-muted font-medium">{totalLabelCount} label{totalLabelCount === 1 ? '' : 's'} across {labelQueue.length} product{labelQueue.length === 1 ? '' : 's'}</p>
+                        <div className="flex gap-2">
+                          <button onClick={clearLabelQueue} className="p-btn p-btn-ghost">Clear Batch</button>
+                          <button onClick={() => window.print()} className="p-btn p-btn-primary btn-shimmer">
+                            <IconPrinter className="w-3.5 h-3.5" /> Print {totalLabelCount} Label{totalLabelCount === 1 ? '' : 's'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -5026,6 +5240,46 @@ export default function AdminDashboard() {
             <div style={{ textAlign: 'center', fontSize: '10px', marginTop: 2 }}>{businessSettings.receipt_footer_line2}</div>
           </div>
         )}
+      </div>
+
+      {/* ── LABEL PRINT LAYOUT ──
+          Same pattern as the receipt block above: always in the DOM,
+          hidden on screen, shown only when printing via .print-labels.
+          Each queued product is expanded into `qty` individual tags so the
+          sheet has exactly one tag per physical item to apply. */}
+      <div className="print-labels" style={{ display: 'none' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4mm' }}>
+          {labelQueue.flatMap((item) =>
+            Array.from({ length: item.qty }).map((_, i) => (
+              <div
+                key={`${item.id}-${i}`}
+                className="print-label-tag"
+                style={{
+                  width: '62mm',
+                  border: '1px dashed #999',
+                  borderRadius: '2mm',
+                  padding: '3mm',
+                  fontFamily: 'sans-serif',
+                  color: '#000',
+                  textAlign: 'center',
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: '12px', lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {item.name}
+                </div>
+                {item.brand && (
+                  <div style={{ fontSize: '9px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 1 }}>
+                    {item.brand}
+                  </div>
+                )}
+                <div style={{ fontWeight: 700, fontSize: '15px', margin: '2px 0' }}>৳{item.price}</div>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <BarcodeSVG value={item.barcode} height={40} barWidth={1.4} fontSize={11} />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
     </div>
