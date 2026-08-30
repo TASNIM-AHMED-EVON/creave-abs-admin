@@ -3262,9 +3262,9 @@ export default function AdminDashboard() {
 
                     <div className="p-divider mx-7 mb-2" />
 
-                    <div className="px-7 py-2 divide-y divide-thread">
+                    <div className="px-7 py-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                       {filteredInventory.length === 0 ? (
-                        <div className="text-center py-12 text-muted">
+                        <div className="col-span-full text-center py-12 text-muted">
                           <IconArchive className="mx-auto h-9 w-9 mb-3 text-thread-dark" />
                           <p className="text-sm font-medium">No items found matching your search.</p>
                         </div>
@@ -3276,10 +3276,10 @@ export default function AdminDashboard() {
                           const categoryOptions = categories.length > 0 ? categories.map((c: any) => c.name) : FALLBACK_CATEGORIES;
 
                           return (
-                            <div key={item.id} className={`py-4 ${isArchived ? 'opacity-50' : ''}`}>
+                            <div key={item.id} className={`p-card overflow-hidden flex flex-col ${isArchived ? 'opacity-50' : ''} ${isEditing ? 'col-span-full' : ''}`}>
                               {isEditing ? (
-                                <div className="space-y-2.5 max-w-xl">
-                                  <div className="grid grid-cols-2 gap-2">
+                                <div className="p-4 space-y-2.5">
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                     <input
                                       value={editDraft.name}
                                       onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
@@ -3295,8 +3295,6 @@ export default function AdminDashboard() {
                                         <option key={name} value={name}>{name}</option>
                                       ))}
                                     </select>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2">
                                     <select
                                       value={editDraft.brand}
                                       onChange={(e) => setEditDraft({ ...editDraft, brand: e.target.value })}
@@ -3318,7 +3316,7 @@ export default function AdminDashboard() {
                                       ))}
                                     </select>
                                   </div>
-                                  <div className="grid grid-cols-2 gap-2">
+                                  <div className="grid grid-cols-2 gap-2 max-w-sm">
                                     <input
                                       type="number"
                                       value={editDraft.price}
@@ -3334,7 +3332,7 @@ export default function AdminDashboard() {
                                       className="px-3 py-2 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-sm text-ink font-mono font-bold transition-colors"
                                     />
                                   </div>
-                                  <div className="flex gap-2 pt-0.5">
+                                  <div className="flex gap-2 pt-0.5 max-w-sm">
                                     <button onClick={() => saveEditInventory(item.id)} className="flex-1 bg-ink text-paper text-[11px] font-bold uppercase tracking-wide py-2 hover:bg-brass-dark transition-colors">
                                       Save Changes
                                     </button>
@@ -3344,92 +3342,88 @@ export default function AdminDashboard() {
                                   </div>
                                 </div>
                               ) : (
-                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                                  <div className="flex items-center gap-3 min-w-0">
-                                    {userRole === 'salesman' ? (
-                                      <div className="relative shrink-0 w-11 h-11 rounded border border-thread bg-paper-dim overflow-hidden">
-                                        {item.image_url ? (
-                                          // eslint-disable-next-line @next/next/no-img-element
-                                          <img src={item.image_url} alt="" className="w-full h-full object-cover" />
-                                        ) : (
-                                          <div className="w-full h-full flex items-center justify-center text-muted">
-                                            <IconImage className="w-4 h-4" />
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <label className="relative shrink-0 w-11 h-11 rounded border border-thread bg-paper-dim overflow-hidden cursor-pointer group" title="Click to add/change photo">
-                                        {item.image_url ? (
-                                          // eslint-disable-next-line @next/next/no-img-element
-                                          <img src={item.image_url} alt="" className="w-full h-full object-cover" />
-                                        ) : (
-                                          <div className="w-full h-full flex items-center justify-center text-muted">
-                                            <IconImage className="w-4 h-4" />
-                                          </div>
-                                        )}
-                                        {photoUploadingId === item.id ? (
-                                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                            <span className="text-[8px] text-white font-bold uppercase">Saving…</span>
-                                          </div>
-                                        ) : (
-                                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                            <IconPencil className="w-3.5 h-3.5 text-white" />
-                                          </div>
-                                        )}
-                                        <input
-                                          type="file"
-                                          accept="image/*"
-                                          className="hidden"
-                                          disabled={photoUploadingId === item.id}
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) handleReplacePhoto(item, file);
-                                            e.target.value = '';
-                                          }}
-                                        />
-                                      </label>
-                                    )}
-                                    <div className="min-w-0">
-                                      <p className="font-bold text-ink text-sm truncate">{item.name}</p>
-                                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                        <span className="text-xs text-muted font-mono">{item.barcode}</span>
-                                        <span className="text-xs text-thread-dark">·</span>
-                                        <span className="text-xs text-muted">{item.category}</span>
-                                        {item.brand && (<><span className="text-xs text-thread-dark">·</span><span className="text-xs text-muted">{item.brand}</span></>)}
-                                        <span className="text-xs text-thread-dark">·</span>
-                                        <span className="text-xs text-muted">{item.unit || 'Piece'}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-3 shrink-0">
-                                    <div className="text-right">
-                                      <p className="font-mono font-bold text-ink text-sm">৳{item.price}</p>
-                                      <span className={`text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide ${
-                                        isArchived ? 'p-badge p-badge-muted'
-                                        : isLow || item.quantity === 0 ? 'p-badge p-badge-danger'
-                                        : 'p-badge p-badge-success'
-                                      }`}>
-                                        {isArchived ? 'archived' : `${item.quantity} in stock`}
-                                      </span>
-                                    </div>
-                                    <div className="flex gap-1">
-                                      {userRole === 'salesman' ? null : isArchived ? (
-                                        <button onClick={() => restoreInventoryItem(item)} title="Restore item" className="w-7 h-7 flex items-center justify-center border border-thread text-moss hover:border-moss transition-colors">
-                                          <IconUndo className="w-3.5 h-3.5" />
-                                        </button>
+                                <>
+                                  {userRole === 'salesman' ? (
+                                    <div className="relative w-full aspect-square bg-paper-dim overflow-hidden">
+                                      {item.image_url ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={item.image_url} alt="" className="w-full h-full object-cover" />
                                       ) : (
-                                        <>
-                                          <button onClick={() => startEditInventory(item)} title="Edit item" className="w-7 h-7 flex items-center justify-center border border-thread text-ink hover:border-brass hover:text-brass transition-colors">
-                                            <IconPencil className="w-3.5 h-3.5" />
-                                          </button>
-                                          <button onClick={() => archiveInventoryItem(item)} title="Archive item" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
-                                            <IconArchive className="w-3.5 h-3.5" />
-                                          </button>
-                                        </>
+                                        <div className="w-full h-full flex items-center justify-center text-muted">
+                                          <IconImage className="w-8 h-8" />
+                                        </div>
                                       )}
                                     </div>
+                                  ) : (
+                                    <label className="relative block w-full aspect-square bg-paper-dim overflow-hidden cursor-pointer group" title="Click to add/change photo">
+                                      {item.image_url ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-muted">
+                                          <IconImage className="w-8 h-8" />
+                                        </div>
+                                      )}
+                                      {photoUploadingId === item.id ? (
+                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                          <span className="text-[10px] text-white font-bold uppercase">Saving…</span>
+                                        </div>
+                                      ) : (
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                          <IconPencil className="w-5 h-5 text-white" />
+                                        </div>
+                                      )}
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        disabled={photoUploadingId === item.id}
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleReplacePhoto(item, file);
+                                          e.target.value = '';
+                                        }}
+                                      />
+                                    </label>
+                                  )}
+                                  <div className="p-3 flex flex-col gap-2 flex-1">
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-ink text-sm leading-snug line-clamp-2">{item.name}</p>
+                                      <p className="text-xs text-muted font-mono mt-1 truncate">{item.barcode}</p>
+                                      <p className="text-xs text-muted mt-0.5 truncate">
+                                        {item.category}{item.brand ? ` · ${item.brand}` : ''} · {item.unit || 'Piece'}
+                                      </p>
+                                    </div>
+                                    <div className="mt-auto flex items-end justify-between gap-2 pt-1">
+                                      <div>
+                                        <p className="font-mono font-bold text-ink text-sm">৳{item.price}</p>
+                                        <span className={`text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide inline-block mt-1 ${
+                                          isArchived ? 'p-badge p-badge-muted'
+                                          : isLow || item.quantity === 0 ? 'p-badge p-badge-danger'
+                                          : 'p-badge p-badge-success'
+                                        }`}>
+                                          {isArchived ? 'archived' : `${item.quantity} in stock`}
+                                        </span>
+                                      </div>
+                                      <div className="flex gap-1 shrink-0">
+                                        {userRole === 'salesman' ? null : isArchived ? (
+                                          <button onClick={() => restoreInventoryItem(item)} title="Restore item" className="w-7 h-7 flex items-center justify-center border border-thread text-moss hover:border-moss transition-colors">
+                                            <IconUndo className="w-3.5 h-3.5" />
+                                          </button>
+                                        ) : (
+                                          <>
+                                            <button onClick={() => startEditInventory(item)} title="Edit item" className="w-7 h-7 flex items-center justify-center border border-thread text-ink hover:border-brass hover:text-brass transition-colors">
+                                              <IconPencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button onClick={() => archiveInventoryItem(item)} title="Archive item" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
+                                              <IconArchive className="w-3.5 h-3.5" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
+                                </>
                               )}
                             </div>
                           );
@@ -3651,15 +3645,15 @@ export default function AdminDashboard() {
                         <div className="bg-white border border-thread rounded p-3 text-center" style={{ width: '62mm' }}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src="/logo-ac.png" alt="" className="h-[9mm] w-auto mx-auto mb-1" />
-                          <p className="text-[12px] font-bold text-black leading-tight truncate">
+                          {labelQueue[labelQueue.length - 1].brand && (
+                            <p className="text-[13px] font-bold text-black uppercase tracking-wide mb-0.5" style={{ fontFamily: 'var(--font-display), Georgia, serif' }}>{labelQueue[labelQueue.length - 1].brand}</p>
+                          )}
+                          <p className="text-[10.5px] font-bold text-black leading-tight truncate">
                             {labelQueue[labelQueue.length - 1].name}
                             {labelQueue[labelQueue.length - 1].category && (
-                              <span className="font-normal"> · {labelQueue[labelQueue.length - 1].category}</span>
+                              <span className="font-bold"> · {labelQueue[labelQueue.length - 1].category}</span>
                             )}
                           </p>
-                          {labelQueue[labelQueue.length - 1].brand && (
-                            <p className="text-[11px] font-bold text-black uppercase tracking-wide" style={{ fontFamily: 'var(--font-display), Georgia, serif' }}>{labelQueue[labelQueue.length - 1].brand}</p>
-                          )}
                           <p className="text-[15px] font-bold text-black my-0.5">৳{labelQueue[labelQueue.length - 1].price}</p>
                           <div className="flex justify-center">
                             <BarcodeSVG value={labelQueue[labelQueue.length - 1].barcode} height={40} barWidth={1.4} fontSize={11} />
@@ -5742,14 +5736,14 @@ export default function AdminDashboard() {
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo-ac.png" alt="" style={{ height: '9mm', width: 'auto', margin: '0 auto 1mm', display: 'block' }} />
-                <div style={{ fontWeight: 700, fontSize: '12px', lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {item.name}{item.category ? <span style={{ fontWeight: 400 }}> · {item.category}</span> : ''}
-                </div>
                 {item.brand && (
-                  <div style={{ fontFamily: 'var(--font-display), Georgia, serif', fontWeight: 700, fontSize: '11px', color: '#000', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 1 }}>
+                  <div style={{ fontFamily: 'var(--font-display), Georgia, serif', fontWeight: 700, fontSize: '13px', color: '#000', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>
                     {item.brand}
                   </div>
                 )}
+                <div style={{ fontWeight: 700, fontSize: '10.5px', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {item.name}{item.category ? <span style={{ fontWeight: 700 }}> · {item.category}</span> : ''}
+                </div>
                 <div style={{ fontWeight: 700, fontSize: '15px', margin: '2px 0' }}>৳{item.price}</div>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <BarcodeSVG value={item.barcode} height={40} barWidth={1.4} fontSize={11} />
