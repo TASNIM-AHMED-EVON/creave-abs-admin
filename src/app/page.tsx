@@ -434,6 +434,7 @@ export default function AdminDashboard() {
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
 
   // POS State
@@ -2180,19 +2181,8 @@ export default function AdminDashboard() {
       setActiveTab('pos');
       setExpandedGroup('sell');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole, activeTab]);
-
-  // Which group's children to show in the mobile sub-tab strip, based on
-  // the currently active tab's prefix.
-  const mobileSubGroupId =
-    activeTab.startsWith('sell-') || activeTab === 'pos' || activeTab === 'refund' ? 'sell'
-    : activeTab.startsWith('products-') ? 'products'
-    : activeTab.startsWith('purchases-') ? 'purchases'
-    : activeTab.startsWith('membership-') ? 'membership'
-    : activeTab.startsWith('settings-') ? 'settings'
-    : null;
-  const mobileSubGroup: any = mobileSubGroupId ? visibleNavGroups.find((g: any) => g.id === mobileSubGroupId) : null;
 
   // --- AUTH CHECK GATE ---
   // Avoids flashing the login screen while we ask Supabase whether a
@@ -2433,8 +2423,17 @@ export default function AdminDashboard() {
 
       <div className="lg:flex print:hidden">
 
-        {/* ---- Sidebar (desktop) ---- */}
-        <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 bg-canvas border-r border-thread print:hidden" style={{ transition: 'background 0.25s', overflow: 'hidden', position: 'relative' }}>
+        {/* ---- Backdrop for the mobile sidebar drawer ---- */}
+        {mobileSidebarOpen && (
+          <div
+            className="fixed inset-0 z-[90] bg-black/50 lg:hidden print:hidden"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
+
+        {/* ---- Sidebar: fixed drawer on mobile (slides in/out), always
+              visible in place on desktop (lg:translate-x-0 pins it open) ---- */}
+        <aside className={`fixed inset-y-0 left-0 z-[95] w-64 flex flex-col bg-canvas border-r border-thread print:hidden transition-transform duration-300 ease-out ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`} style={{ transition: 'background 0.25s, transform 0.3s ease-out', overflow: 'hidden' }}>
 
           {/* ── Rain animation + Glow button styles ── */}
           <style>{`
@@ -2603,7 +2602,7 @@ export default function AdminDashboard() {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => goToTab(item.tab)}
+                    onClick={() => { goToTab(item.tab); setMobileSidebarOpen(false); }}
                     className={`nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold ${
                       isActive ? 'nav-btn-active' : 'text-muted'
                     }`}
@@ -2639,7 +2638,7 @@ export default function AdminDashboard() {
                         return (
                           <button
                             key={child.tab}
-                            onClick={() => goToTab(child.tab, item.id)}
+                            onClick={() => { goToTab(child.tab, item.id); setMobileSidebarOpen(false); }}
                             className={`anim-nav-child nav-btn w-full flex items-center gap-2.5 text-left px-2.5 py-2 rounded-md text-[13px] font-semibold ${
                               isChildActive
                                 ? isRefund ? 'nav-child-refund-active bg-oxblood-light/30' : 'nav-child-active bg-brass-light/20'
@@ -2697,11 +2696,26 @@ export default function AdminDashboard() {
           </div>
         </aside>
 
-        {/* ---- Top bar (mobile / tablet) ---- */}
-        <div className="lg:hidden sticky top-0 z-50 bg-canvas border-b border-thread print:hidden">
-          <div className="flex items-center justify-between px-5 h-16">
-            <h1 className="font-display text-xl text-ink tracking-tight">CRAVE <em className="not-italic text-brass">ABS</em></h1>
-            <div className="flex items-center gap-3">
+        {/* ---- Top bar (mobile / tablet) ----
+              Just a hamburger + brand + quick actions now; the full
+              navigation lives in the same sidebar as desktop (opened as a
+              drawer via the hamburger), instead of a separate mobile-only
+              nav pattern, so mobile and laptop navigate identically. */}
+        <div className="lg:hidden sticky top-0 z-40 bg-canvas border-b border-thread print:hidden">
+          <div className="flex items-center justify-between px-4 h-16 gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                onClick={() => setMobileSidebarOpen(true)}
+                className="w-9 h-9 flex items-center justify-center shrink-0 rounded-lg border border-thread text-ink hover:border-brass hover:text-brass transition-colors"
+                aria-label="Open menu"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>
+                  <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <h1 className="font-display text-lg text-ink tracking-tight truncate">CRAVE <em className="not-italic text-brass">ABS</em></h1>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
               <button
                 onClick={toggleTheme}
                 className="w-8 h-8 flex items-center justify-center rounded-full border border-thread text-muted hover:text-ink hover:border-thread-dark transition-colors"
@@ -2718,46 +2732,11 @@ export default function AdminDashboard() {
                   </svg>
                 )}
               </button>
-              <button onClick={handleLogout} className="text-[11px] font-bold uppercase tracking-wider text-oxblood">
+              <button onClick={handleLogout} className="text-[11px] font-bold uppercase tracking-wider text-oxblood whitespace-nowrap">
                 Log Out
               </button>
             </div>
           </div>
-          <div className="flex overflow-x-auto px-2 pb-2 gap-1">
-            {visibleNavGroups.map((item: any) => {
-              const Icon = item.icon;
-              const isActive = item.kind === 'single' ? activeTab === item.tab : item.children.some((c: any) => c.tab === activeTab);
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => (item.kind === 'single' ? goToTab(item.tab) : goToTab(item.children[0].tab, item.id))}
-                  className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
-                    isActive ? 'text-ink bg-brass-light/50' : 'text-muted'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-          {mobileSubGroup && (
-            <div className="flex overflow-x-auto px-2 pb-2 gap-1 border-t border-thread pt-2">
-              {mobileSubGroup.children.map((child: any) => (
-                <button
-                  key={child.tab}
-                  onClick={() => setActiveTab(child.tab)}
-                  className={`whitespace-nowrap px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide transition-colors ${
-                    activeTab === child.tab
-                      ? child.tab === 'refund' ? 'text-oxblood bg-oxblood-light/40' : 'text-brass bg-brass-light/40'
-                      : 'text-muted'
-                  }`}
-                >
-                  {child.label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* ---- Main content ---- */}
@@ -5678,12 +5657,12 @@ export default function AdminDashboard() {
               </div>
             )}
             {cartDiscountValue > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold', color: '#c00' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold', color: '#000' }}>
                 <span>Discount:</span><span>- Tk {cartDiscountValue}</span>
               </div>
             )}
             {cartTaxValue > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold', color: '#060' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold', color: '#000' }}>
                 <span>Tax{cartActiveTaxRate ? ` (${cartActiveTaxRate.name} ${cartActiveTaxRate.rate_percent}%)` : ''}:</span>
                 <span>+ Tk {cartTaxValue}</span>
               </div>
