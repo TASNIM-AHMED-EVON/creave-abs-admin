@@ -3262,7 +3262,7 @@ export default function AdminDashboard() {
 
                     <div className="p-divider mx-7 mb-2" />
 
-                    <div className="px-7 py-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div className="px-7 py-2 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-3">
                       {filteredInventory.length === 0 ? (
                         <div className="col-span-full text-center py-12 text-muted">
                           <IconArchive className="mx-auto h-9 w-9 mb-3 text-thread-dark" />
@@ -3350,7 +3350,7 @@ export default function AdminDashboard() {
                                         <img src={item.image_url} alt="" className="w-full h-full object-cover" />
                                       ) : (
                                         <div className="w-full h-full flex items-center justify-center text-muted">
-                                          <IconImage className="w-8 h-8" />
+                                          <IconImage className="w-6 h-6" />
                                         </div>
                                       )}
                                     </div>
@@ -3361,7 +3361,7 @@ export default function AdminDashboard() {
                                         <img src={item.image_url} alt="" className="w-full h-full object-cover" />
                                       ) : (
                                         <div className="w-full h-full flex items-center justify-center text-muted">
-                                          <IconImage className="w-8 h-8" />
+                                          <IconImage className="w-6 h-6" />
                                         </div>
                                       )}
                                       {photoUploadingId === item.id ? (
@@ -3386,7 +3386,7 @@ export default function AdminDashboard() {
                                       />
                                     </label>
                                   )}
-                                  <div className="p-3 flex flex-col gap-2 flex-1">
+                                  <div className="p-2.5 flex flex-col gap-1.5 flex-1">
                                     <div className="min-w-0">
                                       <p className="font-bold text-ink text-sm leading-snug line-clamp-2">{item.name}</p>
                                       <p className="text-xs text-muted font-mono mt-1 truncate">{item.barcode}</p>
