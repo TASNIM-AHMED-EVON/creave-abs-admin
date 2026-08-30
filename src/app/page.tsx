@@ -506,7 +506,7 @@ export default function AdminDashboard() {
 
   // Print Labels (search a product, queue it with a quantity, print the batch)
   const [labelSearchQuery, setLabelSearchQuery] = useState('');
-  const [labelQueue, setLabelQueue] = useState<{ id: any; barcode: string; name: string; brand: string; price: number; qty: number }[]>([]);
+  const [labelQueue, setLabelQueue] = useState<{ id: any; barcode: string; name: string; category: string; brand: string; price: number; qty: number }[]>([]);
   const [labelQtyDraft, setLabelQtyDraft] = useState<Record<string, string>>({});
 
   // Purchase Requisition
@@ -1407,7 +1407,7 @@ export default function AdminDashboard() {
   const addToLabelQueue = (item: any) => {
     setLabelQueue(prev => {
       if (prev.some(l => l.id === item.id)) return prev;
-      return [...prev, { id: item.id, barcode: item.barcode, name: item.name, brand: item.brand || '', price: item.price, qty: 1 }];
+      return [...prev, { id: item.id, barcode: item.barcode, name: item.name, category: item.category || '', brand: item.brand || '', price: item.price, qty: 1 }];
     });
     setLabelQtyDraft(prev => ({ ...prev, [item.id]: '1' }));
     setLabelSearchQuery('');
@@ -3651,9 +3651,14 @@ export default function AdminDashboard() {
                         <div className="bg-white border border-thread rounded p-3 text-center" style={{ width: '62mm' }}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src="/logo-ac.png" alt="" className="h-[9mm] w-auto mx-auto mb-1" />
-                          <p className="text-[12px] font-bold text-black leading-tight truncate">{labelQueue[labelQueue.length - 1].name}</p>
+                          <p className="text-[12px] font-bold text-black leading-tight truncate">
+                            {labelQueue[labelQueue.length - 1].name}
+                            {labelQueue[labelQueue.length - 1].category && (
+                              <span className="font-normal"> · {labelQueue[labelQueue.length - 1].category}</span>
+                            )}
+                          </p>
                           {labelQueue[labelQueue.length - 1].brand && (
-                            <p className="text-[10px] font-bold text-black uppercase tracking-wide">{labelQueue[labelQueue.length - 1].brand}</p>
+                            <p className="text-[11px] font-bold text-black uppercase tracking-wide" style={{ fontFamily: 'var(--font-display), Georgia, serif' }}>{labelQueue[labelQueue.length - 1].brand}</p>
                           )}
                           <p className="text-[15px] font-bold text-black my-0.5">৳{labelQueue[labelQueue.length - 1].price}</p>
                           <div className="flex justify-center">
@@ -5738,10 +5743,10 @@ export default function AdminDashboard() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo-ac.png" alt="" style={{ height: '9mm', width: 'auto', margin: '0 auto 1mm', display: 'block' }} />
                 <div style={{ fontWeight: 700, fontSize: '12px', lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {item.name}
+                  {item.name}{item.category ? <span style={{ fontWeight: 400 }}> · {item.category}</span> : ''}
                 </div>
                 {item.brand && (
-                  <div style={{ fontWeight: 700, fontSize: '10px', color: '#000', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 1 }}>
+                  <div style={{ fontFamily: 'var(--font-display), Georgia, serif', fontWeight: 700, fontSize: '11px', color: '#000', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 1 }}>
                     {item.brand}
                   </div>
                 )}
