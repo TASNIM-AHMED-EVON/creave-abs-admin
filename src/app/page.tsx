@@ -1386,6 +1386,7 @@ export default function AdminDashboard() {
   // Replaces the photo on an existing product directly from the List
   // Products row — no need to open a separate edit form just for this.
   const handleReplacePhoto = async (item: any, file: File) => {
+    if (userRole === 'salesman') return;
     setPhotoUploadingId(item.id);
     const imageUrl = await uploadProductImage(file, item.barcode);
     if (!imageUrl) {
@@ -1421,9 +1422,15 @@ export default function AdminDashboard() {
   const totalLabelCount = labelQueue.reduce((sum, l) => sum + l.qty, 0);
 
   // --- INVENTORY EDIT / ARCHIVE FUNCTIONS ---
+  // Salesman accounts get read-only access to List Products: they can see
+  // stock, but never edit details, change the photo, or archive/restore an
+  // item. Every mutating function below re-checks the role itself (not just
+  // hiding the triggering button) so there's no path — current or future —
+  // that lets a salesman session slip through and write to a product.
   // Barcode is left out of the editable fields since it's the lookup key
   // used at the POS counter and in refund search.
   const startEditInventory = (item: any) => {
+    if (userRole === 'salesman') return;
     setEditingId(item.id);
     setEditDraft({
       name: item.name,
@@ -1440,6 +1447,7 @@ export default function AdminDashboard() {
   };
 
   const saveEditInventory = async (id: any) => {
+    if (userRole === 'salesman') return;
     const qty = parseInt(editDraft.quantity);
     const price = parseFloat(editDraft.price);
     const { error } = await supabase
@@ -1467,6 +1475,7 @@ export default function AdminDashboard() {
   // table references dress_id with ON DELETE CASCADE, so a hard delete
   // would silently wipe that item's transaction record from your reports.
   const archiveInventoryItem = async (item: any) => {
+    if (userRole === 'salesman') return;
     if (!window.confirm(`Archive "${item.name}"? It will be hidden from the POS and active stock list, but its sales history stays intact. You can restore it anytime.`)) return;
     const { error } = await supabase
       .from('dresses')
@@ -1480,6 +1489,7 @@ export default function AdminDashboard() {
   };
 
   const restoreInventoryItem = async (item: any) => {
+    if (userRole === 'salesman') return;
     const { error } = await supabase
       .from('dresses')
       .update({ status: 'available' })
@@ -3336,36 +3346,49 @@ export default function AdminDashboard() {
                               ) : (
                                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                                   <div className="flex items-center gap-3 min-w-0">
-                                    <label className="relative shrink-0 w-11 h-11 rounded border border-thread bg-paper-dim overflow-hidden cursor-pointer group" title="Click to add/change photo">
-                                      {item.image_url ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={item.image_url} alt="" className="w-full h-full object-cover" />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-muted">
-                                          <IconImage className="w-4 h-4" />
-                                        </div>
-                                      )}
-                                      {photoUploadingId === item.id ? (
-                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                          <span className="text-[8px] text-white font-bold uppercase">Saving…</span>
-                                        </div>
-                                      ) : (
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                          <IconPencil className="w-3.5 h-3.5 text-white" />
-                                        </div>
-                                      )}
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        disabled={photoUploadingId === item.id}
-                                        onChange={(e) => {
-                                          const file = e.target.files?.[0];
-                                          if (file) handleReplacePhoto(item, file);
-                                          e.target.value = '';
-                                        }}
-                                      />
-                                    </label>
+                                    {userRole === 'salesman' ? (
+                                      <div className="relative shrink-0 w-11 h-11 rounded border border-thread bg-paper-dim overflow-hidden">
+                                        {item.image_url ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center text-muted">
+                                            <IconImage className="w-4 h-4" />
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <label className="relative shrink-0 w-11 h-11 rounded border border-thread bg-paper-dim overflow-hidden cursor-pointer group" title="Click to add/change photo">
+                                        {item.image_url ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center text-muted">
+                                            <IconImage className="w-4 h-4" />
+                                          </div>
+                                        )}
+                                        {photoUploadingId === item.id ? (
+                                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                            <span className="text-[8px] text-white font-bold uppercase">Saving…</span>
+                                          </div>
+                                        ) : (
+                                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                            <IconPencil className="w-3.5 h-3.5 text-white" />
+                                          </div>
+                                        )}
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          className="hidden"
+                                          disabled={photoUploadingId === item.id}
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) handleReplacePhoto(item, file);
+                                            e.target.value = '';
+                                          }}
+                                        />
+                                      </label>
+                                    )}
                                     <div className="min-w-0">
                                       <p className="font-bold text-ink text-sm truncate">{item.name}</p>
                                       <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -3390,7 +3413,7 @@ export default function AdminDashboard() {
                                       </span>
                                     </div>
                                     <div className="flex gap-1">
-                                      {isArchived ? (
+                                      {userRole === 'salesman' ? null : isArchived ? (
                                         <button onClick={() => restoreInventoryItem(item)} title="Restore item" className="w-7 h-7 flex items-center justify-center border border-thread text-moss hover:border-moss transition-colors">
                                           <IconUndo className="w-3.5 h-3.5" />
                                         </button>
