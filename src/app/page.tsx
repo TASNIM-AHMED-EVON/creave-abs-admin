@@ -447,14 +447,16 @@ export default function AdminDashboard() {
   const [selectedTaxRateId, setSelectedTaxRateId] = useState<string>('');
 
   // Inventory State
-  const [invBarcode, setInvBarcode] = useState('');
-  const [invBarcodeGenerating, setInvBarcodeGenerating] = useState(false);
+  // A product can have multiple variants (size/color combos) sharing one
+  // name/category/brand/photo, but each with its own barcode, price, and
+  // stock count — variants of the same product share a groupId.
   const [invName, setInvName] = useState('');
   const [invCategory, setInvCategory] = useState('');
   const [invBrand, setInvBrand] = useState('');
   const [invUnit, setInvUnit] = useState('Piece');
-  const [invPrice, setInvPrice] = useState('');
-  const [invQuantity, setInvQuantity] = useState('1');
+  const [invVariants, setInvVariants] = useState<{ barcode: string; size: string; color: string; price: string; quantity: string; generating: boolean }[]>([
+    { barcode: '', size: '', color: '', price: '', quantity: '1', generating: false }
+  ]);
   const [invImageFile, setInvImageFile] = useState<File | null>(null);
   const [invImagePreview, setInvImagePreview] = useState('');
   const [invImageUploading, setInvImageUploading] = useState(false);
@@ -488,7 +490,7 @@ export default function AdminDashboard() {
   // Inventory: archive visibility + inline edit
   const [showArchived, setShowArchived] = useState(false);
   const [editingId, setEditingId] = useState<any>(null);
-  const [editDraft, setEditDraft] = useState({ name: '', category: '', brand: '', unit: '', price: '', quantity: '' });
+  const [editDraft, setEditDraft] = useState({ name: '', category: '', brand: '', unit: '', size: '', color: '', price: '', quantity: '' });
 
   // Products reference data: Categories / Units / Brands
   const [categories, setCategories] = useState<any[]>([]);
@@ -506,7 +508,7 @@ export default function AdminDashboard() {
 
   // Print Labels (search a product, queue it with a quantity, print the batch)
   const [labelSearchQuery, setLabelSearchQuery] = useState('');
-  const [labelQueue, setLabelQueue] = useState<{ id: any; barcode: string; name: string; category: string; brand: string; price: number; qty: number }[]>([]);
+  const [labelQueue, setLabelQueue] = useState<{ id: any; barcode: string; name: string; category: string; brand: string; variant: string; price: number; qty: number }[]>([]);
   const [labelQtyDraft, setLabelQtyDraft] = useState<Record<string, string>>({});
 
   // Purchase Requisition
@@ -642,7 +644,7 @@ export default function AdminDashboard() {
 
   // --- REPORTS MEMOIZED FETCH ---
   const fetchSalesData = useCallback(async () => {
-    let query = supabase.from('sales').select(`*, dresses ( name, barcode )`).order('sold_at', { ascending: false });
+    let query = supabase.from('sales').select(`*, dresses ( name, barcode, category, size, color )`).order('sold_at', { ascending: false });
 
     if (startDate) {
       const start = new Date(startDate);
@@ -704,19 +706,21 @@ export default function AdminDashboard() {
     // surface a top-sellers leaderboard without needing a SQL view.
     const { data: recentSales } = await supabase
       .from('sales')
-      .select('dress_id, amount_paid, status, dresses ( name, barcode )')
+      .select('dress_id, amount_paid, status, dresses ( name, barcode, size, color )')
       .eq('status', 'completed')
       .order('sold_at', { ascending: false })
       .limit(500);
 
     if (recentSales) {
-      const tally: Record<string, { name: string; barcode: string; unitsSold: number; revenue: number }> = {};
+      const tally: Record<string, { name: string; barcode: string; size: string; color: string; unitsSold: number; revenue: number }> = {};
       recentSales.forEach((sale: any) => {
         const key = String(sale.dress_id);
         if (!tally[key]) {
           tally[key] = {
             name: sale.dresses?.name ?? 'Unknown Item',
             barcode: sale.dresses?.barcode ?? '',
+            size: sale.dresses?.size ?? '',
+            color: sale.dresses?.color ?? '',
             unitsSold: 0,
             revenue: 0,
           };
@@ -1301,8 +1305,9 @@ export default function AdminDashboard() {
   // --- INVENTORY ADD FUNCTIONS ---
   // Random 8–12 digit barcode, checked against the live table so it can never
   // collide with an existing product (owner never has to make one up by hand).
-  const generateUniqueBarcode = async () => {
-    setInvBarcodeGenerating(true);
+  // Takes a variant row index since each variant needs its own unique code.
+  const generateUniqueBarcodeForVariant = async (index: number) => {
+    setInvVariants(prev => prev.map((v, i) => (i === index ? { ...v, generating: true } : v)));
     setInvMessage({ type: '', text: '' });
     try {
       for (let attempt = 0; attempt < 20; attempt++) {
@@ -1311,14 +1316,24 @@ export default function AdminDashboard() {
         for (let i = 0; i < length; i++) code += Math.floor(Math.random() * 10).toString();
         const { data, error } = await supabase.from('dresses').select('barcode').eq('barcode', code).maybeSingle();
         if (!error && !data) {
-          setInvBarcode(code);
+          setInvVariants(prev => prev.map((v, i) => (i === index ? { ...v, barcode: code } : v)));
           return;
         }
       }
       setInvMessage({ type: 'error', text: 'Could not find a free code after several tries — please click Generate again.' });
     } finally {
-      setInvBarcodeGenerating(false);
+      setInvVariants(prev => prev.map((v, i) => (i === index ? { ...v, generating: false } : v)));
     }
+  };
+
+  const addVariantRow = () => {
+    setInvVariants(prev => [...prev, { barcode: '', size: '', color: '', price: prev[prev.length - 1]?.price || '', quantity: '1', generating: false }]);
+  };
+  const removeVariantRow = (index: number) => {
+    setInvVariants(prev => prev.length > 1 ? prev.filter((_, i) => i !== index) : prev);
+  };
+  const updateVariantField = (index: number, field: 'barcode' | 'size' | 'color' | 'price' | 'quantity', value: string) => {
+    setInvVariants(prev => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)));
   };
 
   // Uploads to the "product-images" Storage bucket and returns the public
@@ -1346,12 +1361,23 @@ export default function AdminDashboard() {
   const handleAddInventory = async (e: React.FormEvent) => {
     e.preventDefault();
     setInvMessage({ type: '', text: '' });
-    const qty = parseInt(invQuantity);
+
+    for (const v of invVariants) {
+      if (!v.barcode.trim() || !v.price.trim()) {
+        setInvMessage({ type: 'error', text: 'Every variant needs a barcode and a price.' });
+        return;
+      }
+    }
+    const barcodesInForm = invVariants.map(v => v.barcode.trim());
+    if (new Set(barcodesInForm).size !== barcodesInForm.length) {
+      setInvMessage({ type: 'error', text: 'Two variants have the same barcode — each one needs its own.' });
+      return;
+    }
 
     let imageUrl: string | null = null;
     if (invImageFile) {
       setInvImageUploading(true);
-      imageUrl = await uploadProductImage(invImageFile, invBarcode);
+      imageUrl = await uploadProductImage(invImageFile, invVariants[0].barcode.trim());
       setInvImageUploading(false);
       if (!imageUrl) {
         setInvMessage({ type: 'error', text: 'Photo upload failed. Make sure the "product-images" storage bucket exists (see setup note), then try again.' });
@@ -1359,25 +1385,35 @@ export default function AdminDashboard() {
       }
     }
 
-    const { error } = await supabase.from('dresses').insert([
-      {
-        barcode: invBarcode,
+    // Variants of the same product share this id so List Products can group
+    // them back into one card even though each is its own database row.
+    const groupId = crypto.randomUUID();
+    const rows = invVariants.map(v => {
+      const qty = parseInt(v.quantity) || 0;
+      return {
+        barcode: v.barcode.trim(),
         name: invName,
         category: invCategory,
         brand: invBrand || null,
         unit: invUnit || 'Piece',
-        price: parseFloat(invPrice),
+        size: v.size.trim() || null,
+        color: v.color.trim() || null,
+        group_id: groupId,
+        price: parseFloat(v.price),
         quantity: qty,
         status: qty > 0 ? 'available' : 'sold',
         image_url: imageUrl,
-      }
-    ]);
+      };
+    });
+
+    const { error } = await supabase.from('dresses').insert(rows);
     if (error) {
-      setInvMessage({ type: 'error', text: 'Failed to add item. Barcode might already exist.' });
+      setInvMessage({ type: 'error', text: 'Failed to add item. A barcode might already exist, or the size/color/group_id columns may be missing (see setup note).' });
     } else {
-      setInvMessage({ type: 'success', text: `Successfully stocked ${qty} item(s)!` });
-      setInvBarcode(''); setInvName(''); setInvCategory(''); setInvBrand('');
-      setInvUnit('Piece'); setInvPrice(''); setInvQuantity('1');
+      const totalQty = rows.reduce((sum, r) => sum + r.quantity, 0);
+      setInvMessage({ type: 'success', text: `Successfully stocked ${rows.length} variant(s), ${totalQty} item(s) total!` });
+      setInvName(''); setInvCategory(''); setInvBrand(''); setInvUnit('Piece');
+      setInvVariants([{ barcode: '', size: '', color: '', price: '', quantity: '1', generating: false }]);
       setInvImageFile(null); setInvImagePreview('');
       fetchRecentInventory();
     }
@@ -1403,11 +1439,23 @@ export default function AdminDashboard() {
     }
   };
 
+  // Short "Size / Color" tag for a variant, used anywhere a product name is
+  // shown (POS, cart, receipts, ledgers, labels) so the specific variant is
+  // never ambiguous once a product has more than one.
+  const variantTag = (item: any): string => {
+    const parts = [item?.size, item?.color].filter(Boolean);
+    return parts.length > 0 ? parts.join(' / ') : '';
+  };
+  const variantLabel = (item: any): string => {
+    const tag = variantTag(item);
+    return tag ? `${item.name} (${tag})` : (item?.name ?? '');
+  };
+
   // --- PRINT LABELS ---
   const addToLabelQueue = (item: any) => {
     setLabelQueue(prev => {
       if (prev.some(l => l.id === item.id)) return prev;
-      return [...prev, { id: item.id, barcode: item.barcode, name: item.name, category: item.category || '', brand: item.brand || '', price: item.price, qty: 1 }];
+      return [...prev, { id: item.id, barcode: item.barcode, name: item.name, category: item.category || '', brand: item.brand || '', variant: variantTag(item), price: item.price, qty: 1 }];
     });
     setLabelQtyDraft(prev => ({ ...prev, [item.id]: '1' }));
     setLabelSearchQuery('');
@@ -1437,6 +1485,8 @@ export default function AdminDashboard() {
       category: item.category,
       brand: item.brand || '',
       unit: item.unit || 'Piece',
+      size: item.size || '',
+      color: item.color || '',
       price: String(item.price),
       quantity: String(item.quantity),
     });
@@ -1457,6 +1507,8 @@ export default function AdminDashboard() {
         category: editDraft.category,
         brand: editDraft.brand || null,
         unit: editDraft.unit || 'Piece',
+        size: editDraft.size.trim() || null,
+        color: editDraft.color.trim() || null,
         price,
         quantity: qty,
         status: qty > 0 ? 'available' : 'sold',
@@ -1893,7 +1945,7 @@ export default function AdminDashboard() {
       status: newQuantity === 0 ? 'sold' : 'available',
     }).eq('id', addSaleSelectedItem.id);
 
-    setAddSaleMessage({ type: 'success', text: `Sale recorded for ${addSaleSelectedItem.name}.` });
+    setAddSaleMessage({ type: 'success', text: `Sale recorded for ${variantLabel(addSaleSelectedItem)}.` });
     setAddSaleSelectedItem(null);
     setAddSaleTrxId('');
     fetchRecentInventory();
@@ -2003,7 +2055,7 @@ export default function AdminDashboard() {
 
     const { data, error } = await supabase
       .from('sales')
-      .select(`*, dresses!inner ( id, name, barcode, quantity )`)
+      .select(`*, dresses!inner ( id, name, barcode, quantity, size, color )`)
       .eq('dresses.barcode', refundBarcode)
       .eq('status', 'completed')
       .order('sold_at', { ascending: false });
@@ -2061,13 +2113,30 @@ export default function AdminDashboard() {
 
   const clearDateFilters = () => { setStartDate(''); setEndDate(''); setReportsPage(1); };
 
-  const filteredInventory = recentInventory.filter(item => {
-    const matchesSearch =
-      item.name.toLowerCase().includes(stockSearchQuery.toLowerCase()) ||
-      item.barcode.toLowerCase().includes(stockSearchQuery.toLowerCase());
-    const matchesArchiveView = showArchived ? true : item.status !== 'archived';
-    return matchesSearch && matchesArchiveView;
-  });
+  // List Products groups variant rows (same size/color-less product split
+  // across multiple barcodes) back into one card by group_id. Rows with no
+  // group_id (older products, or ones added before variants existed) are
+  // treated as their own single-variant group keyed by their own id.
+  const groupedProducts = (() => {
+    const archiveFiltered = recentInventory.filter(item => showArchived ? true : item.status !== 'archived');
+    const map = new Map<string, any>();
+    for (const item of archiveFiltered) {
+      const key = item.group_id || `single-${item.id}`;
+      if (!map.has(key)) {
+        map.set(key, { key, name: item.name, category: item.category, brand: item.brand, unit: item.unit, image_url: item.image_url, variants: [] as any[] });
+      }
+      const group = map.get(key);
+      if (!group.image_url && item.image_url) group.image_url = item.image_url;
+      group.variants.push(item);
+    }
+    return Array.from(map.values());
+  })();
+  // A product matches if its name matches, or ANY of its variants' barcodes
+  // do — so scanning/typing one variant's barcode still surfaces the card.
+  const filteredInventory = stockSearchQuery === '' ? groupedProducts : groupedProducts.filter((p: any) =>
+    p.name.toLowerCase().includes(stockSearchQuery.toLowerCase()) ||
+    p.variants.some((v: any) => v.barcode.toLowerCase().includes(stockSearchQuery.toLowerCase()))
+  );
   // Search/filter above runs against the full inventory first, so a match on
   // any page is found — pagination below only slices what's already matched.
   const stockTotalPages = Math.max(1, Math.ceil(filteredInventory.length / STOCK_PAGE_SIZE));
@@ -2995,7 +3064,7 @@ export default function AdminDashboard() {
                         {lowStockItems.slice(0, 6).map(item => (
                           <div key={item.id} className="p-list-item">
                             <div className="min-w-0">
-                              <p className="font-semibold text-ink text-sm truncate">{item.name}</p>
+                              <p className="font-semibold text-ink text-sm truncate">{variantLabel(item)}</p>
                               <p className="text-xs text-muted font-mono mt-0.5">{item.barcode}</p>
                             </div>
                             <span className="p-badge p-badge-danger shrink-0">{item.quantity} left</span>
@@ -3029,7 +3098,7 @@ export default function AdminDashboard() {
                             <div className="flex items-center gap-3 min-w-0">
                               <span className="font-mono text-xs font-bold text-muted w-5 shrink-0 tabular-nums">{String(i + 1).padStart(2, '0')}</span>
                               <div className="min-w-0">
-                                <p className="font-semibold text-ink text-sm truncate">{item.name}</p>
+                                <p className="font-semibold text-ink text-sm truncate">{variantLabel(item)}</p>
                                 <p className="text-xs text-muted">{item.unitsSold} sold</p>
                               </div>
                             </div>
@@ -3061,7 +3130,7 @@ export default function AdminDashboard() {
                       {salesRecord.slice(0, 6).map(sale => (
                         <div key={sale.id} className="p-list-item">
                           <div className="min-w-0">
-                            <p className={`font-semibold text-sm truncate ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
+                            <p className={`font-semibold text-sm truncate ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{variantLabel(sale.dresses)}</p>
                             <p className="text-xs text-muted font-mono mt-0.5">{new Date(sale.sold_at).toLocaleString('en-BD')}</p>
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
@@ -3118,7 +3187,7 @@ export default function AdminDashboard() {
                         {cart.map((item) => (
                           <div key={item.id} className="anim-cart-item flex justify-between items-center gap-3 px-4 py-3.5 hover:bg-brass/5 transition-colors" style={{ borderBottom: '1px solid var(--card-border)' }}>
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-ink text-sm truncate">{item.name}</p>
+                              <p className="font-semibold text-ink text-sm truncate">{variantLabel(item)}</p>
                               <p className="text-xs text-muted mt-0.5 font-mono">৳{item.price} · {item.quantity} in stock</p>
                             </div>
                             <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid var(--card-border)', boxShadow: 'var(--shadow-xs)' }}>
@@ -3269,162 +3338,141 @@ export default function AdminDashboard() {
                           <p className="text-sm font-medium">No items found matching your search.</p>
                         </div>
                       ) : (
-                        paginatedInventory.map(item => {
-                          const isEditing = editingId === item.id;
-                          const isArchived = item.status === 'archived';
-                          const isLow = !isArchived && item.quantity > 0 && item.quantity <= LOW_STOCK_THRESHOLD;
+                        paginatedInventory.map((group: any) => {
+                          const anyEditingInGroup = group.variants.some((v: any) => editingId === v.id);
                           const categoryOptions = categories.length > 0 ? categories.map((c: any) => c.name) : FALLBACK_CATEGORIES;
 
                           return (
-                            <div key={item.id} className={`p-card overflow-hidden flex flex-col ${isArchived ? 'opacity-50' : ''} ${isEditing ? 'col-span-full' : ''}`}>
-                              {isEditing ? (
-                                <div className="p-4 space-y-2.5">
-                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                    <input
-                                      value={editDraft.name}
-                                      onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
-                                      placeholder="Item title"
-                                      className="p-input"
-                                    />
-                                    <select
-                                      value={editDraft.category}
-                                      onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })}
-                                      className="p-input"
-                                    >
-                                      {categoryOptions.map((name: string) => (
-                                        <option key={name} value={name}>{name}</option>
-                                      ))}
-                                    </select>
-                                    <select
-                                      value={editDraft.brand}
-                                      onChange={(e) => setEditDraft({ ...editDraft, brand: e.target.value })}
-                                      className="p-input"
-                                    >
-                                      <option value="">No brand</option>
-                                      {brands.map((b: any) => (
-                                        <option key={b.id} value={b.name}>{b.name}</option>
-                                      ))}
-                                    </select>
-                                    <select
-                                      value={editDraft.unit}
-                                      onChange={(e) => setEditDraft({ ...editDraft, unit: e.target.value })}
-                                      className="p-input"
-                                    >
-                                      <option value="Piece">Piece</option>
-                                      {units.filter((u: any) => u.name !== 'Piece').map((u: any) => (
-                                        <option key={u.id} value={u.name}>{u.name}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2 max-w-sm">
-                                    <input
-                                      type="number"
-                                      value={editDraft.price}
-                                      onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })}
-                                      placeholder="Price"
-                                      className="p-input"
-                                    />
-                                    <input
-                                      type="number"
-                                      value={editDraft.quantity}
-                                      onChange={(e) => setEditDraft({ ...editDraft, quantity: e.target.value })}
-                                      placeholder="Quantity"
-                                      className="px-3 py-2 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-sm text-ink font-mono font-bold transition-colors"
-                                    />
-                                  </div>
-                                  <div className="flex gap-2 pt-0.5 max-w-sm">
-                                    <button onClick={() => saveEditInventory(item.id)} className="flex-1 bg-ink text-paper text-[11px] font-bold uppercase tracking-wide py-2 hover:bg-brass-dark transition-colors">
-                                      Save Changes
-                                    </button>
-                                    <button onClick={cancelEditInventory} className="flex-1 border border-thread text-ink text-[11px] font-bold uppercase tracking-wide py-2 hover:border-thread-dark transition-colors">
-                                      Cancel
-                                    </button>
-                                  </div>
+                            <div key={group.key} className={`p-card overflow-hidden flex flex-col ${anyEditingInGroup ? 'col-span-full' : ''}`}>
+                              {userRole === 'salesman' ? (
+                                <div className="relative w-full aspect-square bg-paper-dim overflow-hidden">
+                                  {group.image_url ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={group.image_url} alt="" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-muted">
+                                      <IconImage className="w-6 h-6" />
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
-                                <>
-                                  {userRole === 'salesman' ? (
-                                    <div className="relative w-full aspect-square bg-paper-dim overflow-hidden">
-                                      {item.image_url ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={item.image_url} alt="" className="w-full h-full object-cover" />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-muted">
-                                          <IconImage className="w-6 h-6" />
-                                        </div>
-                                      )}
+                                <label className="relative block w-full aspect-square bg-paper-dim overflow-hidden cursor-pointer group" title="Click to add/change photo">
+                                  {group.image_url ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={group.image_url} alt="" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-muted">
+                                      <IconImage className="w-6 h-6" />
+                                    </div>
+                                  )}
+                                  {photoUploadingId === group.variants[0].id ? (
+                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                      <span className="text-[10px] text-white font-bold uppercase">Saving…</span>
                                     </div>
                                   ) : (
-                                    <label className="relative block w-full aspect-square bg-paper-dim overflow-hidden cursor-pointer group" title="Click to add/change photo">
-                                      {item.image_url ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={item.image_url} alt="" className="w-full h-full object-cover" />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-muted">
-                                          <IconImage className="w-6 h-6" />
-                                        </div>
-                                      )}
-                                      {photoUploadingId === item.id ? (
-                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                          <span className="text-[10px] text-white font-bold uppercase">Saving…</span>
-                                        </div>
-                                      ) : (
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                          <IconPencil className="w-5 h-5 text-white" />
-                                        </div>
-                                      )}
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        disabled={photoUploadingId === item.id}
-                                        onChange={(e) => {
-                                          const file = e.target.files?.[0];
-                                          if (file) handleReplacePhoto(item, file);
-                                          e.target.value = '';
-                                        }}
-                                      />
-                                    </label>
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                      <IconPencil className="w-5 h-5 text-white" />
+                                    </div>
                                   )}
-                                  <div className="p-2.5 flex flex-col gap-1.5 flex-1">
-                                    <div className="min-w-0">
-                                      <p className="font-bold text-ink text-sm leading-snug line-clamp-2">{item.name}</p>
-                                      <p className="text-xs text-muted font-mono mt-1 truncate">{item.barcode}</p>
-                                      <p className="text-xs text-muted mt-0.5 truncate">
-                                        {item.category}{item.brand ? ` · ${item.brand}` : ''} · {item.unit || 'Piece'}
-                                      </p>
-                                    </div>
-                                    <div className="mt-auto flex items-end justify-between gap-2 pt-1">
-                                      <div>
-                                        <p className="font-mono font-bold text-ink text-sm">৳{item.price}</p>
-                                        <span className={`text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide inline-block mt-1 ${
-                                          isArchived ? 'p-badge p-badge-muted'
-                                          : isLow || item.quantity === 0 ? 'p-badge p-badge-danger'
-                                          : 'p-badge p-badge-success'
-                                        }`}>
-                                          {isArchived ? 'archived' : `${item.quantity} in stock`}
-                                        </span>
-                                      </div>
-                                      <div className="flex gap-1 shrink-0">
-                                        {userRole === 'salesman' ? null : isArchived ? (
-                                          <button onClick={() => restoreInventoryItem(item)} title="Restore item" className="w-7 h-7 flex items-center justify-center border border-thread text-moss hover:border-moss transition-colors">
-                                            <IconUndo className="w-3.5 h-3.5" />
-                                          </button>
-                                        ) : (
-                                          <>
-                                            <button onClick={() => startEditInventory(item)} title="Edit item" className="w-7 h-7 flex items-center justify-center border border-thread text-ink hover:border-brass hover:text-brass transition-colors">
-                                              <IconPencil className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button onClick={() => archiveInventoryItem(item)} title="Archive item" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
-                                              <IconArchive className="w-3.5 h-3.5" />
-                                            </button>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    disabled={photoUploadingId === group.variants[0].id}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) handleReplacePhoto(group.variants[0], file);
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                </label>
                               )}
+
+                              <div className="p-2.5 flex flex-col gap-2 flex-1">
+                                <div className="min-w-0">
+                                  <p className="font-bold text-ink text-sm leading-snug line-clamp-2">{group.name}</p>
+                                  <p className="text-xs text-muted mt-0.5 truncate">
+                                    {group.category}{group.brand ? ` · ${group.brand}` : ''} · {group.unit || 'Piece'}
+                                  </p>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                  {group.variants.map((item: any) => {
+                                    const isEditing = editingId === item.id;
+                                    const isArchived = item.status === 'archived';
+                                    const isLow = !isArchived && item.quantity > 0 && item.quantity <= LOW_STOCK_THRESHOLD;
+                                    const tag = variantTag(item);
+
+                                    return isEditing ? (
+                                      <div key={item.id} className="p-2.5 bg-paper-dim border border-thread space-y-2">
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <input value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })} placeholder="Item title" className="p-input text-xs" />
+                                          <select value={editDraft.category} onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })} className="p-input text-xs">
+                                            {categoryOptions.map((name: string) => (<option key={name} value={name}>{name}</option>))}
+                                          </select>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <input value={editDraft.size} onChange={(e) => setEditDraft({ ...editDraft, size: e.target.value })} placeholder="Size" className="p-input text-xs" />
+                                          <input value={editDraft.color} onChange={(e) => setEditDraft({ ...editDraft, color: e.target.value })} placeholder="Color" className="p-input text-xs" />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <select value={editDraft.brand} onChange={(e) => setEditDraft({ ...editDraft, brand: e.target.value })} className="p-input text-xs">
+                                            <option value="">No brand</option>
+                                            {brands.map((b: any) => (<option key={b.id} value={b.name}>{b.name}</option>))}
+                                          </select>
+                                          <select value={editDraft.unit} onChange={(e) => setEditDraft({ ...editDraft, unit: e.target.value })} className="p-input text-xs">
+                                            <option value="Piece">Piece</option>
+                                            {units.filter((u: any) => u.name !== 'Piece').map((u: any) => (<option key={u.id} value={u.name}>{u.name}</option>))}
+                                          </select>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <input type="number" value={editDraft.price} onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })} placeholder="Price" className="p-input text-xs" />
+                                          <input type="number" value={editDraft.quantity} onChange={(e) => setEditDraft({ ...editDraft, quantity: e.target.value })} placeholder="Quantity" className="px-3 py-2 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-xs text-ink font-mono font-bold transition-colors" />
+                                        </div>
+                                        <div className="flex gap-2">
+                                          <button onClick={() => saveEditInventory(item.id)} className="flex-1 bg-ink text-paper text-[11px] font-bold uppercase tracking-wide py-2 hover:bg-brass-dark transition-colors">Save</button>
+                                          <button onClick={cancelEditInventory} className="flex-1 border border-thread text-ink text-[11px] font-bold uppercase tracking-wide py-2 hover:border-thread-dark transition-colors">Cancel</button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div key={item.id} className="flex items-center justify-between gap-2 pb-2 border-b border-thread/50 last:border-0 last:pb-0">
+                                        <div className="min-w-0">
+                                          {tag && <p className="text-[10px] font-bold text-brass uppercase tracking-wide truncate">{tag}</p>}
+                                          <p className="text-xs text-muted font-mono truncate">{item.barcode}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <div className="text-right">
+                                            <p className="font-mono font-bold text-ink text-xs">৳{item.price}</p>
+                                            <span className={`text-[9px] px-1.5 py-0.5 font-bold uppercase tracking-wide inline-block mt-0.5 ${
+                                              isArchived ? 'p-badge p-badge-muted'
+                                              : isLow || item.quantity === 0 ? 'p-badge p-badge-danger'
+                                              : 'p-badge p-badge-success'
+                                            }`}>
+                                              {isArchived ? 'archived' : `${item.quantity} left`}
+                                            </span>
+                                          </div>
+                                          <div className="flex gap-1">
+                                            {userRole === 'salesman' ? null : isArchived ? (
+                                              <button onClick={() => restoreInventoryItem(item)} title="Restore item" className="w-6 h-6 flex items-center justify-center border border-thread text-moss hover:border-moss transition-colors">
+                                                <IconUndo className="w-3 h-3" />
+                                              </button>
+                                            ) : (
+                                              <>
+                                                <button onClick={() => startEditInventory(item)} title="Edit item" className="w-6 h-6 flex items-center justify-center border border-thread text-ink hover:border-brass hover:text-brass transition-colors">
+                                                  <IconPencil className="w-3 h-3" />
+                                                </button>
+                                                <button onClick={() => archiveInventoryItem(item)} title="Archive item" className="w-6 h-6 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
+                                                  <IconArchive className="w-3 h-3" />
+                                                </button>
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             </div>
                           );
                         })
@@ -3466,36 +3514,17 @@ export default function AdminDashboard() {
 
             {/* PRODUCTS: ADD PRODUCT */}
             {activeTab === 'products-add' && (
-              <div className="max-w-xl print:hidden">
+              <div className="max-w-2xl print:hidden">
                 <div className="p-card p-7">
-                  <h3 className="text-base font-bold mb-6 text-ink flex items-center gap-2">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconPlus className="w-4 h-4 text-brass" />
                     Add Product
                   </h3>
+                  <p className="text-sm text-muted mb-6">Fill in the shared details once, then add one row per size/color — each gets its own barcode, price, and stock count.</p>
 
                   {invMessage.text && <div className={`anim-alert p-alert ${invMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{invMessage.text}</div>}
 
                   <form onSubmit={handleAddInventory} className="space-y-5">
-                    <div>
-                      <label className="p-label">Barcode Tag</label>
-                      <div className="flex gap-2">
-                        <input required type="text" className="flex-1 p-input font-mono" placeholder="Scan, type, or generate..." value={invBarcode} onChange={(e) => setInvBarcode(e.target.value)} />
-                        <button
-                          type="button"
-                          onClick={generateUniqueBarcode}
-                          disabled={invBarcodeGenerating}
-                          className="p-btn p-btn-ghost whitespace-nowrap disabled:opacity-60"
-                        >
-                          {invBarcodeGenerating ? 'Generating…' : 'Generate'}
-                        </button>
-                      </div>
-                      <p className="text-xs text-muted mt-1.5">Generates a random unique 8–12 digit code — only type one by hand for an item that already carries a manufacturer barcode.</p>
-                      {invBarcode && (
-                        <div className="mt-3 p-3 bg-white border border-thread inline-block">
-                          <BarcodeSVG value={invBarcode} height={45} barWidth={1.6} fontSize={12} />
-                        </div>
-                      )}
-                    </div>
                     <div>
                       <label className="p-label">Product Photo</label>
                       <div className="flex items-center gap-4">
@@ -3508,7 +3537,7 @@ export default function AdminDashboard() {
                           <img src={invImagePreview} alt="Preview" className="w-16 h-16 object-cover border border-thread rounded" />
                         )}
                       </div>
-                      <p className="text-xs text-muted mt-1.5">Optional — shown on List Products. Uploads when you save.</p>
+                      <p className="text-xs text-muted mt-1.5">Optional — shown on List Products, shared by every variant below.</p>
                     </div>
                     <div>
                       <label className="p-label">Item Title</label>
@@ -3553,18 +3582,59 @@ export default function AdminDashboard() {
                         </select>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="p-label">Unit Price (৳)</label>
-                        <input required type="number" className="w-full p-input" placeholder="1500" value={invPrice} onChange={(e) => setInvPrice(e.target.value)} />
+
+                    <div className="pt-2 border-t border-thread">
+                      <div className="flex items-center justify-between mt-5 mb-3">
+                        <label className="p-label mb-0">Variants (Size / Color)</label>
+                        <button type="button" onClick={addVariantRow} className="p-btn p-btn-ghost text-xs">
+                          <IconPlus className="w-3 h-3" /> Add Variant
+                        </button>
                       </div>
-                      <div>
-                        <label className="p-label">Bundle Qty</label>
-                        <input required type="number" min="1" className="w-full px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="Pieces" value={invQuantity} onChange={(e) => setInvQuantity(e.target.value)} />
+                      <div className="space-y-4">
+                        {invVariants.map((v, index) => (
+                          <div key={index} className="p-4 bg-paper-dim border border-thread space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-muted uppercase tracking-wide">Variant {index + 1}</span>
+                              {invVariants.length > 1 && (
+                                <button type="button" onClick={() => removeVariantRow(index)} className="text-muted hover:text-oxblood transition-colors">
+                                  <IconTrash className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <input type="text" className="p-input" placeholder="Size (e.g., M, 32, 0-5)" value={v.size} onChange={(e) => updateVariantField(index, 'size', e.target.value)} />
+                              <input type="text" className="p-input" placeholder="Color (optional)" value={v.color} onChange={(e) => updateVariantField(index, 'color', e.target.value)} />
+                            </div>
+                            <div>
+                              <div className="flex gap-2">
+                                <input required type="text" className="flex-1 p-input font-mono" placeholder="Scan, type, or generate..." value={v.barcode} onChange={(e) => updateVariantField(index, 'barcode', e.target.value)} />
+                                <button
+                                  type="button"
+                                  onClick={() => generateUniqueBarcodeForVariant(index)}
+                                  disabled={v.generating}
+                                  className="p-btn p-btn-ghost whitespace-nowrap disabled:opacity-60"
+                                >
+                                  {v.generating ? 'Generating…' : 'Generate'}
+                                </button>
+                              </div>
+                              {v.barcode && (
+                                <div className="mt-2 p-2 bg-white border border-thread inline-block">
+                                  <BarcodeSVG value={v.barcode} height={38} barWidth={1.4} fontSize={11} />
+                                </div>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <input required type="number" className="p-input" placeholder="Price (৳)" value={v.price} onChange={(e) => updateVariantField(index, 'price', e.target.value)} />
+                              <input required type="number" min="1" className="px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="Stock qty" value={v.quantity} onChange={(e) => updateVariantField(index, 'quantity', e.target.value)} />
+                            </div>
+                          </div>
+                        ))}
                       </div>
+                      <p className="text-xs text-muted mt-3">Leave Size/Color blank for a product with no variants — one row is all you need.</p>
                     </div>
+
                     <button type="submit" disabled={invImageUploading} className="btn-shimmer w-full mt-2 p-btn p-btn-primary disabled:opacity-60">
-                      {invImageUploading ? 'Uploading Photo…' : 'Save to Database'}
+                      {invImageUploading ? 'Uploading Photo…' : `Save ${invVariants.length > 1 ? `${invVariants.length} Variants` : 'to Database'}`}
                     </button>
                   </form>
                 </div>
@@ -3601,7 +3671,7 @@ export default function AdminDashboard() {
                       {labelResults.map(item => (
                         <button key={item.id} onClick={() => addToLabelQueue(item)} className="w-full py-3 flex items-center justify-between gap-3 text-left hover:bg-paper-dim transition-colors px-3">
                           <div className="min-w-0">
-                            <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                            <p className="font-bold text-ink text-sm truncate">{variantLabel(item)}</p>
                             <p className="text-xs text-muted font-mono">{item.barcode}{item.brand ? ` · ${item.brand}` : ''}</p>
                           </div>
                           <p className="font-mono font-bold text-ink text-sm shrink-0">৳{item.price}</p>
@@ -3621,7 +3691,7 @@ export default function AdminDashboard() {
                         {labelQueue.map(item => (
                           <div key={item.id} className="p-3 flex items-center justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                              <p className="font-bold text-ink text-sm truncate">{item.name}{item.variant ? ` (${item.variant})` : ''}</p>
                               <p className="text-xs text-muted font-mono">{item.barcode} · ৳{item.price}{item.brand ? ` · ${item.brand}` : ''}</p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
@@ -3654,6 +3724,9 @@ export default function AdminDashboard() {
                               <span className="font-bold"> · {labelQueue[labelQueue.length - 1].category}</span>
                             )}
                           </p>
+                          {labelQueue[labelQueue.length - 1].variant && (
+                            <p className="text-[10px] font-bold text-black mt-0.5">{labelQueue[labelQueue.length - 1].variant}</p>
+                          )}
                           <p className="text-[15px] font-bold text-black my-0.5">৳{labelQueue[labelQueue.length - 1].price}</p>
                           <div className="flex justify-center">
                             <BarcodeSVG value={labelQueue[labelQueue.length - 1].barcode} height={40} barWidth={1.4} fontSize={11} />
@@ -3712,7 +3785,7 @@ export default function AdminDashboard() {
                         return (
                           <div key={item.id} className="p-list-item">
                             <div className="min-w-0">
-                              <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                              <p className="font-bold text-ink text-sm truncate">{variantLabel(item)}</p>
                               <p className="text-xs text-muted font-mono mt-0.5">{item.barcode}</p>
                             </div>
                             {isEditing ? (
@@ -4520,7 +4593,7 @@ export default function AdminDashboard() {
                           <tr key={sale.id} className={`${sale.status === 'refunded' ? 'opacity-50' : 'hover:bg-brass/5'} transition-colors`}>
                             <td className="p-4 text-sm text-muted whitespace-nowrap font-mono">{new Date(sale.sold_at).toLocaleString('en-BD')}</td>
                             <td className="p-4">
-                              <p className={`text-sm font-bold ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
+                              <p className={`text-sm font-bold ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{variantLabel(sale.dresses)}</p>
                               <span className="text-xs font-mono text-muted">{sale.dresses?.barcode}</span>
                             </td>
                             <td className="p-4">
@@ -4608,7 +4681,7 @@ export default function AdminDashboard() {
                         {addSaleResults.map(item => (
                           <button key={item.id} onClick={() => selectAddSaleItem(item)} className="w-full py-3 flex items-center justify-between gap-3 text-left hover:bg-paper-dim transition-colors px-2">
                             <div className="min-w-0">
-                              <p className="font-bold text-ink text-sm truncate">{item.name}</p>
+                              <p className="font-bold text-ink text-sm truncate">{variantLabel(item)}</p>
                               <p className="text-xs text-muted font-mono">{item.barcode} · {item.quantity} in stock</p>
                             </div>
                             <p className="font-mono font-bold text-ink text-sm shrink-0">৳{item.price}</p>
@@ -4620,7 +4693,7 @@ export default function AdminDashboard() {
                     <div className="space-y-5">
                       <div className="bg-paper-dim p-4 border border-thread flex items-center justify-between">
                         <div>
-                          <p className="font-bold text-ink text-sm">{addSaleSelectedItem.name}</p>
+                          <p className="font-bold text-ink text-sm">{variantLabel(addSaleSelectedItem)}</p>
                           <p className="text-xs text-muted font-mono mt-0.5">{addSaleSelectedItem.barcode} · ৳{addSaleSelectedItem.price}</p>
                         </div>
                         <button onClick={() => setAddSaleSelectedItem(null)} className="text-xs font-bold text-muted hover:text-ink uppercase tracking-wide">Change</button>
@@ -4671,7 +4744,7 @@ export default function AdminDashboard() {
                       salesRecord.slice(0, 30).map(sale => (
                         <div key={sale.id} className="py-3.5 flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <p className={`font-bold text-sm truncate ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
+                            <p className={`font-bold text-sm truncate ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{variantLabel(sale.dresses)}</p>
                             <p className="text-xs text-muted font-mono mt-0.5">{new Date(sale.sold_at).toLocaleString('en-BD')}</p>
                           </div>
                           <p className={`font-mono text-sm font-bold shrink-0 ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>৳{sale.amount_paid}</p>
@@ -4745,7 +4818,7 @@ export default function AdminDashboard() {
                       salesRecord.filter(s => s.status === 'refunded').slice(0, 10).map(sale => (
                         <div key={sale.id} className="p-list-item">
                           <div className="min-w-0">
-                            <p className="font-bold text-ink text-sm truncate">{sale.dresses?.name}</p>
+                            <p className="font-bold text-ink text-sm truncate">{variantLabel(sale.dresses)}</p>
                             <p className="text-xs text-muted font-mono mt-0.5">{new Date(sale.sold_at).toLocaleString('en-BD')}</p>
                           </div>
                           <p className="font-mono text-sm font-bold text-oxblood shrink-0">৳{sale.amount_paid}</p>
@@ -5276,7 +5349,7 @@ export default function AdminDashboard() {
                           <tr key={sale.id} className={`${sale.status === 'refunded' ? 'opacity-50' : 'hover:bg-brass/5'} transition-colors`}>
                             <td className="p-4 text-sm text-muted whitespace-nowrap font-mono">{new Date(sale.sold_at).toLocaleString('en-BD')}</td>
                             <td className="p-4">
-                              <p className={`text-sm font-bold ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{sale.dresses?.name}</p>
+                              <p className={`text-sm font-bold ${sale.status === 'refunded' ? 'line-through text-muted' : 'text-ink'}`}>{variantLabel(sale.dresses)}</p>
                               <span className="text-xs font-mono text-muted">{sale.dresses?.barcode}</span>
                             </td>
                             <td className="p-4">
@@ -5661,7 +5734,7 @@ export default function AdminDashboard() {
             {/* Items */}
             {cart.map((item, index) => (
               <div key={index} style={{ marginBottom: 8 }}>
-                <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{item.name}</div>
+                <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{variantLabel(item)}</div>
                 <div style={{ fontSize: '10px', color: '#000', fontWeight: 'bold' }}>CAT: {item.category}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', marginTop: 2 }}>
                   <span>{item.cartQty}x Item</span>
@@ -5744,6 +5817,9 @@ export default function AdminDashboard() {
                 <div style={{ fontWeight: 700, fontSize: '10.5px', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {item.name}{item.category ? <span style={{ fontWeight: 700 }}> · {item.category}</span> : ''}
                 </div>
+                {item.variant && (
+                  <div style={{ fontWeight: 700, fontSize: '10px', marginTop: 1 }}>{item.variant}</div>
+                )}
                 <div style={{ fontWeight: 700, fontSize: '15px', margin: '2px 0' }}>৳{item.price}</div>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <BarcodeSVG value={item.barcode} height={40} barWidth={1.4} fontSize={11} />
