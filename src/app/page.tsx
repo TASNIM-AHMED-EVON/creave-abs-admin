@@ -2928,13 +2928,19 @@ export default function AdminDashboard() {
             {[...Array(5)].map((_, i) => <span key={`thread-${i}`} className="dust-thread" />)}
           </div>
 
-         <div className="max-w-6xl mx-auto px-5 sm:px-8 pt-7 pb-16 print:p-0 relative z-10">
-
-            {/* ── GLOBAL HEADER TOOLBAR ──
-                Shown above every page. Buttons come from HEADER_ACTIONS near
-                the top of this file — add an entry there to add a button
-                here, nothing in this block needs to change. */}
-            <div className="flex items-center justify-between mb-8 print:hidden flex-wrap gap-3 px-4 py-3 bg-canvas/70 backdrop-blur-sm border border-thread/60 rounded-lg">
+          {/* ── GLOBAL HEADER TOOLBAR ──
+              Flush against the very top of the content column — same y as
+              the sidebar's "CRAVE ABS / ADMIN CONSOLE" brand block, so the
+              two form one continuous top strip instead of the toolbar
+              floating lower with a slab of video showing above it. Lives
+              OUTSIDE the max-w-6xl/pt-7 wrapper below on purpose: it needs
+              to span the full content width and sit at y:0, not be inset
+              with the rest of the page's content.
+              Buttons come from HEADER_ACTIONS near the top of this file —
+              add an entry there to add a button here, nothing in this
+              block needs to change. */}
+          <div className="sticky top-0 z-30 bg-canvas/90 backdrop-blur-sm border-b border-thread/60 print:hidden">
+            <div className="max-w-6xl mx-auto px-5 sm:px-8 py-[22px] flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2 flex-wrap">
                 {visibleHeaderActions.map((action) => {
                   const Icon = action.icon;
@@ -2958,6 +2964,9 @@ export default function AdminDashboard() {
                 {new Date().toLocaleDateString('en-BD', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             </div>
+          </div>
+
+          <div className="max-w-6xl mx-auto px-5 sm:px-8 pt-8 pb-16 print:p-0 relative z-10">
 
             {/* key forces remount on tab switch → triggers .tab-enter animation */}
             <div key={activeTab} className="tab-enter">
@@ -3435,13 +3444,18 @@ export default function AdminDashboard() {
                                         </div>
                                       </div>
                                     ) : (
-                                      <div key={item.id} className="flex items-center justify-between gap-2 pb-2 border-b border-thread/50 last:border-0 last:pb-0">
-                                       <div className="min-w-0">
-  {tag && <p className="text-[10px] font-bold text-brass uppercase tracking-wide truncate">{tag}</p>}
-  <p className="text-[11px] text-ink font-mono font-bold truncate" title={item.barcode}>
-    {item.barcode || '— no barcode —'}
-  </p>
-</div>
+                                      <div key={item.id} className="pb-2 border-b border-thread/50 last:border-0 last:pb-0">
+                                        {/* Barcode gets its own full-width line — at 6-7 cards per
+                                            row the price/badge/buttons on the right already claim
+                                            most of the row, so sharing a row with them squeezed this
+                                            down to ~0px and made it invisible. Own line = always room. */}
+                                        <p className="text-[11px] text-ink font-mono font-bold truncate mb-1" title={item.barcode}>
+                                          {item.barcode || '— no barcode —'}
+                                        </p>
+                                        <div className="flex items-center justify-between gap-2">
+                                        <div className="min-w-0">
+                                          {tag && <p className="text-[10px] font-bold text-brass uppercase tracking-wide truncate">{tag}</p>}
+                                        </div>
                                         <div className="flex items-center gap-1.5 shrink-0">
                                           <div className="text-right">
                                             <p className="font-mono font-bold text-ink text-xs">৳{item.price}</p>
@@ -3469,6 +3483,7 @@ export default function AdminDashboard() {
                                               </>
                                             )}
                                           </div>
+                                        </div>
                                         </div>
                                       </div>
                                     );
