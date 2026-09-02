@@ -2939,7 +2939,7 @@ export default function AdminDashboard() {
               Buttons come from HEADER_ACTIONS near the top of this file —
               add an entry there to add a button here, nothing in this
               block needs to change. */}
-          <div className="sticky top-0 z-30 bg-canvas/90 backdrop-blur-sm border-b border-thread/60 print:hidden">
+          <div className="sticky top-0 z-30 bg-black border-b border-thread/60 print:hidden">
             <div className="max-w-6xl mx-auto px-5 sm:px-8 py-[22px] flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2 flex-wrap">
                 {visibleHeaderActions.map((action) => {
