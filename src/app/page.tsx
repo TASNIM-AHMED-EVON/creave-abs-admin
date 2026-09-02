@@ -2928,7 +2928,7 @@ export default function AdminDashboard() {
             {[...Array(5)].map((_, i) => <span key={`thread-${i}`} className="dust-thread" />)}
           </div>
 
-          <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 sm:py-10 pb-16 print:p-0 relative z-10">
+         <div className="max-w-6xl mx-auto px-5 sm:px-8 pt-7 pb-16 print:p-0 relative z-10">
 
             {/* ── GLOBAL HEADER TOOLBAR ──
                 Shown above every page. Buttons come from HEADER_ACTIONS near
@@ -3436,10 +3436,12 @@ export default function AdminDashboard() {
                                       </div>
                                     ) : (
                                       <div key={item.id} className="flex items-center justify-between gap-2 pb-2 border-b border-thread/50 last:border-0 last:pb-0">
-                                        <div className="min-w-0">
-                                          {tag && <p className="text-[10px] font-bold text-brass uppercase tracking-wide truncate">{tag}</p>}
-                                          <p className="text-xs text-muted font-mono truncate">{item.barcode}</p>
-                                        </div>
+                                       <div className="min-w-0">
+  {tag && <p className="text-[10px] font-bold text-brass uppercase tracking-wide truncate">{tag}</p>}
+  <p className="text-[11px] text-ink font-mono font-bold truncate" title={item.barcode}>
+    {item.barcode || '— no barcode —'}
+  </p>
+</div>
                                         <div className="flex items-center gap-1.5 shrink-0">
                                           <div className="text-right">
                                             <p className="font-mono font-bold text-ink text-xs">৳{item.price}</p>
