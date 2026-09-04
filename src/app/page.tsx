@@ -2394,8 +2394,15 @@ export default function AdminDashboard() {
     }
   };
 
-  const processRefund = async (sale: any) => {
-    if (!window.confirm(`Are you sure you want to refund this purchase of ${sale.dresses.name}?`)) return;
+  // `asStoreCredit`: when true, instead of handing cash back, issues a
+  // gift_cards row with source='issued_as_credit' for the sale amount —
+  // same redemption path as a purchased gift card (usable as a Split
+  // Payment line at the POS later).
+  const processRefund = async (sale: any, asStoreCredit: boolean = false) => {
+    const confirmText = asStoreCredit
+      ? `Refund this purchase of ${sale.dresses.name} as store credit instead of cash?`
+      : `Are you sure you want to refund this purchase of ${sale.dresses.name}?`;
+    if (!window.confirm(confirmText)) return;
     const { error: updateSaleError } = await supabase.from('sales').update({ status: 'refunded' }).eq('id', sale.id);
     if (updateSaleError) {
       setRefundMessage({ type: 'error', text: 'Failed to update sale status.' });
@@ -2404,7 +2411,18 @@ export default function AdminDashboard() {
 
     const restoredQuantity = sale.dresses.quantity + 1;
     await supabase.from('dresses').update({ quantity: restoredQuantity, status: 'available' }).eq('id', sale.dresses.id);
-    setRefundMessage({ type: 'success', text: 'Refund successful! Stock levels updated.' });
+
+    if (asStoreCredit) {
+      const code = await issueStoreCredit(Number(sale.amount_paid));
+      if (code) {
+        setRefundMessage({ type: 'success', text: `Refunded as store credit — code ${code} for ৳${sale.amount_paid}. Stock levels updated.` });
+      } else {
+        setRefundMessage({ type: 'error', text: 'Sale was refunded and stock restored, but issuing the store credit card failed. Make sure migration_008 has been run.' });
+      }
+    } else {
+      setRefundMessage({ type: 'success', text: 'Refund successful! Stock levels updated.' });
+    }
+
     setRefundBarcode('');
     setRefundItemSales([]);
     fetchRecentInventory();
@@ -5255,10 +5273,16 @@ export default function AdminDashboard() {
                         </div>
                         <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3">
                           <p className="font-mono text-lg font-bold text-ink">৳{sale.amount_paid}</p>
-                          <button onClick={() => processRefund(sale)} className="p-badge p-badge-danger px-4 py-2 text-xs font-bold uppercase tracking-wide hover:bg-oxblood hover:text-white transition-colors border border-oxblood/20 flex items-center gap-2">
-                            <IconUndo className="w-3.5 h-3.5" />
-                            Approve Refund
-                          </button>
+                          <div className="flex gap-2">
+                            <button onClick={() => processRefund(sale, false)} className="p-badge p-badge-danger px-4 py-2 text-xs font-bold uppercase tracking-wide hover:bg-oxblood hover:text-white transition-colors border border-oxblood/20 flex items-center gap-2">
+                              <IconUndo className="w-3.5 h-3.5" />
+                              Approve Refund
+                            </button>
+                            <button onClick={() => processRefund(sale, true)} title="Issue a gift-card code for this amount instead of cash back" className="p-badge p-badge-brass px-4 py-2 text-xs font-bold uppercase tracking-wide hover:bg-brass hover:text-white transition-colors border border-brass/30 flex items-center gap-2">
+                              <IconCard className="w-3.5 h-3.5" />
+                              As Store Credit
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
