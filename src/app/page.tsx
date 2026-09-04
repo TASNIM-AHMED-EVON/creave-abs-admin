@@ -215,11 +215,27 @@ const IconWallet = (p: React.SVGProps<SVGSVGElement>) => (
 );
 
 // ---------------------------------------------------------------------------
-// Real, scannable barcode. Renders CODE128 bars (not a decorative stripe) via
-// jsbarcode, so codes of any length between 8–12 digits work — unlike
-// EAN/UPC, CODE128 has no fixed digit-length requirement. Used for the Add
-// Product preview and for every tag on the Print Labels sheet.
+// Real, scannable barcode via jsbarcode. Auto-detects the standard from the
+// value's shape so a manufacturer's own EAN-13/UPC-A barcode (already
+// printed on many wholesale/imported clothing tags) renders correctly
+// instead of being forced into CODE128:
+//   - 13 digits            → EAN-13 (the international retail standard)
+//   - 12 digits            → UPC-A  (the North American equivalent)
+//   - anything else        → CODE128 (our own generated 8–12 digit codes,
+//                            or any manufacturer code that isn't EAN/UPC
+//                            shaped — CODE128 has no fixed-length rule)
+// EAN-13/UPC-A both end in a checksum digit; if the value's checksum is
+// invalid (e.g. a barcode that just happens to be 13 digits but isn't a
+// real EAN-13), jsbarcode throws — we catch that and fall back to CODE128
+// so the code still renders as *something* scannable rather than blank.
 // ---------------------------------------------------------------------------
+function detectBarcodeFormat(value: string): 'EAN13' | 'UPC' | 'CODE128' {
+  const digitsOnly = /^\d+$/.test(value);
+  if (digitsOnly && value.length === 13) return 'EAN13';
+  if (digitsOnly && value.length === 12) return 'UPC';
+  return 'CODE128';
+}
+
 function BarcodeSVG({ value, height = 55, barWidth = 2, fontSize = 14 }: {
   value: string; height?: number; barWidth?: number; fontSize?: number;
 }) {
@@ -227,9 +243,10 @@ function BarcodeSVG({ value, height = 55, barWidth = 2, fontSize = 14 }: {
   useEffect(() => {
     if (!ref.current) return;
     if (!value) { ref.current.innerHTML = ''; return; }
+    const primaryFormat = detectBarcodeFormat(value);
     try {
       JsBarcode(ref.current, value, {
-        format: 'CODE128',
+        format: primaryFormat,
         displayValue: true,
         height,
         width: barWidth,
@@ -240,6 +257,26 @@ function BarcodeSVG({ value, height = 55, barWidth = 2, fontSize = 14 }: {
         lineColor: '#000000',
       });
     } catch {
+      // Right length for EAN-13/UPC-A but a bad checksum — fall back to
+      // CODE128, which accepts any digit string.
+      if (primaryFormat !== 'CODE128') {
+        try {
+          JsBarcode(ref.current, value, {
+            format: 'CODE128',
+            displayValue: true,
+            height,
+            width: barWidth,
+            fontSize,
+            fontOptions: 'bold',
+            margin: 8,
+            background: '#ffffff',
+            lineColor: '#000000',
+          });
+          return;
+        } catch {
+          // fall through to blank
+        }
+      }
       ref.current.innerHTML = '';
     }
   }, [value, height, barWidth, fontSize]);
@@ -267,6 +304,8 @@ const NAV_GROUPS = [
       { tab: 'products-add', label: 'Add Product' },
       { tab: 'products-labels', label: 'Print Labels' },
       { tab: 'products-price', label: 'Update Price' },
+      { tab: 'products-reorder', label: 'Reorder Suggestions' },
+      { tab: 'products-locations', label: 'Locations & Transfers' },
       { tab: 'products-units', label: 'Units' },
       { tab: 'products-categories', label: 'Categories' },
       { tab: 'products-brands', label: 'Brands' },
@@ -488,9 +527,19 @@ export default function AdminDashboard() {
   const [invCategory, setInvCategory] = useState('');
   const [invBrand, setInvBrand] = useState('');
   const [invUnit, setInvUnit] = useState('Piece');
-  const [invVariants, setInvVariants] = useState<{ barcode: string; size: string; color: string; price: string; quantity: string; generating: boolean }[]>([
-    { barcode: '', size: '', color: '', price: '', quantity: '1', generating: false }
+  const [invVariants, setInvVariants] = useState<{ barcode: string; size: string; color: string; price: string; quantity: string; reorderPoint: string; generating: boolean }[]>([
+    { barcode: '', size: '', color: '', price: '', quantity: '1', reorderPoint: '', generating: false }
   ]);
+  // Size/Color Matrix — a faster way to populate invVariants above: type
+  // sizes and colors once, generate the full grid of combinations, tick off
+  // the ones this product actually comes in, then push them all into
+  // invVariants at once instead of adding rows one by one.
+  const [matrixSizesInput, setMatrixSizesInput] = useState('');
+  const [matrixColorsInput, setMatrixColorsInput] = useState('');
+  const [matrixPrice, setMatrixPrice] = useState('');
+  const [matrixQty, setMatrixQty] = useState('1');
+  const [matrixCombos, setMatrixCombos] = useState<{ size: string; color: string }[]>([]);
+  const [matrixSelected, setMatrixSelected] = useState<Record<string, boolean>>({});
   const [invImageFile, setInvImageFile] = useState<File | null>(null);
   const [invImagePreview, setInvImagePreview] = useState('');
   const [invImageUploading, setInvImageUploading] = useState(false);
@@ -524,7 +573,7 @@ export default function AdminDashboard() {
   // Inventory: archive visibility + inline edit
   const [showArchived, setShowArchived] = useState(false);
   const [editingId, setEditingId] = useState<any>(null);
-  const [editDraft, setEditDraft] = useState({ name: '', category: '', brand: '', unit: '', size: '', color: '', price: '', quantity: '' });
+  const [editDraft, setEditDraft] = useState({ name: '', category: '', brand: '', unit: '', size: '', color: '', price: '', quantity: '', reorder_point: '' });
 
   // Products reference data: Categories / Units / Brands
   const [categories, setCategories] = useState<any[]>([]);
@@ -534,6 +583,26 @@ export default function AdminDashboard() {
   const [newUnitName, setNewUnitName] = useState('');
   const [newUnitCode, setNewUnitCode] = useState('');
   const [newBrandName, setNewBrandName] = useState('');
+
+  // Reorder Suggestions — units sold per dress_id over the lookback window,
+  // used to estimate sales velocity and days-until-stockout.
+  const [reorderVelocity, setReorderVelocity] = useState<Record<string, number>>({});
+  const [reorderLoading, setReorderLoading] = useState(false);
+  const REORDER_LOOKBACK_DAYS = 30;
+
+  // Locations & Stock Transfer
+  const [locations, setLocations] = useState<any[]>([]);
+  const [locationStock, setLocationStock] = useState<any[]>([]);
+  const [newLocationName, setNewLocationName] = useState('');
+  const [newLocationAddress, setNewLocationAddress] = useState('');
+  const [locationMessage, setLocationMessage] = useState({ type: '', text: '' });
+  const [transferBarcode, setTransferBarcode] = useState('');
+  const [transferMatch, setTransferMatch] = useState<any>(null);
+  const [transferFromLocationId, setTransferFromLocationId] = useState<string>('');
+  const [transferToLocationId, setTransferToLocationId] = useState<string>('');
+  const [transferQuantity, setTransferQuantity] = useState('1');
+  const [transferMessage, setTransferMessage] = useState({ type: '', text: '' });
+  const [stockTransfers, setStockTransfers] = useState<any[]>([]);
 
   // Update Price (focused quick-edit list)
   const [priceSearchQuery, setPriceSearchQuery] = useState('');
@@ -783,6 +852,65 @@ export default function AdminDashboard() {
   const fetchBrands = useCallback(async () => {
     const { data } = await supabase.from('brands').select('*').order('name', { ascending: true });
     if (data) setBrands(data);
+  }, []);
+
+  // --- REORDER SUGGESTIONS: SALES VELOCITY ---
+  // Tallies completed sales per dress_id over the lookback window. Each row
+  // in `sales` already represents exactly one physical unit sold (see how
+  // checkout flattens the cart), so counting rows per dress_id IS units sold.
+  const fetchReorderVelocity = useCallback(async () => {
+    setReorderLoading(true);
+    const since = new Date();
+    since.setDate(since.getDate() - REORDER_LOOKBACK_DAYS);
+    const { data, error } = await supabase
+      .from('sales')
+      .select('dress_id, status, sold_at')
+      .eq('status', 'completed')
+      .gte('sold_at', since.toISOString());
+    if (!error && data) {
+      const tally: Record<string, number> = {};
+      data.forEach((row: any) => {
+        const key = String(row.dress_id);
+        tally[key] = (tally[key] || 0) + 1;
+      });
+      setReorderVelocity(tally);
+    }
+    setReorderLoading(false);
+  }, []);
+
+  // --- LOCATIONS & STOCK TRANSFER ---
+  const fetchLocations = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('locations').select('*').order('name', { ascending: true });
+      if (!error && data) setLocations(data);
+    } catch (_) {
+      // table not yet created — stays empty until migration_009 is run
+    }
+  }, []);
+
+  const fetchLocationStock = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('location_stock')
+        .select(`*, locations ( id, name ), dresses ( id, name, barcode, size, color )`)
+        .order('updated_at', { ascending: false });
+      if (!error && data) setLocationStock(data);
+    } catch (_) {
+      // table not yet created
+    }
+  }, []);
+
+  const fetchStockTransfers = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('stock_transfers')
+        .select(`*, dresses ( name, barcode ), from_location:from_location_id ( name ), to_location:to_location_id ( name )`)
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (!error && data) setStockTransfers(data);
+    } catch (_) {
+      // table not yet created
+    }
   }, []);
 
   const fetchSuppliers = useCallback(async () => {
@@ -1187,7 +1315,11 @@ export default function AdminDashboard() {
     fetchCurrencies();
     fetchExchangeRates();
     fetchGiftCards();
-  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchSuppliers, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchDailyCosts, fetchCurrencies, fetchExchangeRates, fetchGiftCards]);
+    fetchReorderVelocity();
+    fetchLocations();
+    fetchLocationStock();
+    fetchStockTransfers();
+  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchSuppliers, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchDailyCosts, fetchCurrencies, fetchExchangeRates, fetchGiftCards, fetchReorderVelocity, fetchLocations, fetchLocationStock, fetchStockTransfers]);
 
   // --- REAL SUPABASE AUTH SESSION HANDLING ---
   // Replaces the old localStorage timer: Supabase's own client keeps the
@@ -1496,13 +1628,79 @@ export default function AdminDashboard() {
   };
 
   const addVariantRow = () => {
-    setInvVariants(prev => [...prev, { barcode: '', size: '', color: '', price: prev[prev.length - 1]?.price || '', quantity: '1', generating: false }]);
+    setInvVariants(prev => [...prev, { barcode: '', size: '', color: '', price: prev[prev.length - 1]?.price || '', quantity: '1', reorderPoint: prev[prev.length - 1]?.reorderPoint || '', generating: false }]);
   };
   const removeVariantRow = (index: number) => {
     setInvVariants(prev => prev.length > 1 ? prev.filter((_, i) => i !== index) : prev);
   };
-  const updateVariantField = (index: number, field: 'barcode' | 'size' | 'color' | 'price' | 'quantity', value: string) => {
+  const updateVariantField = (index: number, field: 'barcode' | 'size' | 'color' | 'price' | 'quantity' | 'reorderPoint', value: string) => {
     setInvVariants(prev => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)));
+  };
+
+  // --- SIZE/COLOR MATRIX ---
+  // Builds every (size × color) combination from the two comma-separated
+  // inputs and shows them as a tickable grid — standard clothing-retail
+  // pattern (e.g. a t-shirt in S/M/L/XL × Red/Blue/Black = 12 combinations)
+  // instead of typing each variant row by hand.
+  const generateMatrixGrid = () => {
+    const sizes = matrixSizesInput.split(',').map(s => s.trim()).filter(Boolean);
+    const colors = matrixColorsInput.split(',').map(c => c.trim()).filter(Boolean);
+    if (sizes.length === 0) {
+      setInvMessage({ type: 'error', text: 'Enter at least one size to build the matrix (colors are optional).' });
+      return;
+    }
+    const combos: { size: string; color: string }[] = [];
+    const colorList = colors.length > 0 ? colors : [''];
+    for (const size of sizes) {
+      for (const color of colorList) {
+        combos.push({ size, color });
+      }
+    }
+    setMatrixCombos(combos);
+    const selected: Record<string, boolean> = {};
+    combos.forEach(c => { selected[`${c.size}|${c.color}`] = true; });
+    setMatrixSelected(selected);
+  };
+
+  const toggleMatrixCell = (size: string, color: string) => {
+    const key = `${size}|${color}`;
+    setMatrixSelected(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Pushes every ticked combination into invVariants (replacing the single
+  // still-blank default row, if that's all there is, rather than leaving
+  // an empty row alongside the generated ones).
+  const applyMatrixToVariants = () => {
+    const selectedCombos = matrixCombos.filter(c => matrixSelected[`${c.size}|${c.color}`]);
+    if (selectedCombos.length === 0) {
+      setInvMessage({ type: 'error', text: 'Tick at least one combination in the matrix first.' });
+      return;
+    }
+    const newRows = selectedCombos.map(c => ({
+      barcode: '', size: c.size, color: c.color,
+      price: matrixPrice, quantity: matrixQty || '1', reorderPoint: '', generating: false,
+    }));
+    setInvVariants(prev => {
+      const isSingleBlankRow = prev.length === 1 && !prev[0].barcode && !prev[0].size && !prev[0].color;
+      return isSingleBlankRow ? newRows : [...prev, ...newRows];
+    });
+    setMatrixCombos([]);
+    setMatrixSelected({});
+    setInvMessage({ type: 'success', text: `Added ${newRows.length} variant row(s) from the matrix — scroll down to fill in barcodes.` });
+  };
+
+  // Runs the existing per-row barcode generator across every variant row
+  // that doesn't have one yet, sequentially (each checks uniqueness against
+  // the live table, so they must run one at a time, not in parallel).
+  const [generatingAllBarcodes, setGeneratingAllBarcodes] = useState(false);
+  const generateAllMissingBarcodes = async () => {
+    setGeneratingAllBarcodes(true);
+    for (let i = 0; i < invVariants.length; i++) {
+      if (!invVariants[i].barcode.trim()) {
+        await generateUniqueBarcodeForVariant(i);
+      }
+    }
+    setGeneratingAllBarcodes(false);
   };
 
   // Uploads to the "product-images" Storage bucket and returns the public
@@ -1570,6 +1768,7 @@ export default function AdminDashboard() {
         group_id: groupId,
         price: parseFloat(v.price),
         quantity: qty,
+        reorder_point: v.reorderPoint.trim() ? parseInt(v.reorderPoint) : null,
         status: qty > 0 ? 'available' : 'sold',
         image_url: imageUrl,
       };
@@ -1577,12 +1776,14 @@ export default function AdminDashboard() {
 
     const { error } = await supabase.from('dresses').insert(rows);
     if (error) {
-      setInvMessage({ type: 'error', text: 'Failed to add item. A barcode might already exist, or the size/color/group_id columns may be missing (see setup note).' });
+      setInvMessage({ type: 'error', text: 'Failed to add item. A barcode might already exist, or the size/color/group_id/reorder_point columns may be missing (see setup note).' });
     } else {
       const totalQty = rows.reduce((sum, r) => sum + r.quantity, 0);
       setInvMessage({ type: 'success', text: `Successfully stocked ${rows.length} variant(s), ${totalQty} item(s) total!` });
       setInvName(''); setInvCategory(''); setInvBrand(''); setInvUnit('Piece');
-      setInvVariants([{ barcode: '', size: '', color: '', price: '', quantity: '1', generating: false }]);
+      setInvVariants([{ barcode: '', size: '', color: '', price: '', quantity: '1', reorderPoint: '', generating: false }]);
+      setMatrixSizesInput(''); setMatrixColorsInput(''); setMatrixPrice(''); setMatrixQty('1');
+      setMatrixCombos([]); setMatrixSelected({});
       setInvImageFile(null); setInvImagePreview('');
       fetchRecentInventory();
     }
@@ -1619,6 +1820,13 @@ export default function AdminDashboard() {
     const tag = variantTag(item);
     return tag ? `${item.name} (${tag})` : (item?.name ?? '');
   };
+
+  // Per-item reorder point when the admin set one on that variant,
+  // otherwise the shop-wide default (LOW_STOCK_THRESHOLD) — this is what
+  // "low stock" means everywhere in the app now, instead of one fixed
+  // number for every product regardless of how fast it actually sells.
+  const effectiveReorderPoint = (item: any): number =>
+    item?.reorder_point != null && item.reorder_point !== '' ? Number(item.reorder_point) : LOW_STOCK_THRESHOLD;
 
   // --- PRINT LABELS ---
   const addToLabelQueue = (item: any) => {
@@ -1658,6 +1866,7 @@ export default function AdminDashboard() {
       color: item.color || '',
       price: String(item.price),
       quantity: String(item.quantity),
+      reorder_point: item.reorder_point != null ? String(item.reorder_point) : '',
     });
   };
 
@@ -1680,6 +1889,7 @@ export default function AdminDashboard() {
         color: editDraft.color.trim() || null,
         price,
         quantity: qty,
+        reorder_point: editDraft.reorder_point.trim() ? parseInt(editDraft.reorder_point) : null,
         status: qty > 0 ? 'available' : 'sold',
       })
       .eq('id', id);
@@ -1794,6 +2004,99 @@ export default function AdminDashboard() {
     if (!window.confirm('Remove this brand?')) return;
     const { error } = await supabase.from('brands').delete().eq('id', id);
     if (!error) fetchBrands();
+  };
+
+  // --- LOCATIONS CRUD ---
+  const addLocation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocationMessage({ type: '', text: '' });
+    if (!newLocationName.trim()) return;
+    const { error } = await supabase.from('locations').insert([{ name: newLocationName.trim(), address: newLocationAddress.trim() || null }]);
+    if (error) {
+      setLocationMessage({ type: 'error', text: 'Failed to add location. It may already exist, or migration_009 hasn\'t been run yet.' });
+    } else {
+      setNewLocationName(''); setNewLocationAddress('');
+      fetchLocations();
+    }
+  };
+
+  const deleteLocation = async (id: any, name: string) => {
+    if (!window.confirm(`Remove "${name}"? Its stock-transfer history stays, but it won't be selectable for new transfers.`)) return;
+    const { error } = await supabase.from('locations').delete().eq('id', id);
+    if (!error) fetchLocations();
+  };
+
+  // --- STOCK TRANSFER ---
+  // Finds the product by barcode (same pattern as Add Purchase / Refund
+  // search) so the transfer screen works with a scanner, not just typing.
+  const handleTransferBarcodeSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTransferMessage({ type: '', text: '' });
+    setTransferMatch(null);
+    if (!transferBarcode) return;
+    const { data, error } = await supabase.from('dresses').select('*').eq('barcode', transferBarcode).single();
+    if (error || !data) {
+      setTransferMessage({ type: 'error', text: 'No product with that barcode.' });
+    } else {
+      setTransferMatch(data);
+    }
+  };
+
+  // Moves stock between two locations. `dresses.quantity` (the number the
+  // POS actually sells from) is NOT touched by a transfer — it stays the
+  // shop-wide total. This only moves the breakdown of WHERE that stock
+  // physically sits, tracked in `location_stock`, with every move logged
+  // to `stock_transfers` for an audit trail.
+  const handleRecordTransfer = async () => {
+    setTransferMessage({ type: '', text: '' });
+    if (!transferMatch) { setTransferMessage({ type: 'error', text: 'Search for a product first.' }); return; }
+    if (!transferFromLocationId || !transferToLocationId) { setTransferMessage({ type: 'error', text: 'Pick both a source and a destination location.' }); return; }
+    if (transferFromLocationId === transferToLocationId) { setTransferMessage({ type: 'error', text: 'Source and destination must be different.' }); return; }
+    const qty = parseInt(transferQuantity);
+    if (!qty || qty <= 0) { setTransferMessage({ type: 'error', text: 'Enter a valid quantity.' }); return; }
+
+    const { data: sourceRow } = await supabase
+      .from('location_stock')
+      .select('*')
+      .eq('dress_id', transferMatch.id)
+      .eq('location_id', transferFromLocationId)
+      .maybeSingle();
+
+    const sourceQty = sourceRow ? Number(sourceRow.quantity) : 0;
+    if (qty > sourceQty) {
+      setTransferMessage({ type: 'error', text: `Only ${sourceQty} recorded at the source location — can't transfer ${qty}.` });
+      return;
+    }
+
+    // Decrement source
+    if (sourceRow) {
+      await supabase.from('location_stock').update({ quantity: sourceQty - qty, updated_at: new Date().toISOString() }).eq('id', sourceRow.id);
+    }
+
+    // Increment (or create) destination
+    const { data: destRow } = await supabase
+      .from('location_stock')
+      .select('*')
+      .eq('dress_id', transferMatch.id)
+      .eq('location_id', transferToLocationId)
+      .maybeSingle();
+    if (destRow) {
+      await supabase.from('location_stock').update({ quantity: Number(destRow.quantity) + qty, updated_at: new Date().toISOString() }).eq('id', destRow.id);
+    } else {
+      await supabase.from('location_stock').insert([{ dress_id: transferMatch.id, location_id: transferToLocationId, quantity: qty }]);
+    }
+
+    await supabase.from('stock_transfers').insert([{
+      dress_id: transferMatch.id,
+      from_location_id: transferFromLocationId,
+      to_location_id: transferToLocationId,
+      quantity: qty,
+    }]);
+
+    setTransferMessage({ type: 'success', text: `Moved ${qty} unit(s) of ${transferMatch.name}.` });
+    setTransferBarcode(''); setTransferMatch(null); setTransferQuantity('1');
+    fetchLocationStock();
+    fetchStockTransfers();
   };
 
   // --- SUPPLIERS CRUD ---
@@ -2525,7 +2828,7 @@ export default function AdminDashboard() {
 
   const activeStock = recentInventory.filter(item => item.status !== 'archived');
   const lowStockItems = activeStock
-    .filter(item => item.quantity > 0 && item.quantity <= LOW_STOCK_THRESHOLD)
+    .filter(item => item.quantity > 0 && item.quantity <= effectiveReorderPoint(item))
     .sort((a, b) => a.quantity - b.quantity);
   const outOfStockItems = activeStock.filter(item => item.quantity === 0);
 
@@ -3868,7 +4171,7 @@ export default function AdminDashboard() {
                                   {group.variants.map((item: any) => {
                                     const isEditing = editingId === item.id;
                                     const isArchived = item.status === 'archived';
-                                    const isLow = !isArchived && item.quantity > 0 && item.quantity <= LOW_STOCK_THRESHOLD;
+                                    const isLow = !isArchived && item.quantity > 0 && item.quantity <= effectiveReorderPoint(item);
                                     const tag = variantTag(item);
 
                                     return isEditing ? (
@@ -3896,6 +4199,9 @@ export default function AdminDashboard() {
                                         <div className="grid grid-cols-2 gap-2">
                                           <input type="number" value={editDraft.price} onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })} placeholder="Price" className="p-input text-xs" />
                                           <input type="number" value={editDraft.quantity} onChange={(e) => setEditDraft({ ...editDraft, quantity: e.target.value })} placeholder="Quantity" className="px-3 py-2 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-xs text-ink font-mono font-bold transition-colors" />
+                                        </div>
+                                        <div>
+                                          <input type="number" min="0" value={editDraft.reorder_point} onChange={(e) => setEditDraft({ ...editDraft, reorder_point: e.target.value })} placeholder={`Reorder point (default: ${LOW_STOCK_THRESHOLD})`} className="w-full p-input text-xs" />
                                         </div>
                                         <div className="flex gap-2">
                                           <button onClick={() => saveEditInventory(item.id)} className="flex-1 bg-ink text-paper text-[11px] font-bold uppercase tracking-wide py-2 hover:bg-brass-dark transition-colors">Save</button>
@@ -4060,11 +4366,59 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="pt-2 border-t border-thread">
+                      {/* Size/Color Matrix — quick bulk-generator for the
+                          variant rows below, standard for clothing where a
+                          product comes in every size × color combination. */}
+                      <div className="mt-5 p-4 bg-paper-dim border border-thread space-y-3">
+                        <div className="flex items-center gap-2">
+                          <IconLayers className="w-3.5 h-3.5 text-brass" />
+                          <span className="text-[11px] font-bold text-muted uppercase tracking-wide">Size/Color Matrix (optional)</span>
+                        </div>
+                        <p className="text-xs text-muted">Type sizes and colors once, tick the combinations you actually stock, and add them all as variant rows at once.</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <input type="text" className="p-input text-sm" placeholder="Sizes, e.g. S, M, L, XL" value={matrixSizesInput} onChange={(e) => setMatrixSizesInput(e.target.value)} />
+                          <input type="text" className="p-input text-sm" placeholder="Colors, e.g. Red, Blue, Black" value={matrixColorsInput} onChange={(e) => setMatrixColorsInput(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <input type="number" className="p-input text-sm" placeholder="Price for all (৳)" value={matrixPrice} onChange={(e) => setMatrixPrice(e.target.value)} />
+                          <input type="number" min="0" className="px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold text-sm transition-colors" placeholder="Stock qty for all" value={matrixQty} onChange={(e) => setMatrixQty(e.target.value)} />
+                        </div>
+                        <button type="button" onClick={generateMatrixGrid} className="p-btn p-btn-ghost text-xs w-full justify-center">
+                          <IconLayers className="w-3 h-3" /> Build Matrix
+                        </button>
+
+                        {matrixCombos.length > 0 && (
+                          <div className="space-y-3 pt-2 border-t border-thread">
+                            <div className="max-h-56 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {matrixCombos.map((c, i) => {
+                                const key = `${c.size}|${c.color}`;
+                                const checked = !!matrixSelected[key];
+                                return (
+                                  <label key={i} className={`flex items-center gap-2 px-2.5 py-2 border text-xs font-semibold cursor-pointer select-none transition-colors ${checked ? 'border-brass bg-brass-light/30 text-ink' : 'border-thread text-muted'}`}>
+                                    <input type="checkbox" checked={checked} onChange={() => toggleMatrixCell(c.size, c.color)} className="accent-brass w-3.5 h-3.5 shrink-0" />
+                                    <span className="truncate">{c.color ? `${c.size} / ${c.color}` : c.size}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <p className="text-xs text-muted">{Object.values(matrixSelected).filter(Boolean).length} of {matrixCombos.length} selected</p>
+                            <button type="button" onClick={applyMatrixToVariants} className="p-btn p-btn-primary text-xs w-full justify-center">
+                              <IconPlus className="w-3 h-3" /> Add Selected to Variants
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="flex items-center justify-between mt-5 mb-3">
                         <label className="p-label mb-0">Variants (Size / Color)</label>
-                        <button type="button" onClick={addVariantRow} className="p-btn p-btn-ghost text-xs">
-                          <IconPlus className="w-3 h-3" /> Add Variant
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={generateAllMissingBarcodes} disabled={generatingAllBarcodes} className="p-btn p-btn-ghost text-xs disabled:opacity-60">
+                            {generatingAllBarcodes ? 'Generating…' : 'Generate All Barcodes'}
+                          </button>
+                          <button type="button" onClick={addVariantRow} className="p-btn p-btn-ghost text-xs">
+                            <IconPlus className="w-3 h-3" /> Add Variant
+                          </button>
+                        </div>
                       </div>
                       <div className="space-y-4">
                         {invVariants.map((v, index) => (
@@ -4094,8 +4448,14 @@ export default function AdminDashboard() {
                                 </button>
                               </div>
                               {v.barcode && (
-                                <div className="mt-2 p-2 bg-white border border-thread inline-block">
-                                  <BarcodeSVG value={v.barcode} height={38} barWidth={1.4} fontSize={11} />
+                                <div className="mt-2">
+                                  <div className="p-2 bg-white border border-thread inline-block">
+                                    <BarcodeSVG value={v.barcode} height={38} barWidth={1.4} fontSize={11} />
+                                  </div>
+                                  <p className="text-[10px] text-muted mt-1 font-mono uppercase">
+                                    Detected as {detectBarcodeFormat(v.barcode)}
+                                    {detectBarcodeFormat(v.barcode) !== 'CODE128' && ' — scanned from packaging'}
+                                  </p>
                                 </div>
                               )}
                             </div>
@@ -4103,6 +4463,7 @@ export default function AdminDashboard() {
                               <input required type="number" className="p-input" placeholder="Price (৳)" value={v.price} onChange={(e) => updateVariantField(index, 'price', e.target.value)} />
                               <input required type="number" min="1" className="px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:bg-canvas focus:border-brass outline-none text-ink font-mono font-bold transition-colors" placeholder="Stock qty" value={v.quantity} onChange={(e) => updateVariantField(index, 'quantity', e.target.value)} />
                             </div>
+                            <input type="number" min="0" className="w-full p-input" placeholder={`Reorder point (optional — default ${LOW_STOCK_THRESHOLD})`} value={v.reorderPoint} onChange={(e) => updateVariantField(index, 'reorderPoint', e.target.value)} />
                           </div>
                         ))}
                       </div>
@@ -4292,6 +4653,259 @@ export default function AdminDashboard() {
                     )}
                   </div>
                   <div className="pb-7" />
+                </div>
+              </div>
+            )}
+
+            {/* PRODUCTS: REORDER SUGGESTIONS */}
+            {activeTab === 'products-reorder' && (
+              <div className="print:hidden">
+                <div className="p-card">
+                  <div className="flex items-center justify-between px-7 pt-7 pb-5 gap-4 flex-wrap">
+                    <div>
+                      <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                        <IconTrendingUp className="w-4 h-4 text-brass" />
+                        Reorder Suggestions
+                      </h3>
+                      <p className="text-sm text-muted mt-1">
+                        Based on units sold in the last {REORDER_LOOKBACK_DAYS} days. Suggested quantity restocks each item to roughly {REORDER_LOOKBACK_DAYS} days of cover at its current sales pace.
+                      </p>
+                    </div>
+                    <button
+                      onClick={fetchReorderVelocity}
+                      disabled={reorderLoading}
+                      className="p-btn p-btn-ghost shrink-0 disabled:opacity-50"
+                    >
+                      {reorderLoading ? 'Refreshing…' : '↻ Refresh'}
+                    </button>
+                  </div>
+                  <div className="p-divider mx-7 mb-2" />
+
+                  {(() => {
+                    // Build one row per active (non-archived) variant, using
+                    // its own reorder point and its own sales velocity.
+                    const rows = activeStock.map((item: any) => {
+                      const unitsSold = reorderVelocity[String(item.id)] || 0;
+                      const avgDaily = unitsSold / REORDER_LOOKBACK_DAYS;
+                      const daysLeft = avgDaily > 0 ? item.quantity / avgDaily : Infinity;
+                      const reorderPoint = effectiveReorderPoint(item);
+                      const targetStock = Math.ceil(avgDaily * REORDER_LOOKBACK_DAYS);
+                      const suggestedQty = Math.max(0, targetStock - item.quantity);
+                      const needsAttention = item.quantity <= reorderPoint || (avgDaily > 0 && daysLeft <= 14);
+                      return { item, unitsSold, avgDaily, daysLeft, reorderPoint, suggestedQty, needsAttention };
+                    })
+                      .filter((r: any) => r.needsAttention)
+                      .sort((a: any, b: any) => a.daysLeft - b.daysLeft);
+
+                    if (rows.length === 0) {
+                      return (
+                        <div className="p-empty">
+                          <div className="p-empty-icon"><IconTrendingUp className="w-5 h-5" /></div>
+                          <p className="p-empty-title">Nothing needs reordering right now</p>
+                          <p className="p-empty-desc">Every active item is above its reorder point and not projected to run out within 14 days.</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="overflow-x-auto">
+                        <table className="p-table">
+                          <thead>
+                            <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread/60 bg-paper/40">
+                              <th className="p-4 font-bold">Item</th>
+                              <th className="p-4 font-bold text-right">In Stock</th>
+                              <th className="p-4 font-bold text-right">Reorder Point</th>
+                              <th className="p-4 font-bold text-right">Sold / {REORDER_LOOKBACK_DAYS}d</th>
+                              <th className="p-4 font-bold text-right">Est. Days Left</th>
+                              <th className="p-4 font-bold text-right">Suggested Reorder</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-thread">
+                            {rows.map((r: any) => (
+                              <tr key={r.item.id} className={r.daysLeft <= 7 ? 'bg-oxblood-light/10' : ''}>
+                                <td className="p-4">
+                                  <p className="text-sm font-bold text-ink">{variantLabel(r.item)}</p>
+                                  <span className="text-xs font-mono text-muted">{r.item.barcode}</span>
+                                </td>
+                                <td className="p-4 text-sm font-mono text-right text-ink">{r.item.quantity}</td>
+                                <td className="p-4 text-sm font-mono text-right text-muted">{r.reorderPoint}</td>
+                                <td className="p-4 text-sm font-mono text-right text-ink">{r.unitsSold}</td>
+                                <td className="p-4 text-right">
+                                  <span className={`text-sm font-mono font-bold ${!Number.isFinite(r.daysLeft) ? 'text-muted' : r.daysLeft <= 7 ? 'text-oxblood' : r.daysLeft <= 14 ? 'text-brass' : 'text-ink'}`}>
+                                    {Number.isFinite(r.daysLeft) ? `${Math.round(r.daysLeft)}d` : '—'}
+                                  </span>
+                                </td>
+                                <td className="p-4 text-sm font-mono font-bold text-right text-moss">
+                                  {r.suggestedQty > 0 ? `+${r.suggestedQty}` : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                  <div className="pb-7" />
+                </div>
+              </div>
+            )}
+
+            {/* PRODUCTS: LOCATIONS & TRANSFERS */}
+            {activeTab === 'products-locations' && (
+              <div className="space-y-6 print:hidden">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Locations list */}
+                  <div className="p-card p-7">
+                    <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                      <IconTruck className="w-4 h-4 text-brass" />
+                      Locations
+                    </h3>
+                    <p className="text-sm text-muted mb-5">Warehouses, branches, or storage spots you track stock across.</p>
+                    {locationMessage.text && (
+                      <div className={`anim-alert p-alert ${locationMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{locationMessage.text}</div>
+                    )}
+                    <form onSubmit={addLocation} className="flex gap-2 mb-5">
+                      <input type="text" placeholder="Location name, e.g. Main Store" className="flex-1 p-input text-sm" value={newLocationName} onChange={(e) => setNewLocationName(e.target.value)} />
+                      <button type="submit" className="p-btn p-btn-primary shrink-0"><IconPlus className="w-3.5 h-3.5" /> Add</button>
+                    </form>
+                    <input type="text" placeholder="Address (optional)" className="w-full p-input text-sm mb-5" value={newLocationAddress} onChange={(e) => setNewLocationAddress(e.target.value)} />
+                    <div className="divide-y divide-thread border border-thread">
+                      {locations.length === 0 ? (
+                        <div className="p-empty"><p className="p-empty-desc">No locations yet — run migration_009 first, then add your first branch/warehouse above.</p></div>
+                      ) : (
+                        locations.map((loc: any) => (
+                          <div key={loc.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-bold text-ink text-sm">{loc.name}</p>
+                              {loc.address && <p className="text-xs text-muted mt-0.5">{loc.address}</p>}
+                            </div>
+                            <button onClick={() => deleteLocation(loc.id, loc.name)} title="Remove" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors shrink-0">
+                              <IconTrash className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Transfer stock */}
+                  <div className="p-card p-7">
+                    <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                      <IconUndo className="w-4 h-4 text-brass" />
+                      Transfer Stock
+                    </h3>
+                    <p className="text-sm text-muted mb-5">
+                      Records where stock physically sits. This doesn&rsquo;t change the total quantity the POS sells from — it&rsquo;s a
+                      separate breakdown of which location currently holds it.
+                    </p>
+                    {transferMessage.text && (
+                      <div className={`anim-alert p-alert ${transferMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{transferMessage.text}</div>
+                    )}
+                    <form onSubmit={handleTransferBarcodeSearch} className="flex gap-2 mb-5">
+                      <input type="text" placeholder="Scan or type product barcode..." className="flex-1 p-input font-mono" value={transferBarcode} onChange={(e) => setTransferBarcode(e.target.value)} />
+                      <button type="submit" className="p-btn p-btn-primary">Find</button>
+                    </form>
+
+                    {transferMatch && (
+                      <div className="space-y-4">
+                        <div className="bg-paper-dim p-4 border border-thread">
+                          <p className="font-bold text-ink text-sm">{variantLabel(transferMatch)}</p>
+                          <p className="text-xs text-muted font-mono mt-0.5">{transferMatch.barcode} · {transferMatch.quantity} total in stock</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="p-label">From</label>
+                            <select value={transferFromLocationId} onChange={(e) => setTransferFromLocationId(e.target.value)} className="w-full p-input text-sm">
+                              <option value="">Select…</option>
+                              {locations.map((loc: any) => (<option key={loc.id} value={loc.id}>{loc.name}</option>))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="p-label">To</label>
+                            <select value={transferToLocationId} onChange={(e) => setTransferToLocationId(e.target.value)} className="w-full p-input text-sm">
+                              <option value="">Select…</option>
+                              {locations.map((loc: any) => (<option key={loc.id} value={loc.id}>{loc.name}</option>))}
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="p-label">Quantity</label>
+                          <input type="number" min="1" className="w-full px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-ink font-mono font-bold transition-colors" value={transferQuantity} onChange={(e) => setTransferQuantity(e.target.value)} />
+                        </div>
+                        <button onClick={handleRecordTransfer} className="p-btn p-btn-primary btn-shimmer w-full py-3">Record Transfer</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Current breakdown by location */}
+                <div className="p-card overflow-hidden">
+                  <div className="p-7 pb-5">
+                    <h3 className="text-base font-bold text-ink">Stock by Location</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="p-table">
+                      <thead>
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread/60 bg-paper/40">
+                          <th className="p-4 font-bold">Item</th>
+                          <th className="p-4 font-bold">Location</th>
+                          <th className="p-4 font-bold text-right">Quantity</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-thread">
+                        {locationStock.length === 0 && (
+                          <tr><td colSpan={3} className="p-8 text-center text-muted font-medium">No stock recorded at any location yet — use Transfer Stock above to start tracking a breakdown.</td></tr>
+                        )}
+                        {locationStock.map((ls: any) => (
+                          <tr key={ls.id}>
+                            <td className="p-4">
+                              <p className="text-sm font-bold text-ink">{ls.dresses?.name}</p>
+                              <span className="text-xs font-mono text-muted">{ls.dresses?.barcode}</span>
+                            </td>
+                            <td className="p-4 text-sm text-ink">{ls.locations?.name}</td>
+                            <td className="p-4 text-sm font-mono font-bold text-right text-ink">{ls.quantity}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Transfer history */}
+                <div className="p-card overflow-hidden">
+                  <div className="p-7 pb-5">
+                    <h3 className="text-base font-bold text-ink">Transfer History</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="p-table">
+                      <thead>
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread/60 bg-paper/40">
+                          <th className="p-4 font-bold">Date</th>
+                          <th className="p-4 font-bold">Item</th>
+                          <th className="p-4 font-bold">From</th>
+                          <th className="p-4 font-bold">To</th>
+                          <th className="p-4 font-bold text-right">Qty</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-thread">
+                        {stockTransfers.length === 0 && (
+                          <tr><td colSpan={5} className="p-8 text-center text-muted font-medium">No transfers logged yet.</td></tr>
+                        )}
+                        {stockTransfers.map((t: any) => (
+                          <tr key={t.id}>
+                            <td className="p-4 text-sm text-muted whitespace-nowrap font-mono">{new Date(t.created_at).toLocaleString('en-BD')}</td>
+                            <td className="p-4">
+                              <p className="text-sm font-bold text-ink">{t.dresses?.name}</p>
+                              <span className="text-xs font-mono text-muted">{t.dresses?.barcode}</span>
+                            </td>
+                            <td className="p-4 text-sm text-muted">{t.from_location?.name || '—'}</td>
+                            <td className="p-4 text-sm text-muted">{t.to_location?.name || '—'}</td>
+                            <td className="p-4 text-sm font-mono font-bold text-right text-ink">{t.quantity}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
