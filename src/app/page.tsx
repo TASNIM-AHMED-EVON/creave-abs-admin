@@ -2050,27 +2050,37 @@ export default function AdminDashboard() {
   const handleRecordTransfer = async () => {
     setTransferMessage({ type: '', text: '' });
     if (!transferMatch) { setTransferMessage({ type: 'error', text: 'Search for a product first.' }); return; }
-    if (!transferFromLocationId || !transferToLocationId) { setTransferMessage({ type: 'error', text: 'Pick both a source and a destination location.' }); return; }
+    if (!transferToLocationId) { setTransferMessage({ type: 'error', text: 'Pick a destination location.' }); return; }
     if (transferFromLocationId === transferToLocationId) { setTransferMessage({ type: 'error', text: 'Source and destination must be different.' }); return; }
     const qty = parseInt(transferQuantity);
     if (!qty || qty <= 0) { setTransferMessage({ type: 'error', text: 'Enter a valid quantity.' }); return; }
 
-    const { data: sourceRow } = await supabase
-      .from('location_stock')
-      .select('*')
-      .eq('dress_id', transferMatch.id)
-      .eq('location_id', transferFromLocationId)
-      .maybeSingle();
+    // "From" is optional: leaving it blank means this is the FIRST time this
+    // product's stock is being assigned to a location (e.g. right after
+    // adding it, or backfilling an existing product) — there's nothing to
+    // deduct from, it's simply being recorded as arriving at `to`.
+    const isInitialAssignment = !transferFromLocationId;
 
-    const sourceQty = sourceRow ? Number(sourceRow.quantity) : 0;
-    if (qty > sourceQty) {
-      setTransferMessage({ type: 'error', text: `Only ${sourceQty} recorded at the source location — can't transfer ${qty}.` });
-      return;
-    }
+    let sourceRow: any = null;
+    if (!isInitialAssignment) {
+      const { data } = await supabase
+        .from('location_stock')
+        .select('*')
+        .eq('dress_id', transferMatch.id)
+        .eq('location_id', transferFromLocationId)
+        .maybeSingle();
+      sourceRow = data;
 
-    // Decrement source
-    if (sourceRow) {
-      await supabase.from('location_stock').update({ quantity: sourceQty - qty, updated_at: new Date().toISOString() }).eq('id', sourceRow.id);
+      const sourceQty = sourceRow ? Number(sourceRow.quantity) : 0;
+      if (qty > sourceQty) {
+        setTransferMessage({ type: 'error', text: `Only ${sourceQty} recorded at the source location — can't transfer ${qty}. If this is the first time you're assigning this product to a location, leave "From" set to "Initial stock" instead.` });
+        return;
+      }
+
+      // Decrement source
+      if (sourceRow) {
+        await supabase.from('location_stock').update({ quantity: sourceQty - qty, updated_at: new Date().toISOString() }).eq('id', sourceRow.id);
+      }
     }
 
     // Increment (or create) destination
@@ -2088,7 +2098,7 @@ export default function AdminDashboard() {
 
     await supabase.from('stock_transfers').insert([{
       dress_id: transferMatch.id,
-      from_location_id: transferFromLocationId,
+      from_location_id: isInitialAssignment ? null : transferFromLocationId,
       to_location_id: transferToLocationId,
       quantity: qty,
     }]);
@@ -4816,9 +4826,10 @@ export default function AdminDashboard() {
                           <div>
                             <label className="p-label">From</label>
                             <select value={transferFromLocationId} onChange={(e) => setTransferFromLocationId(e.target.value)} className="w-full p-input text-sm">
-                              <option value="">Select…</option>
+                              <option value="">Initial stock (not moving from another location)</option>
                               {locations.map((loc: any) => (<option key={loc.id} value={loc.id}>{loc.name}</option>))}
                             </select>
+                            <p className="text-[11px] text-muted mt-1">First time assigning this product to a location? Leave this as "Initial stock".</p>
                           </div>
                           <div>
                             <label className="p-label">To</label>
@@ -4898,7 +4909,7 @@ export default function AdminDashboard() {
                               <p className="text-sm font-bold text-ink">{t.dresses?.name}</p>
                               <span className="text-xs font-mono text-muted">{t.dresses?.barcode}</span>
                             </td>
-                            <td className="p-4 text-sm text-muted">{t.from_location?.name || '—'}</td>
+                            <td className="p-4 text-sm text-muted">{t.from_location?.name || 'Initial stock'}</td>
                             <td className="p-4 text-sm text-muted">{t.to_location?.name || '—'}</td>
                             <td className="p-4 text-sm font-mono font-bold text-right text-ink">{t.quantity}</td>
                           </tr>
