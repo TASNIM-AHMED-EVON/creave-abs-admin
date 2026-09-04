@@ -257,6 +257,7 @@ const NAV_GROUPS = [
       { tab: 'sell-list-pos', label: 'List POS' },
       { tab: 'pos', label: 'POS' },
       { tab: 'refund', label: 'List Sell Return' },
+      { tab: 'gift-cards', label: 'Gift Cards' },
     ],
   },
   {
@@ -298,6 +299,7 @@ const NAV_GROUPS = [
       { tab: 'settings-invoice', label: 'Invoice Settings' },
       { tab: 'settings-barcode', label: 'Barcode Settings' },
       { tab: 'settings-tax', label: 'Tax Rates' },
+      { tab: 'settings-currency', label: 'Currency & Exchange Rates' },
     ],
   },
   { kind: 'single', id: 'reports', tab: 'reports', label: 'Reports', icon: IconChart },
@@ -445,6 +447,38 @@ export default function AdminDashboard() {
   const [posMessage, setPosMessage] = useState({ type: '', text: '' });
   const [discountAmount, setDiscountAmount] = useState('0');
   const [selectedTaxRateId, setSelectedTaxRateId] = useState<string>('');
+
+  // POS — Currency (the sale is always recorded in the base currency
+  // internally; this only controls what's displayed/printed and what a
+  // foreign-currency payment line is converted from).
+  const [posCurrencyCode, setPosCurrencyCode] = useState<string>('');
+
+  // POS — Split Payment. Off by default (single-method checkout, unchanged
+  // from before); toggling this on swaps the single payment-method picker
+  // for a list of payment lines that must sum to the total before checkout
+  // is allowed. Each line can optionally be a gift card / store credit code.
+  const [splitPaymentMode, setSplitPaymentMode] = useState(false);
+  const [cartPayments, setCartPayments] = useState<{ method: string; amount: string; trxId: string; giftCardCode: string }[]>([]);
+  const [splitPaymentDraft, setSplitPaymentDraft] = useState({ method: 'cash', amount: '', trxId: '', giftCardCode: '' });
+  const [splitPaymentMessage, setSplitPaymentMessage] = useState({ type: '', text: '' });
+
+  // --- CURRENCY & EXCHANGE RATES ---
+  const [currencies, setCurrencies] = useState<any[]>([]);
+  const [exchangeRates, setExchangeRates] = useState<Record<string, { rate: number; fetchedAt: string }>>({});
+  const [newCurrencyCode, setNewCurrencyCode] = useState('');
+  const [newCurrencySymbol, setNewCurrencySymbol] = useState('');
+  const [currencyMessage, setCurrencyMessage] = useState({ type: '', text: '' });
+  const [ratesRefreshing, setRatesRefreshing] = useState(false);
+
+  // --- GIFT CARDS / STORE CREDIT ---
+  const [giftCards, setGiftCards] = useState<any[]>([]);
+  const [giftCardSearchQuery, setGiftCardSearchQuery] = useState('');
+  const [giftCardSellAmount, setGiftCardSellAmount] = useState('');
+  const [giftCardSellPhone, setGiftCardSellPhone] = useState('');
+  const [giftCardMessage, setGiftCardMessage] = useState({ type: '', text: '' });
+  const [giftCardLookupCode, setGiftCardLookupCode] = useState('');
+  const [giftCardLookupResult, setGiftCardLookupResult] = useState<any>(null);
+  const [giftCardLookupMessage, setGiftCardLookupMessage] = useState({ type: '', text: '' });
 
   // Inventory State
   // A product can have multiple variants (size/color combos) sharing one
@@ -797,6 +831,53 @@ export default function AdminDashboard() {
     if (data) setTaxRates(data);
   }, []);
 
+  // --- CURRENCY FETCH ---
+  const fetchCurrencies = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('currencies').select('*').order('is_base', { ascending: false });
+      if (!error && data) {
+        setCurrencies(data);
+        const base = data.find((c: any) => c.is_base);
+        if (base && !posCurrencyCode) setPosCurrencyCode(base.code);
+      }
+    } catch (_) {
+      // table not yet created — stays empty until migration_008 is run
+    }
+  }, [posCurrencyCode]);
+
+  // Pulls the most recent rate per currency (exchange_rates keeps history,
+  // so this is just "latest row per currency_code").
+  const fetchExchangeRates = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('exchange_rates')
+        .select('*')
+        .order('fetched_at', { ascending: false })
+        .limit(500);
+      if (!error && data) {
+        const latest: Record<string, { rate: number; fetchedAt: string }> = {};
+        for (const row of data) {
+          if (!latest[row.currency_code]) {
+            latest[row.currency_code] = { rate: Number(row.rate_to_base), fetchedAt: row.fetched_at };
+          }
+        }
+        setExchangeRates(latest);
+      }
+    } catch (_) {
+      // table not yet created
+    }
+  }, []);
+
+  // --- GIFT CARDS FETCH ---
+  const fetchGiftCards = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('gift_cards').select('*').order('created_at', { ascending: false }).limit(500);
+      if (!error && data) setGiftCards(data);
+    } catch (_) {
+      // table not yet created
+    }
+  }, []);
+
   const fetchMembers = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -1103,7 +1184,10 @@ export default function AdminDashboard() {
     fetchMembers();
     fetchMembershipSettings();
     fetchDailyCosts();
-  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchSuppliers, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchDailyCosts]);
+    fetchCurrencies();
+    fetchExchangeRates();
+    fetchGiftCards();
+  }, [fetchRecentInventory, fetchSalesData, fetchOverviewData, fetchCategories, fetchUnits, fetchBrands, fetchSuppliers, fetchBusinessSettings, fetchTaxRates, fetchMembers, fetchMembershipSettings, fetchDailyCosts, fetchCurrencies, fetchExchangeRates, fetchGiftCards]);
 
   // --- REAL SUPABASE AUTH SESSION HANDLING ---
   // Replaces the old localStorage timer: Supabase's own client keeps the
@@ -1218,6 +1302,10 @@ export default function AdminDashboard() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+    if (splitPaymentMode && splitRemaining > 0) {
+      setPosMessage({ type: 'error', text: `Payment lines still ৳${splitRemaining} short of the total.` });
+      return;
+    }
 
     const subtotal = cart.reduce((total, item) => total + item.price * item.cartQty, 0);
     const discount = Math.min(Math.max(parseFloat(discountAmount) || 0, 0), subtotal);
@@ -1239,10 +1327,10 @@ export default function AdminDashboard() {
     let remainingDiscount = discount;
     let remainingTax = taxTotal;
 
-    const dbPaymentMethod = paymentMethod === 'bank/card' ? 'cash' : paymentMethod;
-    const dbTrxId = paymentMethod === 'bank/card'
-      ? 'BANK/CARD-SALE'
-      : (paymentMethod === 'cash' ? 'DIRECT-SALE' : trxId);
+    const dbPaymentMethod = splitPaymentMode ? 'split' : (paymentMethod === 'bank/card' ? 'cash' : paymentMethod);
+    const dbTrxId = splitPaymentMode
+      ? 'SPLIT-SALE'
+      : (paymentMethod === 'bank/card' ? 'BANK/CARD-SALE' : (paymentMethod === 'cash' ? 'DIRECT-SALE' : trxId));
 
     const salesData = units.map((item, idx) => {
       const isLast = idx === units.length - 1;
@@ -1262,12 +1350,52 @@ export default function AdminDashboard() {
       };
     });
 
-    const { error: saleError } = await supabase.from('sales').insert(salesData);
+    const { data: insertedSales, error: saleError } = await supabase.from('sales').insert(salesData).select();
 
-    if (saleError) {
+    if (saleError || !insertedSales) {
       console.error(saleError);
       setPosMessage({ type: 'error', text: 'Checkout failed. Check console for details.' });
       return;
+    }
+
+    // Record the actual payment breakdown into `payments` — one row per
+    // tender, all linked to the first sale row from this checkout (sales
+    // itself stays one-row-per-unit for stock/reporting; `payments` is the
+    // audit trail of HOW it was paid, which matters once a sale can be
+    // split across several methods). Gift-card lines also debit that
+    // card's balance right here.
+    const anchorSaleId = insertedSales[0]?.id;
+    if (anchorSaleId && splitPaymentMode) {
+      const paymentRows = cartPayments.map(p => ({
+        sale_id: anchorSaleId,
+        method: p.method,
+        amount: parseFloat(p.amount) || 0,
+        currency_code: posCurrencyCode || null,
+        transaction_id: p.method === 'gift_card' ? p.giftCardCode.trim().toUpperCase() : (p.trxId || null),
+      }));
+      await supabase.from('payments').insert(paymentRows);
+
+      for (const p of cartPayments) {
+        if (p.method === 'gift_card' && p.giftCardCode) {
+          const code = p.giftCardCode.trim().toUpperCase();
+          const { data: gc } = await supabase.from('gift_cards').select('*').eq('code', code).maybeSingle();
+          if (gc) {
+            const newBalance = Number(gc.current_balance) - (parseFloat(p.amount) || 0);
+            await supabase.from('gift_cards').update({ current_balance: newBalance, status: newBalance <= 0 ? 'redeemed' : 'active' }).eq('id', gc.id);
+            await supabase.from('gift_card_transactions').insert([{ gift_card_id: gc.id, sale_id: anchorSaleId, type: 'redeem', amount: -(parseFloat(p.amount) || 0) }]);
+          }
+        }
+      }
+    } else if (anchorSaleId) {
+      // Single-method checkout — still logged to `payments` so both modes
+      // leave the same kind of audit trail.
+      await supabase.from('payments').insert([{
+        sale_id: anchorSaleId,
+        method: paymentMethod,
+        amount: cartTotal,
+        currency_code: posCurrencyCode || null,
+        transaction_id: dbTrxId,
+      }]);
     }
 
     for (const item of cart) {
@@ -1289,9 +1417,12 @@ export default function AdminDashboard() {
       setTrxId('');
       setDiscountAmount('0');
       setSelectedTaxRateId('');
+      setCartPayments([]);
+      setSplitPaymentDraft({ method: 'cash', amount: '', trxId: '', giftCardCode: '' });
       fetchRecentInventory();
       fetchSalesData();
       fetchOverviewData();
+      fetchGiftCards();
     }, 500);
   };
 
@@ -1301,6 +1432,44 @@ export default function AdminDashboard() {
   const cartActiveTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
   const cartTaxValue = cartActiveTaxRate ? Math.round(cartSubtotalAfterDiscount * (Number(cartActiveTaxRate.rate_percent) / 100)) : 0;
   const cartTotal = cartSubtotalAfterDiscount + cartTaxValue;
+
+  // Split-payment running total — lines must add up to cartTotal (in base
+  // currency; a gift-card or cash line is always entered/stored in base
+  // currency even if the customer is viewing the total in a foreign one).
+  const splitPaidSoFar = cartPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+  const splitRemaining = Math.max(0, Math.round((cartTotal - splitPaidSoFar) * 100) / 100);
+
+  const addSplitPaymentLine = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSplitPaymentMessage({ type: '', text: '' });
+    const amt = parseFloat(splitPaymentDraft.amount);
+    if (!amt || amt <= 0) {
+      setSplitPaymentMessage({ type: 'error', text: 'Enter a valid amount.' });
+      return;
+    }
+    if (amt > splitRemaining + 0.01) {
+      setSplitPaymentMessage({ type: 'error', text: `That's more than the ৳${splitRemaining} still due.` });
+      return;
+    }
+    if (splitPaymentDraft.method === 'gift_card') {
+      const code = splitPaymentDraft.giftCardCode.trim().toUpperCase();
+      if (!code) { setSplitPaymentMessage({ type: 'error', text: 'Enter the gift card code.' }); return; }
+      const { data: gc } = await supabase.from('gift_cards').select('*').eq('code', code).maybeSingle();
+      if (!gc || gc.status !== 'active') {
+        setSplitPaymentMessage({ type: 'error', text: 'Gift card not found, or not active.' });
+        return;
+      }
+      if (Number(gc.current_balance) < amt) {
+        setSplitPaymentMessage({ type: 'error', text: `That card only has ৳${gc.current_balance} left.` });
+        return;
+      }
+    }
+    setCartPayments(prev => [...prev, { ...splitPaymentDraft, amount: String(amt) }]);
+    setSplitPaymentDraft({ method: 'cash', amount: '', trxId: '', giftCardCode: '' });
+  };
+  const removeSplitPaymentLine = (index: number) => {
+    setCartPayments(prev => prev.filter((_, i) => i !== index));
+  };
 
   // --- INVENTORY ADD FUNCTIONS ---
   // Random 8–12 digit barcode, checked against the live table so it can never
@@ -1983,6 +2152,164 @@ export default function AdminDashboard() {
     if (!window.confirm('Remove this tax rate?')) return;
     const { error } = await supabase.from('tax_rates').delete().eq('id', id);
     if (!error) fetchTaxRates();
+  };
+
+  // --- CURRENCY HANDLERS ---
+  const addCurrency = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCurrencyMessage({ type: '', text: '' });
+    const code = newCurrencyCode.trim().toUpperCase();
+    if (!code || !newCurrencySymbol.trim()) {
+      setCurrencyMessage({ type: 'error', text: 'Enter a currency code (e.g. USD) and a symbol.' });
+      return;
+    }
+    const { error } = await supabase.from('currencies').insert([{ code, symbol: newCurrencySymbol.trim(), is_base: false }]);
+    if (error) {
+      setCurrencyMessage({ type: 'error', text: 'Failed to add currency. It may already exist, or migration_008 hasn\'t been run yet.' });
+    } else {
+      setNewCurrencyCode(''); setNewCurrencySymbol('');
+      setCurrencyMessage({ type: 'success', text: `${code} added. Click "Refresh Rates" to fetch its exchange rate.` });
+      fetchCurrencies();
+    }
+  };
+
+  const deleteCurrency = async (id: any, code: string) => {
+    if (!window.confirm(`Remove ${code}? It won't be offered at checkout anymore.`)) return;
+    const { error } = await supabase.from('currencies').delete().eq('id', id);
+    if (!error) fetchCurrencies();
+  };
+
+  // Calls our own /api/exchange-rates route (server-side — keeps the
+  // currencyapi.com key out of the browser) with the shop's base currency,
+  // then stores a fresh rate row per currency we track. currencyapi.com
+  // returns "1 base = X target"; we store the inverse ("1 target = X base")
+  // since that's what a payment-line conversion needs (foreign amount ×
+  // rate_to_base = base-currency amount).
+  const refreshExchangeRates = async () => {
+    setRatesRefreshing(true);
+    setCurrencyMessage({ type: '', text: '' });
+    const base = currencies.find((c: any) => c.is_base)?.code || 'BDT';
+    try {
+      const res = await fetch(`/api/exchange-rates?base=${base}`);
+      const json = await res.json();
+      if (!res.ok) {
+        setCurrencyMessage({ type: 'error', text: json.error || 'Failed to fetch rates.' });
+        return;
+      }
+      const rows = currencies
+        .filter((c: any) => !c.is_base)
+        .map((c: any) => {
+          const perBase = json.data?.[c.code]?.value;
+          if (!perBase) return null;
+          return { currency_code: c.code, rate_to_base: 1 / perBase };
+        })
+        .filter(Boolean);
+      if (rows.length === 0) {
+        setCurrencyMessage({ type: 'error', text: 'No matching currencies found in the API response.' });
+        return;
+      }
+      const { error } = await supabase.from('exchange_rates').insert(rows as any[]);
+      if (error) {
+        setCurrencyMessage({ type: 'error', text: 'Fetched rates but failed to save them.' });
+      } else {
+        setCurrencyMessage({ type: 'success', text: `Rates updated for ${rows.length} currenc${rows.length === 1 ? 'y' : 'ies'}.` });
+        fetchExchangeRates();
+      }
+    } catch (_) {
+      setCurrencyMessage({ type: 'error', text: 'Could not reach the exchange rate service.' });
+    } finally {
+      setRatesRefreshing(false);
+    }
+  };
+
+  // Converts an amount in the base currency (BDT) into `code`, using the
+  // latest stored rate. Falls back to the raw amount if the rate is missing
+  // (e.g. base currency itself, or rates never fetched).
+  const convertFromBase = (amountInBase: number, code: string): number => {
+    if (!code) return amountInBase;
+    const currency = currencies.find((c: any) => c.code === code);
+    if (currency?.is_base) return amountInBase;
+    const rate = exchangeRates[code]?.rate;
+    if (!rate) return amountInBase;
+    return amountInBase / rate;
+  };
+  const currencySymbol = (code: string): string => currencies.find((c: any) => c.code === code)?.symbol || '৳';
+
+  // --- GIFT CARD HANDLERS ---
+  const generateGiftCardCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+    let code = 'GC-';
+    for (let i = 0; i < 10; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  };
+
+  const sellGiftCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGiftCardMessage({ type: '', text: '' });
+    const amount = parseFloat(giftCardSellAmount);
+    if (!amount || amount <= 0) {
+      setGiftCardMessage({ type: 'error', text: 'Enter a valid amount.' });
+      return;
+    }
+    const code = generateGiftCardCode();
+    const { data, error } = await supabase.from('gift_cards').insert([{
+      code,
+      initial_balance: amount,
+      current_balance: amount,
+      source: 'purchased',
+      status: 'active',
+      customer_phone: giftCardSellPhone.trim() || null,
+    }]).select().single();
+
+    if (error || !data) {
+      setGiftCardMessage({ type: 'error', text: 'Failed to issue gift card. Make sure migration_008 has been run.' });
+      return;
+    }
+
+    await supabase.from('gift_card_transactions').insert([{ gift_card_id: data.id, type: 'issue', amount }]);
+    setGiftCardMessage({ type: 'success', text: `Gift card ${code} issued for ৳${amount}.` });
+    setGiftCardSellAmount(''); setGiftCardSellPhone('');
+    fetchGiftCards();
+  };
+
+  // Issues store credit (same table, different `source`) — used from the
+  // Refund flow as an alternative to cash back.
+  const issueStoreCredit = async (amount: number, phone?: string) => {
+    const code = generateGiftCardCode();
+    const { data, error } = await supabase.from('gift_cards').insert([{
+      code,
+      initial_balance: amount,
+      current_balance: amount,
+      source: 'issued_as_credit',
+      status: 'active',
+      customer_phone: phone || null,
+    }]).select().single();
+    if (!error && data) {
+      await supabase.from('gift_card_transactions').insert([{ gift_card_id: data.id, type: 'issue', amount }]);
+      fetchGiftCards();
+      return code;
+    }
+    return null;
+  };
+
+  const lookupGiftCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGiftCardLookupMessage({ type: '', text: '' });
+    setGiftCardLookupResult(null);
+    const code = giftCardLookupCode.trim().toUpperCase();
+    if (!code) return;
+    const { data, error } = await supabase.from('gift_cards').select('*').eq('code', code).maybeSingle();
+    if (error || !data) {
+      setGiftCardLookupMessage({ type: 'error', text: 'No gift card found with that code.' });
+    } else {
+      setGiftCardLookupResult(data);
+    }
+  };
+
+  const revokeGiftCard = async (id: any) => {
+    if (!window.confirm('Revoke this gift card? It can no longer be redeemed.')) return;
+    const { error } = await supabase.from('gift_cards').update({ status: 'revoked' }).eq('id', id);
+    if (!error) fetchGiftCards();
   };
 
   // --- SURVEY HANDLERS ---
@@ -3253,40 +3580,154 @@ export default function AdminDashboard() {
                           <span className="text-sm font-bold text-ink uppercase tracking-wide">Total Due</span>
                           <span className="font-mono text-2xl font-bold p-stat-brass">৳{cartTotal}</span>
                         </div>
+                        {/* Currency — the sale is always recorded in ৳ (base
+                            currency); this just shows what it's worth in a
+                            foreign currency for a customer paying that way. */}
+                        {currencies.filter((c: any) => !c.is_base).length > 0 && (
+                          <div className="px-4 py-3 flex justify-between items-center gap-4" style={{ borderTop: '1px solid var(--card-border)' }}>
+                            <span className="text-sm text-muted font-medium shrink-0">Show total in</span>
+                            <select
+                              value={posCurrencyCode}
+                              onChange={(e) => setPosCurrencyCode(e.target.value)}
+                              className="p-input appearance-none cursor-pointer"
+                              style={{ width: 160, fontSize: 13 }}
+                            >
+                              {currencies.map((c: any) => (
+                                <option key={c.code} value={c.code}>{c.code}{c.is_base ? ' (base)' : ''}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        {posCurrencyCode && !currencies.find((c: any) => c.code === posCurrencyCode)?.is_base && (
+                          <div className="px-4 py-3 flex justify-between items-center" style={{ borderTop: '1px solid var(--card-border)', background: 'var(--color-paper-dim)' }}>
+                            <span className="text-xs text-muted font-medium">≈ in {posCurrencyCode}</span>
+                            <span className="font-mono text-sm font-bold text-ink">
+                              {currencySymbol(posCurrencyCode)}{convertFromBase(cartTotal, posCurrencyCode).toFixed(2)}
+                              {!exchangeRates[posCurrencyCode] && <span className="text-oxblood text-[10px] normal-case ml-1">(no rate set)</span>}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Payment Method */}
-                      <p className="p-label mb-2">Payment Method</p>
-                      <div className="grid grid-cols-3 gap-2 mb-5">
-                        {PAYMENT_METHODS.map((method) => (
-                          <button
-                            key={method}
-                            className={`py-2.5 text-[11px] font-bold uppercase tracking-wide rounded-xl border transition-all ${
-                              paymentMethod === method
-                                ? 'text-white border-transparent'
-                                : 'text-muted border-thread hover:border-brass/40 hover:text-ink'
-                            }`}
-                            style={paymentMethod === method ? {
-                              background: 'linear-gradient(180deg,#2a2620 0%,#1c1a17 100%)',
-                              boxShadow: 'var(--shadow-sm)'
-                            } : {
-                              background: 'var(--card-bg)',
-                              boxShadow: 'var(--shadow-xs)'
-                            }}
-                            onClick={() => setPaymentMethod(method as any)}
-                          >
-                            {method}
-                          </button>
-                        ))}
-                      </div>
+                      {/* Split Payment toggle */}
+                      <label className="flex items-center gap-2 mb-4 text-xs font-bold text-muted uppercase tracking-wide cursor-pointer select-none w-fit">
+                        <input
+                          type="checkbox"
+                          checked={splitPaymentMode}
+                          onChange={(e) => { setSplitPaymentMode(e.target.checked); setCartPayments([]); setSplitPaymentMessage({ type: '', text: '' }); }}
+                          className="accent-brass w-3.5 h-3.5"
+                        />
+                        Split across multiple payment methods
+                      </label>
 
-                      {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && (
+                      {splitPaymentMode ? (
                         <div className="mb-5">
-                          <input type="text" placeholder="Mobile banking Transaction ID" className="p-input font-mono" value={trxId} onChange={(e) => setTrxId(e.target.value)} />
+                          {cartPayments.length > 0 && (
+                            <div className="mb-3 divide-y divide-thread border border-thread">
+                              {cartPayments.map((p, i) => (
+                                <div key={i} className="px-3 py-2 flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <span className="text-xs font-bold uppercase text-ink">{p.method === 'gift_card' ? 'Gift Card' : p.method}</span>
+                                    {p.method === 'gift_card' && <span className="text-[11px] text-muted font-mono ml-2">{p.giftCardCode}</span>}
+                                    {p.trxId && <span className="text-[11px] text-muted font-mono ml-2">Trx: {p.trxId}</span>}
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="font-mono font-bold text-ink text-sm">৳{p.amount}</span>
+                                    <button onClick={() => removeSplitPaymentLine(i)} className="text-muted hover:text-oxblood transition-colors">
+                                      <IconTrash className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between px-1 mb-3">
+                            <span className="text-xs font-semibold text-muted">Still due</span>
+                            <span className={`font-mono font-bold text-sm ${splitRemaining > 0 ? 'text-oxblood' : 'text-moss'}`}>৳{splitRemaining}</span>
+                          </div>
+                          {splitPaymentMessage.text && (
+                            <div className={`anim-alert p-alert mb-3 ${splitPaymentMessage.type === 'error' ? 'text-oxblood' : 'text-moss'}`}>{splitPaymentMessage.text}</div>
+                          )}
+                          {splitRemaining > 0 && (
+                            <form onSubmit={addSplitPaymentLine} className="p-3 bg-paper-dim border border-thread space-y-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <select
+                                  value={splitPaymentDraft.method}
+                                  onChange={(e) => setSplitPaymentDraft({ ...splitPaymentDraft, method: e.target.value })}
+                                  className="p-input text-xs"
+                                >
+                                  {PAYMENT_METHODS.map((m) => (<option key={m} value={m}>{m}</option>))}
+                                  <option value="gift_card">Gift Card / Store Credit</option>
+                                </select>
+                                <input
+                                  type="number" min="0" max={splitRemaining} step="0.01"
+                                  placeholder={`Up to ৳${splitRemaining}`}
+                                  className="p-input text-xs font-mono"
+                                  value={splitPaymentDraft.amount}
+                                  onChange={(e) => setSplitPaymentDraft({ ...splitPaymentDraft, amount: e.target.value })}
+                                />
+                              </div>
+                              {splitPaymentDraft.method === 'gift_card' ? (
+                                <input
+                                  type="text" placeholder="Gift card code (e.g. GC-XXXXXXXXXX)"
+                                  className="w-full p-input text-xs font-mono"
+                                  value={splitPaymentDraft.giftCardCode}
+                                  onChange={(e) => setSplitPaymentDraft({ ...splitPaymentDraft, giftCardCode: e.target.value })}
+                                />
+                              ) : (splitPaymentDraft.method !== 'cash' && splitPaymentDraft.method !== 'bank/card') && (
+                                <input
+                                  type="text" placeholder="Mobile banking Transaction ID"
+                                  className="w-full p-input text-xs font-mono"
+                                  value={splitPaymentDraft.trxId}
+                                  onChange={(e) => setSplitPaymentDraft({ ...splitPaymentDraft, trxId: e.target.value })}
+                                />
+                              )}
+                              <button type="submit" className="w-full p-btn p-btn-ghost text-xs justify-center">
+                                <IconPlus className="w-3.5 h-3.5" /> Add Payment Line
+                              </button>
+                            </form>
+                          )}
                         </div>
+                      ) : (
+                        <>
+                          {/* Payment Method */}
+                          <p className="p-label mb-2">Payment Method</p>
+                          <div className="grid grid-cols-3 gap-2 mb-5">
+                            {PAYMENT_METHODS.map((method) => (
+                              <button
+                                key={method}
+                                className={`py-2.5 text-[11px] font-bold uppercase tracking-wide rounded-xl border transition-all ${
+                                  paymentMethod === method
+                                    ? 'text-white border-transparent'
+                                    : 'text-muted border-thread hover:border-brass/40 hover:text-ink'
+                                }`}
+                                style={paymentMethod === method ? {
+                                  background: 'linear-gradient(180deg,#2a2620 0%,#1c1a17 100%)',
+                                  boxShadow: 'var(--shadow-sm)'
+                                } : {
+                                  background: 'var(--card-bg)',
+                                  boxShadow: 'var(--shadow-xs)'
+                                }}
+                                onClick={() => setPaymentMethod(method as any)}
+                              >
+                                {method}
+                              </button>
+                            ))}
+                          </div>
+
+                          {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && (
+                            <div className="mb-5">
+                              <input type="text" placeholder="Mobile banking Transaction ID" className="p-input font-mono" value={trxId} onChange={(e) => setTrxId(e.target.value)} />
+                            </div>
+                          )}
+                        </>
                       )}
 
-                      <button onClick={handleCheckout} className="btn-shimmer btn-float w-full bg-moss text-white py-4 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors flex items-center justify-center gap-2">
+                      <button
+                        onClick={handleCheckout}
+                        disabled={splitPaymentMode && splitRemaining > 0}
+                        className="btn-shimmer btn-float w-full bg-moss text-white py-4 font-bold text-sm uppercase tracking-wider hover:bg-moss/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
                         <IconReceipt className="w-5 h-5" />
                         Complete Sale & Print
                       </button>
@@ -4848,6 +5289,118 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* SELL: GIFT CARDS */}
+            {activeTab === 'gift-cards' && (
+              <div className="max-w-2xl print:hidden space-y-6">
+                {/* Sell a new gift card */}
+                <div className="p-card p-7">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconCard className="w-4 h-4 text-brass" />
+                    Sell a Gift Card
+                  </h3>
+                  <p className="text-sm text-muted mb-6">Issues a unique code with a stored balance. Redeem it at the POS as a payment method under Split Payment.</p>
+
+                  {giftCardMessage.text && (
+                    <div className={`anim-alert p-alert ${giftCardMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{giftCardMessage.text}</div>
+                  )}
+
+                  <form onSubmit={sellGiftCard} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="p-label">Amount (৳)</label>
+                        <input required type="number" min="1" className="w-full px-4 py-2.5 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-ink font-mono font-bold transition-colors" value={giftCardSellAmount} onChange={(e) => setGiftCardSellAmount(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="p-label">Customer Phone <span className="text-muted font-normal normal-case">(optional)</span></label>
+                        <input type="text" className="w-full p-input font-mono" placeholder="01XXXXXXXXX" value={giftCardSellPhone} onChange={(e) => setGiftCardSellPhone(e.target.value)} />
+                      </div>
+                    </div>
+                    <button type="submit" className="btn-shimmer w-full p-btn p-btn-primary">
+                      Issue Gift Card
+                    </button>
+                  </form>
+                </div>
+
+                {/* Balance lookup */}
+                <div className="p-card p-7">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconSearch className="w-4 h-4 text-brass" />
+                    Check Balance
+                  </h3>
+                  <p className="text-sm text-muted mb-5">Look up a card by its code — useful when a customer isn&rsquo;t sure how much is left.</p>
+                  {giftCardLookupMessage.text && (
+                    <div className={`anim-alert p-alert ${giftCardLookupMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{giftCardLookupMessage.text}</div>
+                  )}
+                  <form onSubmit={lookupGiftCard} className="flex gap-2 mb-4">
+                    <input type="text" placeholder="GC-XXXXXXXXXX" className="flex-1 p-input font-mono uppercase" value={giftCardLookupCode} onChange={(e) => setGiftCardLookupCode(e.target.value)} />
+                    <button type="submit" className="p-btn p-btn-primary">Search</button>
+                  </form>
+                  {giftCardLookupResult && (
+                    <div className="bg-paper-dim p-4 border border-thread flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-ink text-sm font-mono">{giftCardLookupResult.code}</p>
+                        <p className="text-xs text-muted mt-0.5">
+                          {giftCardLookupResult.source === 'issued_as_credit' ? 'Store credit' : 'Gift card'} · {giftCardLookupResult.status}
+                        </p>
+                      </div>
+                      <p className="font-mono text-lg font-bold text-brass">৳{giftCardLookupResult.current_balance}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* All gift cards */}
+                <div className="p-card overflow-hidden">
+                  <div className="flex items-center justify-between p-7 pb-5">
+                    <h3 className="text-base font-bold text-ink">All Gift Cards & Store Credit</h3>
+                    <span className="text-muted text-xs font-mono font-bold">{giftCards.length} ISSUED</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="p-table">
+                      <thead>
+                        <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread/60 bg-paper/40">
+                          <th className="p-4 font-bold">Code</th>
+                          <th className="p-4 font-bold">Type</th>
+                          <th className="p-4 font-bold text-right">Issued</th>
+                          <th className="p-4 font-bold text-right">Balance</th>
+                          <th className="p-4 font-bold">Status</th>
+                          <th className="p-4 font-bold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-thread">
+                        {giftCards.length === 0 && (
+                          <tr><td colSpan={6} className="p-8 text-center text-muted font-medium">No gift cards issued yet.</td></tr>
+                        )}
+                        {giftCards.map((g: any) => (
+                          <tr key={g.id}>
+                            <td className="p-4 font-mono font-bold text-ink text-sm">{g.code}</td>
+                            <td className="p-4 text-sm text-muted">{g.source === 'issued_as_credit' ? 'Store credit' : 'Gift card'}</td>
+                            <td className="p-4 text-sm font-mono text-right text-ink">৳{g.initial_balance}</td>
+                            <td className="p-4 text-sm font-mono text-right text-ink font-bold">৳{g.current_balance}</td>
+                            <td className="p-4">
+                              <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${
+                                g.status === 'active' ? 'p-badge p-badge-success'
+                                : g.status === 'redeemed' ? 'p-badge p-badge-muted'
+                                : 'p-badge p-badge-danger'
+                              }`}>
+                                {g.status}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              {g.status === 'active' && (
+                                <button onClick={() => revokeGiftCard(g.id)} className="text-[11px] font-bold text-muted hover:text-oxblood uppercase tracking-wide border border-thread px-2.5 py-1 hover:border-oxblood transition-colors">
+                                  Revoke
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* MEMBERSHIP: MEMBERS LIST */}
             {activeTab === 'membership-list' && (
               <div className="print:hidden">
@@ -5567,6 +6120,91 @@ export default function AdminDashboard() {
                     )}
                   </div>
                   <div className="pb-7" />
+                </div>
+              </div>
+            )}
+
+            {/* SETTINGS: CURRENCY & EXCHANGE RATES */}
+            {activeTab === 'settings-currency' && (
+              <div className="max-w-xl print:hidden space-y-6">
+                <div className="p-card p-7">
+                  <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
+                    <IconWallet className="w-4 h-4 text-brass" />
+                    Currency & Exchange Rates
+                  </h3>
+                  <p className="text-sm text-muted mb-6">
+                    Your products are always priced and reported in <span className="font-bold text-ink">{currencies.find((c: any) => c.is_base)?.code || 'BDT'}</span> (base currency).
+                    Add other currencies below to accept foreign-currency payments at the POS — rates come from currencyapi.com and are fetched on demand, never automatically in the background.
+                  </p>
+
+                  {currencyMessage.text && (
+                    <div className={`anim-alert p-alert ${currencyMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{currencyMessage.text}</div>
+                  )}
+
+                  <form onSubmit={addCurrency} className="flex gap-2 mb-5">
+                    <input
+                      type="text"
+                      placeholder="Code, e.g. USD"
+                      maxLength={3}
+                      className="flex-1 p-input text-sm font-mono uppercase"
+                      value={newCurrencyCode}
+                      onChange={(e) => setNewCurrencyCode(e.target.value.toUpperCase())}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Symbol, e.g. $"
+                      maxLength={3}
+                      className="w-24 p-input text-sm"
+                      value={newCurrencySymbol}
+                      onChange={(e) => setNewCurrencySymbol(e.target.value)}
+                    />
+                    <button type="submit" className="p-btn p-btn-primary shrink-0">
+                      <IconPlus className="w-3.5 h-3.5" /> Add
+                    </button>
+                  </form>
+
+                  <button
+                    onClick={refreshExchangeRates}
+                    disabled={ratesRefreshing || currencies.filter((c: any) => !c.is_base).length === 0}
+                    className="p-btn p-btn-primary btn-shimmer w-full mb-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {ratesRefreshing ? 'Fetching latest rates…' : 'Refresh Rates from currencyapi.com'}
+                  </button>
+
+                  <div className="divide-y divide-thread border border-thread">
+                    {currencies.length === 0 ? (
+                      <div className="p-empty"><p className="p-empty-desc">No currencies yet — run migration_008 first, then BDT will appear here automatically as your base currency.</p></div>
+                    ) : (
+                      currencies.map((c: any) => (
+                        <div key={c.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-mono font-bold text-ink text-sm">{c.symbol} {c.code}</span>
+                            {c.is_base && <span className="p-badge p-badge-brass text-[9px]">BASE</span>}
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            {!c.is_base && (
+                              <span className="text-xs font-mono text-muted">
+                                {exchangeRates[c.code]
+                                  ? `1 ${c.code} = ৳${exchangeRates[c.code].rate.toFixed(2)}`
+                                  : 'no rate yet'}
+                              </span>
+                            )}
+                            {!c.is_base && (
+                              <button onClick={() => deleteCurrency(c.id, c.code)} title="Remove" className="w-7 h-7 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
+                                <IconTrash className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <p className="text-xs text-muted mt-4">
+                    Add <code className="font-mono bg-paper-dim px-1">CURRENCY_API_KEY</code> to your project&rsquo;s environment
+                    variables (Vercel → Settings → Environment Variables, and locally in <code className="font-mono bg-paper-dim px-1">.env.local</code>) —
+                    <span className="font-bold text-ink"> never</span> as <code className="font-mono bg-paper-dim px-1">NEXT_PUBLIC_</code>, since that would ship the key to every visitor&rsquo;s browser.
+                  </p>
                 </div>
               </div>
             )}
