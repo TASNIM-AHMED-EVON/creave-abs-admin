@@ -6447,12 +6447,38 @@ export default function AdminDashboard() {
               <span>TOTAL:</span><span>TK {cartTotal}</span>
             </div>
 
+            {/* Foreign-currency equivalent, if the cashier picked one other
+                than the base currency for this sale. */}
+            {posCurrencyCode && !currencies.find((c: any) => c.code === posCurrencyCode)?.is_base && exchangeRates[posCurrencyCode] && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold', marginTop: 2 }}>
+                <span>≈ in {posCurrencyCode}:</span>
+                <span>{currencySymbol(posCurrencyCode)}{convertFromBase(cartTotal, posCurrencyCode).toFixed(2)}</span>
+              </div>
+            )}
+
             {/* Payment */}
-            <div style={{ fontSize: '10px', fontWeight: 'bold', marginTop: 4, textTransform: 'uppercase' }}>
-              Paid via: <strong>{paymentMethod}</strong>
-            </div>
-            {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && (
-              <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace' }}>TrxID: {trxId}</div>
+            {splitPaymentMode && cartPayments.length > 0 ? (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 2 }}>Paid via (split):</div>
+                {cartPayments.map((p, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 'bold' }}>
+                    <span style={{ textTransform: 'uppercase' }}>
+                      {p.method === 'gift_card' ? `Gift Card${p.giftCardCode ? ` (${p.giftCardCode})` : ''}` : p.method}
+                      {p.trxId ? ` — Trx: ${p.trxId}` : ''}
+                    </span>
+                    <span>Tk {p.amount}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: '10px', fontWeight: 'bold', marginTop: 4, textTransform: 'uppercase' }}>
+                  Paid via: <strong>{paymentMethod}</strong>
+                </div>
+                {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && (
+                  <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace' }}>TrxID: {trxId}</div>
+                )}
+              </>
             )}
 
             <div style={{ borderBottom: '1px dashed #000', margin: '8px 0 6px' }} />
