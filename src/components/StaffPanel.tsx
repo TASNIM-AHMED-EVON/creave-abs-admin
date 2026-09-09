@@ -1,0 +1,371 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useStaffSession } from '@/lib/staffSession';
+import { hasPermission, type AccountRole } from '@/lib/permissions';
+
+type StaffRow = {
+  id: string;
+  full_name: string;
+  role: string;
+  commission_rate: number;
+  hourly_rate: number | null;
+  active: boolean;
+  created_at: string;
+};
+
+type ClockEvent = { id: string; staff_id: string; event_type: 'in' | 'out'; occurred_at: string; note: string | null };
+type AuditRow = {
+  id: string; action: string; entity_type: string; entity_id: string | null;
+  actor_staff_name: string | null; actor_account_role: string | null;
+  approved_by_staff_name: string | null; reason: string | null; created_at: string;
+  before: any; after: any;
+};
+
+const SUBTAB_LABEL: Record<string, string> = {
+  clock: 'Clock In / Out',
+  manage: 'Manage Staff',
+  commission: 'Commission Report',
+  audit: 'Audit Log',
+};
+
+// Maps the left-nav tab id that was clicked to which sub-view opens first —
+// StaffPanel still lets the user switch between sub-views freely afterward.
+const NAV_TAB_TO_SUBTAB: Record<string, string> = {
+  'staff-clock': 'clock',
+  'staff-manage': 'manage',
+  'audit-log': 'audit',
+};
+
+export default function StaffPanel({ accountRole, navTab }: { accountRole: AccountRole | null; navTab?: string }) {
+  const { currentStaff, identifyStaff, clearStaff } = useStaffSession();
+  const canManage = hasPermission(accountRole, 'manage_staff');
+  const canViewAudit = hasPermission(accountRole, 'view_audit_log');
+
+  const availableSubtabs = ['clock', ...(canManage ? ['manage', 'commission'] : []), ...(canViewAudit ? ['audit'] : [])];
+  const [subtab, setSubtab] = useState<string>(() => (navTab && NAV_TAB_TO_SUBTAB[navTab]) || 'clock');
+  useEffect(() => { if (!availableSubtabs.includes(subtab)) setSubtab('clock'); }, [canManage, canViewAudit]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (navTab && NAV_TAB_TO_SUBTAB[navTab]) setSubtab(NAV_TAB_TO_SUBTAB[navTab]); }, [navTab]);
+
+  return (
+    <div>
+      <div className="flex gap-2 mb-6 border-b border-thread">
+        {availableSubtabs.map(t => (
+          <button
+            key={t}
+            onClick={() => setSubtab(t)}
+            className={`px-4 py-2.5 text-sm font-bold uppercase tracking-wide border-b-2 transition-colors ${subtab === t ? 'border-oxblood text-oxblood' : 'border-transparent text-muted hover:text-ink'}`}
+          >
+            {SUBTAB_LABEL[t]}
+          </button>
+        ))}
+      </div>
+      {subtab === 'clock' && <ClockTab currentStaff={currentStaff} identifyStaff={identifyStaff} clearStaff={clearStaff} />}
+      {subtab === 'manage' && canManage && <ManageTab />}
+      {subtab === 'commission' && canManage && <CommissionTab />}
+      {subtab === 'audit' && canViewAudit && <AuditTab />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+function ClockTab({ currentStaff, identifyStaff, clearStaff }: any) {
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+  const [events, setEvents] = useState<ClockEvent[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const loadEvents = async (staffId: string) => {
+    const since = new Date(); since.setHours(0, 0, 0, 0);
+    const { data } = await supabase.from('clock_events').select('*').eq('staff_id', staffId).gte('occurred_at', since.toISOString()).order('occurred_at', { ascending: false });
+    setEvents((data as ClockEvent[]) || []);
+  };
+
+  useEffect(() => { if (currentStaff) loadEvents(currentStaff.id); }, [currentStaff?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleIdentify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const match = await identifyStaff(pin);
+    if (!match) setError('PIN not recognized.');
+    setPin('');
+  };
+
+  const lastEvent = events[0]?.event_type;
+  const isClockedIn = lastEvent === 'in';
+
+  const punch = async (type: 'in' | 'out') => {
+    if (!currentStaff) return;
+    setBusy(true);
+    await supabase.from('clock_events').insert([{ staff_id: currentStaff.id, event_type: type }]);
+    await loadEvents(currentStaff.id);
+    setBusy(false);
+  };
+
+  if (!currentStaff) {
+    return (
+      <form onSubmit={handleIdentify} className="max-w-xs">
+        <label className="p-label mb-1 block">Enter your PIN to clock in/out</label>
+        <input
+          type="password" inputMode="numeric" maxLength={8} autoFocus value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+          className="w-full px-4 py-3 bg-paper border border-thread focus:border-oxblood outline-none font-mono text-lg tracking-widest text-center mb-2"
+          placeholder="PIN"
+        />
+        {error && <p className="text-xs text-oxblood font-semibold mb-2">{error}</p>}
+        <button type="submit" disabled={pin.length < 4} className="w-full px-4 py-2.5 bg-oxblood text-white text-sm font-bold uppercase tracking-wide hover:bg-oxblood/90 disabled:opacity-50">
+          Continue
+        </button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="max-w-md">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="font-display text-lg text-ink">{currentStaff.full_name}</p>
+          <p className="text-xs text-muted uppercase tracking-wide">{currentStaff.role} · {isClockedIn ? 'Clocked in' : 'Clocked out'}</p>
+        </div>
+        <button onClick={clearStaff} className="text-xs text-muted underline hover:text-ink">Not you?</button>
+      </div>
+      <button
+        onClick={() => punch(isClockedIn ? 'out' : 'in')}
+        disabled={busy}
+        className={`w-full px-4 py-3.5 text-sm font-bold uppercase tracking-wide text-white disabled:opacity-50 ${isClockedIn ? 'bg-oxblood hover:bg-oxblood/90' : 'bg-brass hover:bg-brass/90'}`}
+      >
+        {isClockedIn ? 'Clock Out' : 'Clock In'}
+      </button>
+      <div className="mt-6">
+        <p className="p-label mb-2">Today</p>
+        {events.length === 0 ? (
+          <p className="text-sm text-muted">No punches yet today.</p>
+        ) : (
+          <ul className="space-y-1">
+            {events.map(ev => (
+              <li key={ev.id} className="flex justify-between text-sm font-mono">
+                <span className={ev.event_type === 'in' ? 'text-brass' : 'text-oxblood'}>{ev.event_type === 'in' ? 'IN' : 'OUT'}</span>
+                <span className="text-muted">{new Date(ev.occurred_at).toLocaleTimeString()}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+function ManageTab() {
+  const [staff, setStaff] = useState<StaffRow[]>([]);
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('cashier');
+  const [rate, setRate] = useState('0');
+  const [message, setMessage] = useState('');
+  const [pinDrafts, setPinDrafts] = useState<Record<string, string>>({});
+
+  const load = async () => {
+    const { data } = await supabase.from('staff').select('id, full_name, role, commission_rate, hourly_rate, active, created_at').order('created_at', { ascending: false });
+    setStaff((data as StaffRow[]) || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const addStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    const { error } = await supabase.from('staff').insert([{ full_name: name.trim(), role, commission_rate: parseFloat(rate) || 0 }]);
+    if (error) { setMessage('Failed to add staff. Make sure migration_010 has been run.'); return; }
+    setName(''); setRate('0'); setMessage('Added.');
+    load();
+  };
+
+  const toggleActive = async (row: StaffRow) => {
+    await supabase.from('staff').update({ active: !row.active }).eq('id', row.id);
+    load();
+  };
+
+  const setPin = async (row: StaffRow) => {
+    const pin = pinDrafts[row.id];
+    if (!pin || pin.length < 4) return;
+    const { error } = await supabase.rpc('set_staff_pin', { p_staff_id: row.id, p_pin: pin });
+    setMessage(error ? `Failed to set PIN for ${row.full_name}: ${error.message}` : `PIN set for ${row.full_name}.`);
+    setPinDrafts(prev => ({ ...prev, [row.id]: '' }));
+  };
+
+  return (
+    <div>
+      <form onSubmit={addStaff} className="flex flex-wrap items-end gap-3 mb-6 p-4 border border-thread bg-paper">
+        <div>
+          <label className="p-label block mb-1">Name</label>
+          <input value={name} onChange={e => setName(e.target.value)} className="px-3 py-2 bg-canvas border border-thread outline-none focus:border-oxblood" />
+        </div>
+        <div>
+          <label className="p-label block mb-1">Role</label>
+          <select value={role} onChange={e => setRole(e.target.value)} className="px-3 py-2 bg-canvas border border-thread outline-none focus:border-oxblood">
+            <option value="admin">Admin</option>
+            <option value="manager">Manager</option>
+            <option value="cashier">Cashier</option>
+            <option value="inventory_clerk">Inventory Clerk</option>
+            <option value="salesman">Salesman</option>
+          </select>
+        </div>
+        <div>
+          <label className="p-label block mb-1">Commission %</label>
+          <input value={rate} onChange={e => setRate(e.target.value)} type="number" step="0.1" className="w-24 px-3 py-2 bg-canvas border border-thread outline-none focus:border-oxblood" />
+        </div>
+        <button type="submit" className="px-4 py-2.5 bg-oxblood text-white text-sm font-bold uppercase tracking-wide hover:bg-oxblood/90">Add Staff</button>
+      </form>
+      {message && <p className="text-sm text-muted mb-4">{message}</p>}
+      <div className="space-y-2">
+        {staff.map(row => (
+          <div key={row.id} className={`flex flex-wrap items-center gap-3 p-3 border border-thread ${row.active ? 'bg-canvas' : 'bg-paper opacity-60'}`}>
+            <div className="min-w-[10rem]">
+              <p className="font-bold text-ink text-sm">{row.full_name}</p>
+              <p className="text-xs text-muted uppercase">{row.role} · {row.commission_rate}% commission</p>
+            </div>
+            <input
+              type="password" inputMode="numeric" maxLength={8} placeholder="New PIN"
+              value={pinDrafts[row.id] || ''}
+              onChange={e => setPinDrafts(prev => ({ ...prev, [row.id]: e.target.value.replace(/\D/g, '') }))}
+              className="w-28 px-3 py-2 bg-paper border border-thread outline-none focus:border-oxblood text-sm font-mono"
+            />
+            <button onClick={() => setPin(row)} className="px-3 py-2 text-xs font-bold uppercase border border-brass/30 text-brass hover:bg-brass hover:text-white transition-colors">Set PIN</button>
+            <button onClick={() => toggleActive(row)} className="px-3 py-2 text-xs font-bold uppercase border border-thread hover:bg-paper transition-colors ml-auto">
+              {row.active ? 'Deactivate' : 'Reactivate'}
+            </button>
+          </div>
+        ))}
+        {staff.length === 0 && <p className="text-sm text-muted">No staff yet — add one above.</p>}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+function CommissionTab() {
+  const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); });
+  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [rows, setRows] = useState<{ staff_id: string; full_name: string; commission_rate: number; sale_count: number; total: number }[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const run = async () => {
+    setLoading(true);
+    const { data: sales } = await supabase
+      .from('sales')
+      .select('staff_id, amount_paid, created_at, status')
+      .not('staff_id', 'is', null)
+      .neq('status', 'refunded')
+      .gte('created_at', `${from}T00:00:00`)
+      .lte('created_at', `${to}T23:59:59`);
+    const { data: staffRows } = await supabase.from('staff').select('id, full_name, commission_rate');
+    const byStaff: Record<string, { count: number; total: number }> = {};
+    (sales || []).forEach((s: any) => {
+      const key = s.staff_id;
+      if (!byStaff[key]) byStaff[key] = { count: 0, total: 0 };
+      byStaff[key].count += 1;
+      byStaff[key].total += Number(s.amount_paid) || 0;
+    });
+    const result = (staffRows || [])
+      .filter((s: any) => byStaff[s.id])
+      .map((s: any) => ({
+        staff_id: s.id,
+        full_name: s.full_name,
+        commission_rate: s.commission_rate,
+        sale_count: byStaff[s.id].count,
+        total: byStaff[s.id].total,
+      }))
+      .sort((a: any, b: any) => b.total - a.total);
+    setRows(result);
+    setLoading(false);
+  };
+  useEffect(() => { run(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-end gap-3 mb-6">
+        <div>
+          <label className="p-label block mb-1">From</label>
+          <input type="date" value={from} onChange={e => setFrom(e.target.value)} className="px-3 py-2 bg-paper border border-thread outline-none focus:border-oxblood" />
+        </div>
+        <div>
+          <label className="p-label block mb-1">To</label>
+          <input type="date" value={to} onChange={e => setTo(e.target.value)} className="px-3 py-2 bg-paper border border-thread outline-none focus:border-oxblood" />
+        </div>
+        <button onClick={run} className="px-4 py-2.5 bg-oxblood text-white text-sm font-bold uppercase tracking-wide hover:bg-oxblood/90">
+          {loading ? 'Loading…' : 'Run'}
+        </button>
+      </div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wide text-muted border-b border-thread">
+            <th className="py-2">Staff</th>
+            <th className="py-2 text-right">Sales</th>
+            <th className="py-2 text-right">Revenue</th>
+            <th className="py-2 text-right">Rate</th>
+            <th className="py-2 text-right">Commission</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.staff_id} className="border-b border-thread/50">
+              <td className="py-2 font-bold text-ink">{r.full_name}</td>
+              <td className="py-2 text-right font-mono">{r.sale_count}</td>
+              <td className="py-2 text-right font-mono">৳{r.total.toFixed(2)}</td>
+              <td className="py-2 text-right font-mono">{r.commission_rate}%</td>
+              <td className="py-2 text-right font-mono font-bold text-brass">৳{(r.total * r.commission_rate / 100).toFixed(2)}</td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr><td colSpan={5} className="py-6 text-center text-muted">No attributed sales in this range.</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+function AuditTab() {
+  const [rows, setRows] = useState<AuditRow[]>([]);
+  const [actionFilter, setActionFilter] = useState('');
+
+  const load = async () => {
+    let query = supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(200);
+    if (actionFilter) query = query.eq('action', actionFilter);
+    const { data } = await query;
+    setRows((data as AuditRow[]) || []);
+  };
+  useEffect(() => { load(); }, [actionFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div>
+      <div className="mb-4">
+        <select value={actionFilter} onChange={e => setActionFilter(e.target.value)} className="px-3 py-2 bg-paper border border-thread outline-none focus:border-oxblood text-sm">
+          <option value="">All actions</option>
+          <option value="edit">Edits</option>
+          <option value="void">Voids</option>
+          <option value="refund">Refunds</option>
+          <option value="discount_override">Discount overrides</option>
+        </select>
+      </div>
+      <div className="space-y-2 max-h-[32rem] overflow-y-auto">
+        {rows.map(r => (
+          <div key={r.id} className="p-3 border border-thread bg-canvas text-sm">
+            <div className="flex justify-between items-baseline">
+              <span className="font-bold uppercase text-xs tracking-wide text-oxblood">{r.action}</span>
+              <span className="text-xs text-muted font-mono">{new Date(r.created_at).toLocaleString()}</span>
+            </div>
+            <p className="text-ink mt-1">
+              {r.entity_type}{r.entity_id ? ` #${r.entity_id}` : ''}
+              {r.actor_staff_name ? ` — by ${r.actor_staff_name}` : r.actor_account_role ? ` — ${r.actor_account_role} account` : ''}
+              {r.approved_by_staff_name ? `, approved by ${r.approved_by_staff_name}` : ''}
+            </p>
+            {r.reason && <p className="text-xs text-muted mt-0.5">Reason: {r.reason}</p>}
+          </div>
+        ))}
+        {rows.length === 0 && <p className="text-sm text-muted">No audit entries yet.</p>}
+      </div>
+    </div>
+  );
+}

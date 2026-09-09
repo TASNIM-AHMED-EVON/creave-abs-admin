@@ -2,6 +2,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import JsBarcode from 'jsbarcode';
+import { hasPermission, canReachTab, type AccountRole } from '@/lib/permissions';
+import { useStaffSession } from '@/lib/staffSession';
+import { logAudit } from '@/lib/audit';
+import StaffPanel from '@/components/StaffPanel';
 
 // ---------------------------------------------------------------------------
 // Icons — a single consistent line-icon set (1.5px stroke), drawn locally so
@@ -229,6 +233,15 @@ const IconWallet = (p: React.SVGProps<SVGSVGElement>) => (
 // real EAN-13), jsbarcode throws — we catch that and fall back to CODE128
 // so the code still renders as *something* scannable rather than blank.
 // ---------------------------------------------------------------------------
+// Any account without app_metadata.role set is still treated as 'admin',
+// preserving the original single-admin login behavior. Anything set to one
+// of the five known values is passed through; anything else (typo, stale
+// value) also falls back to 'admin' rather than silently locking someone out.
+const KNOWN_ACCOUNT_ROLES: AccountRole[] = ['admin', 'manager', 'cashier', 'inventory_clerk', 'salesman'];
+function deriveAccountRole(rawRole: unknown): AccountRole {
+  return KNOWN_ACCOUNT_ROLES.includes(rawRole as AccountRole) ? (rawRole as AccountRole) : 'admin';
+}
+
 function detectBarcodeFormat(value: string): 'EAN13' | 'UPC' | 'CODE128' {
   const digitsOnly = /^\d+$/.test(value);
   if (digitsOnly && value.length === 13) return 'EAN13';
@@ -339,6 +352,14 @@ const NAV_GROUPS = [
       { tab: 'settings-barcode', label: 'Barcode Settings' },
       { tab: 'settings-tax', label: 'Tax Rates' },
       { tab: 'settings-currency', label: 'Currency & Exchange Rates' },
+    ],
+  },
+  {
+    kind: 'group', id: 'staff', label: 'Staff', icon: IconBadge,
+    children: [
+      { tab: 'staff-clock', label: 'Clock In / Out' },
+      { tab: 'staff-manage', label: 'Manage Staff' },
+      { tab: 'audit-log', label: 'Audit Log' },
     ],
   },
   { kind: 'single', id: 'reports', tab: 'reports', label: 'Reports', icon: IconChart },
@@ -468,7 +489,8 @@ function SurveyChart({ canvasId, records, isDark }: {
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
-  const [userRole, setUserRole] = useState<'admin' | 'salesman' | null>(null);
+  const [userRole, setUserRole] = useState<AccountRole | null>(null);
+  const { currentStaff, requestManagerApproval } = useStaffSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -1335,7 +1357,7 @@ export default function AdminDashboard() {
         // can never call supabase.auth.updateUser() to grant themselves
         // 'admin'. Any account without a role set is treated as admin, so
         // the existing single-admin login keeps working unchanged.
-        const role = session.user.app_metadata?.role === 'salesman' ? 'salesman' : 'admin';
+        const role = deriveAccountRole(session.user.app_metadata?.role);
         setUserRole(role);
         loadAuthenticatedData();
       }
@@ -1345,7 +1367,7 @@ export default function AdminDashboard() {
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         setIsAuthenticated(true);
-        const role = session.user.app_metadata?.role === 'salesman' ? 'salesman' : 'admin';
+        const role = deriveAccountRole(session.user.app_metadata?.role);
         setUserRole(role);
         loadAuthenticatedData();
       }
@@ -1445,6 +1467,19 @@ export default function AdminDashboard() {
     const activeTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
     const taxTotal = activeTaxRate ? Math.round(subtotalAfterDiscount * (Number(activeTaxRate.rate_percent) / 100)) : 0;
 
+    // Any manual discount on a role without apply_discount needs a
+    // manager/admin PIN before the sale is recorded. (Membership discounts
+    // and tax are unaffected — this only covers the free-form Discount
+    // field in the cart.)
+    let discountApprover: { id: string; full_name: string } | null = null;
+    if (discount > 0 && !hasPermission(userRole, 'apply_discount')) {
+      discountApprover = await requestManagerApproval(`Applying a ৳${discount} discount`);
+      if (!discountApprover) {
+        setPosMessage({ type: 'error', text: 'Discount cancelled — manager approval was required.' });
+        return;
+      }
+    }
+
     // Flatten the cart to one entry per physical unit (matches how each row
     // in `sales` represents a single sold piece), then spread the discount
     // and tax proportionally across those units so amount_paid always
@@ -1479,6 +1514,7 @@ export default function AdminDashboard() {
         discount_amount: rowDiscount,
         tax_amount: rowTax,
         status: 'completed',
+        staff_id: currentStaff?.id ?? null,
       };
     });
 
@@ -1539,6 +1575,19 @@ export default function AdminDashboard() {
           status: newQuantity === 0 ? 'sold' : 'available'
         })
         .eq('id', item.id);
+    }
+
+    if (discount > 0 && discountApprover) {
+      logAudit({
+        action: 'discount_override',
+        entityType: 'sale',
+        entityId: anchorSaleId,
+        after: { discount, subtotal },
+        reason: `Discount of ৳${discount} on a ৳${subtotal} sale`,
+        actor: currentStaff,
+        actorAccountRole: userRole,
+        approvedBy: discountApprover,
+      });
     }
 
     setPosMessage({ type: 'success', text: 'Sale recorded! Printing receipt...' });
@@ -1792,7 +1841,7 @@ export default function AdminDashboard() {
   // Replaces the photo on an existing product directly from the List
   // Products row — no need to open a separate edit form just for this.
   const handleReplacePhoto = async (item: any, file: File) => {
-    if (userRole === 'salesman') return;
+    if (!hasPermission(userRole, 'edit_inventory')) return;
     setPhotoUploadingId(item.id);
     const imageUrl = await uploadProductImage(file, item.barcode);
     if (!imageUrl) {
@@ -1855,7 +1904,7 @@ export default function AdminDashboard() {
   // Barcode is left out of the editable fields since it's the lookup key
   // used at the POS counter and in refund search.
   const startEditInventory = (item: any) => {
-    if (userRole === 'salesman') return;
+    if (!hasPermission(userRole, 'edit_inventory')) return;
     setEditingId(item.id);
     setEditDraft({
       name: item.name,
@@ -1875,39 +1924,56 @@ export default function AdminDashboard() {
   };
 
   const saveEditInventory = async (id: any) => {
-    if (userRole === 'salesman') return;
+    if (!hasPermission(userRole, 'edit_inventory')) return;
+    const before = recentInventory.find((it: any) => it.id === id) || null;
     const qty = parseInt(editDraft.quantity);
     const price = parseFloat(editDraft.price);
-    const { error } = await supabase
-      .from('dresses')
-      .update({
-        name: editDraft.name,
-        category: editDraft.category,
-        brand: editDraft.brand || null,
-        unit: editDraft.unit || 'Piece',
-        size: editDraft.size.trim() || null,
-        color: editDraft.color.trim() || null,
-        price,
-        quantity: qty,
-        reorder_point: editDraft.reorder_point.trim() ? parseInt(editDraft.reorder_point) : null,
-        status: qty > 0 ? 'available' : 'sold',
-      })
-      .eq('id', id);
+    const afterPayload = {
+      name: editDraft.name,
+      category: editDraft.category,
+      brand: editDraft.brand || null,
+      unit: editDraft.unit || 'Piece',
+      size: editDraft.size.trim() || null,
+      color: editDraft.color.trim() || null,
+      price,
+      quantity: qty,
+      reorder_point: editDraft.reorder_point.trim() ? parseInt(editDraft.reorder_point) : null,
+      status: qty > 0 ? 'available' : 'sold',
+    };
+    const { error } = await supabase.from('dresses').update(afterPayload).eq('id', id);
 
     if (error) {
       alert('Failed to save changes. Please try again.');
     } else {
       setEditingId(null);
       fetchRecentInventory();
+      logAudit({
+        action: 'edit',
+        entityType: 'dress',
+        entityId: id,
+        before,
+        after: afterPayload,
+        actor: currentStaff,
+        actorAccountRole: userRole,
+      });
     }
   };
 
   // Archiving (rather than deleting) protects sales history: the sales
   // table references dress_id with ON DELETE CASCADE, so a hard delete
   // would silently wipe that item's transaction record from your reports.
+  // Anyone who can edit inventory can void directly; anyone else can still
+  // trigger it, but needs a manager/admin PIN to actually go through — same
+  // "approve or cancel" pattern as a refund below.
   const archiveInventoryItem = async (item: any) => {
-    if (userRole === 'salesman') return;
-    if (!window.confirm(`Archive "${item.name}"? It will be hidden from the POS and active stock list, but its sales history stays intact. You can restore it anytime.`)) return;
+    if (!window.confirm(`Archive (void) "${item.name}"? It will be hidden from the POS and active stock list, but its sales history stays intact. You can restore it anytime.`)) return;
+
+    let approver: { id: string; full_name: string } | null = null;
+    if (!hasPermission(userRole, 'void_action')) {
+      approver = await requestManagerApproval(`Voiding "${item.name}"`);
+      if (!approver) return; // cancelled or PIN rejected
+    }
+
     const { error } = await supabase
       .from('dresses')
       .update({ status: 'archived', quantity: 0 })
@@ -1916,11 +1982,21 @@ export default function AdminDashboard() {
       alert('Failed to archive item.');
     } else {
       fetchRecentInventory();
+      logAudit({
+        action: 'void',
+        entityType: 'dress',
+        entityId: item.id,
+        before: { status: item.status, quantity: item.quantity },
+        after: { status: 'archived', quantity: 0 },
+        actor: currentStaff,
+        actorAccountRole: userRole,
+        approvedBy: approver,
+      });
     }
   };
 
   const restoreInventoryItem = async (item: any) => {
-    if (userRole === 'salesman') return;
+    if (!hasPermission(userRole, 'edit_inventory')) return;
     const { error } = await supabase
       .from('dresses')
       .update({ status: 'available' })
@@ -1939,6 +2015,7 @@ export default function AdminDashboard() {
       alert('Enter a valid price.');
       return;
     }
+    const before = priceSearchResults.find((it: any) => it.id === id) || null;
     const { error } = await supabase.from('dresses').update({ price: newPrice }).eq('id', id);
     if (error) {
       alert('Failed to update price.');
@@ -1946,6 +2023,15 @@ export default function AdminDashboard() {
       setPriceDraftId(null);
       setPriceDraftValue('');
       fetchRecentInventory();
+      logAudit({
+        action: 'edit',
+        entityType: 'dress',
+        entityId: id,
+        before: before ? { price: before.price } : null,
+        after: { price: newPrice },
+        actor: currentStaff,
+        actorAccountRole: userRole,
+      });
     }
   };
 
@@ -2257,8 +2343,28 @@ export default function AdminDashboard() {
   };
 
   const updatePurchaseOrderStatus = async (id: any, status: string) => {
+    let approver: { id: string; full_name: string } | null = null;
+    if (status === 'cancelled' && !hasPermission(userRole, 'void_action')) {
+      approver = await requestManagerApproval('Cancelling this purchase order');
+      if (!approver) return;
+    }
+    const before = purchaseOrders.find((po: any) => po.id === id) || null;
     const { error } = await supabase.from('purchase_orders').update({ status }).eq('id', id);
-    if (!error) fetchPurchaseOrders();
+    if (!error) {
+      fetchPurchaseOrders();
+      if (status === 'cancelled') {
+        logAudit({
+          action: 'void',
+          entityType: 'purchase_order',
+          entityId: id,
+          before: before ? { status: before.status } : null,
+          after: { status },
+          actor: currentStaff,
+          actorAccountRole: userRole,
+          approvedBy: approver,
+        });
+      }
+    }
   };
 
   // --- ADD PURCHASE (goods received — the action that moves stock) ---
@@ -2358,6 +2464,17 @@ export default function AdminDashboard() {
     const newQuantity = returnMatch.quantity - qty;
     await supabase.from('dresses').update({ quantity: newQuantity, status: newQuantity === 0 ? 'sold' : 'available' }).eq('id', returnMatch.id);
 
+    logAudit({
+      action: 'void',
+      entityType: 'dress',
+      entityId: returnMatch.id,
+      before: { quantity: returnMatch.quantity },
+      after: { quantity: newQuantity, returned_to_supplier: qty },
+      reason: returnReason || undefined,
+      actor: currentStaff,
+      actorAccountRole: userRole,
+    });
+
     setReturnMessage({ type: 'success', text: 'Return logged and stock adjusted.' });
     setReturnBarcode(''); setReturnMatch(null); setReturnQuantity('1'); setReturnReason(''); setReturnSupplierName('');
     fetchRecentInventory();
@@ -2389,8 +2506,28 @@ export default function AdminDashboard() {
   };
 
   const updateSalesOrderStatus = async (id: any, status: string) => {
+    let approver: { id: string; full_name: string } | null = null;
+    if (status === 'cancelled' && !hasPermission(userRole, 'void_action')) {
+      approver = await requestManagerApproval('Cancelling this sales order');
+      if (!approver) return;
+    }
+    const before = salesOrders.find((so: any) => so.id === id) || null;
     const { error } = await supabase.from('sales_orders').update({ status }).eq('id', id);
-    if (!error) fetchSalesOrders();
+    if (!error) {
+      fetchSalesOrders();
+      if (status === 'cancelled') {
+        logAudit({
+          action: 'void',
+          entityType: 'sales_order',
+          entityId: id,
+          before: before ? { status: before.status } : null,
+          after: { status },
+          actor: currentStaff,
+          actorAccountRole: userRole,
+          approvedBy: approver,
+        });
+      }
+    }
   };
 
   // --- ADD SALE (search-based single-item quick sale — no barcode scanner needed) ---
@@ -2716,6 +2853,16 @@ export default function AdminDashboard() {
       ? `Refund this purchase of ${sale.dresses.name} as store credit instead of cash?`
       : `Are you sure you want to refund this purchase of ${sale.dresses.name}?`;
     if (!window.confirm(confirmText)) return;
+
+    let refundApprover: { id: string; full_name: string } | null = null;
+    if (!hasPermission(userRole, 'process_refund')) {
+      refundApprover = await requestManagerApproval(`Refunding ${sale.dresses.name} (৳${sale.amount_paid})`);
+      if (!refundApprover) {
+        setRefundMessage({ type: 'error', text: 'Refund cancelled — manager approval was required.' });
+        return;
+      }
+    }
+
     const { error: updateSaleError } = await supabase.from('sales').update({ status: 'refunded' }).eq('id', sale.id);
     if (updateSaleError) {
       setRefundMessage({ type: 'error', text: 'Failed to update sale status.' });
@@ -2735,6 +2882,17 @@ export default function AdminDashboard() {
     } else {
       setRefundMessage({ type: 'success', text: 'Refund successful! Stock levels updated.' });
     }
+
+    logAudit({
+      action: 'refund',
+      entityType: 'sale',
+      entityId: sale.id,
+      before: { status: sale.status, amount_paid: sale.amount_paid },
+      after: { status: 'refunded', as_store_credit: asStoreCredit },
+      actor: currentStaff,
+      actorAccountRole: userRole,
+      approvedBy: refundApprover,
+    });
 
     setRefundBarcode('');
     setRefundItemSales([]);
@@ -2891,30 +3049,25 @@ export default function AdminDashboard() {
     if (groupId) setExpandedGroup(groupId);
   };
 
-  // --- ROLE-BASED ACCESS (salesman accounts) ---
-  // Salesman accounts get: all of Sell, Products -> List Products only,
-  // Daily Cost, all of Membership, Reports, and Daily Sales Survey.
-  // Everything else (Overview, Purchases, Settings, and every other
-  // Products sub-page) is hidden from nav AND blocked even if reached
-  // directly, so this is the single place that definition lives.
-  const SALESMAN_ALLOWED_IDS = new Set(['overview', 'sell', 'daily-cost', 'membership', 'reports', 'survey']);
-  const visibleNavGroups = userRole === 'salesman'
-    ? NAV_GROUPS
-        .filter((item: any) => SALESMAN_ALLOWED_IDS.has(item.id) || item.id === 'products')
-        .map((item: any) => item.id === 'products'
-          ? { ...item, children: item.children.filter((c: any) => c.tab === 'products-list') }
-          : item)
-    : NAV_GROUPS;
+  // --- ROLE-BASED ACCESS ---
+  // Generalized from the original admin/salesman-only gate to every account
+  // role in src/lib/permissions.ts (admin, manager, cashier, inventory_clerk,
+  // salesman). Products still only exposes "List Products" to a role that
+  // lacks edit_inventory, matching the original salesman behavior exactly;
+  // everything else is filtered per-tab by canReachTab().
+  const visibleNavGroups = NAV_GROUPS
+    .filter((item: any) => item.kind === 'single' ? canReachTab(userRole, item.tab) : item.children.some((c: any) => canReachTab(userRole, c.tab)))
+    .map((item: any) => item.kind === 'single' ? item : { ...item, children: item.children.filter((c: any) => canReachTab(userRole, c.tab)) });
   const allowedTabsForRole = new Set<string>(
     visibleNavGroups.flatMap((item: any) => item.kind === 'single' ? [item.tab] : item.children.map((c: any) => c.tab))
   );
   const visibleHeaderActions = HEADER_ACTIONS.filter(a => allowedTabsForRole.has(a.tab));
 
-  // If a salesman ever ends up on a tab outside that set (default landing
-  // tab, a stale link, a button that isn't hidden, browser back/forward),
-  // bounce them to POS rather than showing restricted content.
+  // If a session ever ends up on a tab outside its allowed set (default
+  // landing tab, a stale link, a button that isn't hidden, browser
+  // back/forward), bounce it to POS rather than showing restricted content.
   useEffect(() => {
-    if (userRole === 'salesman' && !allowedTabsForRole.has(activeTab)) {
+    if (userRole && !allowedTabsForRole.has(activeTab)) {
       setActiveTab('pos');
       setExpandedGroup('sell');
     }
@@ -4079,7 +4232,7 @@ export default function AdminDashboard() {
                       </h3>
                       <div className="flex items-center gap-4 shrink-0">
                         <span className="text-muted text-xs font-mono font-bold hidden sm:inline">{recentInventory.length} ITEMS</span>
-                        {userRole !== 'salesman' && (
+                        {hasPermission(userRole, 'edit_inventory') && (
                           <button onClick={() => goToTab('products-add', 'products')} className="p-btn p-btn-primary">
                             <IconPlus className="w-3.5 h-3.5" /> Add Product
                           </button>
@@ -4125,7 +4278,7 @@ export default function AdminDashboard() {
 
                           return (
                             <div key={group.key} className={`p-card overflow-hidden flex flex-col ${anyEditingInGroup ? 'col-span-full' : ''}`}>
-                              {userRole === 'salesman' ? (
+                              {!hasPermission(userRole, 'edit_inventory') ? (
                                 <div className="relative w-full aspect-square bg-paper-dim overflow-hidden">
                                   {group.image_url ? (
                                     // eslint-disable-next-line @next/next/no-img-element
@@ -4243,7 +4396,7 @@ export default function AdminDashboard() {
                                             </span>
                                           </div>
                                           <div className="flex gap-1">
-                                            {userRole === 'salesman' ? null : isArchived ? (
+                                            {!hasPermission(userRole, 'edit_inventory') ? null : isArchived ? (
                                               <button onClick={() => restoreInventoryItem(item)} title="Restore item" className="w-6 h-6 flex items-center justify-center border border-thread text-moss hover:border-moss transition-colors">
                                                 <IconUndo className="w-3 h-3" />
                                               </button>
@@ -6855,6 +7008,14 @@ export default function AdminDashboard() {
                     <span className="font-bold text-ink"> never</span> as <code className="font-mono bg-paper-dim px-1">NEXT_PUBLIC_</code>, since that would ship the key to every visitor&rsquo;s browser.
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* TAB: STAFF (clock in/out, staff management, audit log) */}
+            {(activeTab === 'staff-clock' || activeTab === 'staff-manage' || activeTab === 'audit-log') && (
+              <div className="space-y-6 print:hidden">
+                <h3 className="text-xl font-display text-ink mb-2">Staff & Security</h3>
+                <StaffPanel accountRole={userRole} navTab={activeTab} />
               </div>
             )}
 
