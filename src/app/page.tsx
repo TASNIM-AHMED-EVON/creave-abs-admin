@@ -6,6 +6,9 @@ import { hasPermission, canReachTab, actingStaffRole, type AccountRole } from '@
 import { useStaffSession } from '@/lib/staffSession';
 import { logAudit } from '@/lib/audit';
 import StaffPanel from '@/components/StaffPanel';
+import PromotionsPanel, { evaluateBestPromotion } from '@/components/PromotionsPanel';
+import ExchangePanel from '@/components/ExchangePanel';
+import LayawayPanel from '@/components/LayawayPanel';
 
 // ---------------------------------------------------------------------------
 // Icons — a single consistent line-icon set (1.5px stroke), drawn locally so
@@ -307,6 +310,9 @@ const NAV_GROUPS = [
       { tab: 'sell-list-pos', label: 'List POS' },
       { tab: 'pos', label: 'POS' },
       { tab: 'refund', label: 'List Sell Return' },
+      { tab: 'exchange', label: 'Exchange' },
+      { tab: 'layaway', label: 'Layaway' },
+      { tab: 'promotions', label: 'Promotions' },
       { tab: 'gift-cards', label: 'Gift Cards' },
     ],
   },
@@ -508,6 +514,9 @@ export default function AdminDashboard() {
   const [posMessage, setPosMessage] = useState({ type: '', text: '' });
   const [discountAmount, setDiscountAmount] = useState('0');
   const [selectedTaxRateId, setSelectedTaxRateId] = useState<string>('');
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{ promotion: any; discountAmount: number } | null>(null);
+  const [promoMessage, setPromoMessage] = useState('');
 
   // POS — Currency (the sale is always recorded in the base currency
   // internally; this only controls what's displayed/printed and what a
@@ -1463,7 +1472,9 @@ export default function AdminDashboard() {
 
     const subtotal = cart.reduce((total, item) => total + item.price * item.cartQty, 0);
     const discount = Math.min(Math.max(parseFloat(discountAmount) || 0, 0), subtotal);
-    const subtotalAfterDiscount = subtotal - discount;
+    const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, subtotal - discount) : 0;
+    const combinedDiscount = discount + promoDiscount;
+    const subtotalAfterDiscount = subtotal - combinedDiscount;
     const activeTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
     const taxTotal = activeTaxRate ? Math.round(subtotalAfterDiscount * (Number(activeTaxRate.rate_percent) / 100)) : 0;
 
@@ -1492,6 +1503,7 @@ export default function AdminDashboard() {
     });
 
     let remainingDiscount = discount;
+    let remainingPromoDiscount = promoDiscount;
     let remainingTax = taxTotal;
 
     const dbPaymentMethod = splitPaymentMode ? 'split' : (paymentMethod === 'bank/card' ? 'cash' : paymentMethod);
@@ -1503,6 +1515,8 @@ export default function AdminDashboard() {
       const isLast = idx === units.length - 1;
       const rowDiscount = isLast ? remainingDiscount : (subtotal > 0 ? Math.round((item.price / subtotal) * discount) : 0);
       if (!isLast) remainingDiscount -= rowDiscount;
+      const rowPromoDiscount = isLast ? remainingPromoDiscount : (subtotal > 0 ? Math.round((item.price / subtotal) * promoDiscount) : 0);
+      if (!isLast) remainingPromoDiscount -= rowPromoDiscount;
       const rowTax = isLast ? remainingTax : (subtotal > 0 ? Math.round((item.price / subtotal) * taxTotal) : 0);
       if (!isLast) remainingTax -= rowTax;
 
@@ -1510,8 +1524,10 @@ export default function AdminDashboard() {
         dress_id: item.id,
         payment_method: dbPaymentMethod,
         transaction_id: dbTrxId,
-        amount_paid: item.price - rowDiscount + rowTax,
+        amount_paid: item.price - rowDiscount - rowPromoDiscount + rowTax,
         discount_amount: rowDiscount,
+        promo_discount_amount: rowPromoDiscount,
+        promotion_id: promoDiscount > 0 ? appliedPromo?.promotion.id ?? null : null,
         tax_amount: rowTax,
         status: 'completed',
         staff_id: currentStaff?.id ?? null,
@@ -1590,6 +1606,11 @@ export default function AdminDashboard() {
       });
     }
 
+    // Best-effort usage counter — never blocks the sale if it fails.
+    if (promoDiscount > 0 && appliedPromo) {
+      supabase.from('promotions').update({ times_used: appliedPromo.promotion.times_used + 1 }).eq('id', appliedPromo.promotion.id);
+    }
+
     setPosMessage({ type: 'success', text: 'Sale recorded! Printing receipt...' });
 
     setTimeout(() => {
@@ -1598,6 +1619,9 @@ export default function AdminDashboard() {
       setTrxId('');
       setDiscountAmount('0');
       setSelectedTaxRateId('');
+      setPromoCode('');
+      setAppliedPromo(null);
+      setPromoMessage('');
       setCartPayments([]);
       setSplitPaymentDraft({ method: 'cash', amount: '', trxId: '', giftCardCode: '' });
       fetchRecentInventory();
@@ -1609,10 +1633,35 @@ export default function AdminDashboard() {
 
   const cartSubtotal = cart.reduce((total, item) => total + (item.price * item.cartQty), 0);
   const cartDiscountValue = Math.min(Math.max(parseFloat(discountAmount) || 0, 0), cartSubtotal);
-  const cartSubtotalAfterDiscount = cartSubtotal - cartDiscountValue;
+  const cartPromoValue = appliedPromo ? Math.min(appliedPromo.discountAmount, cartSubtotal - cartDiscountValue) : 0;
+  const cartSubtotalAfterDiscount = cartSubtotal - cartDiscountValue - cartPromoValue;
   const cartActiveTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
   const cartTaxValue = cartActiveTaxRate ? Math.round(cartSubtotalAfterDiscount * (Number(cartActiveTaxRate.rate_percent) / 100)) : 0;
   const cartTotal = cartSubtotalAfterDiscount + cartTaxValue;
+
+  // Auto-detect tiered/bulk/BOGO/seasonal promotions (no code needed) any
+  // time the cart changes. A typed coupon code is evaluated separately by
+  // applyPromoCode() below and takes priority while a code is entered.
+  useEffect(() => {
+    if (promoCode.trim()) return; // a typed code is handled by applyPromoCode instead
+    if (cart.length === 0) { setAppliedPromo(null); return; }
+    let cancelled = false;
+    evaluateBestPromotion(cart, '').then(result => { if (!cancelled) setAppliedPromo(result); });
+    return () => { cancelled = true; };
+  }, [cart, promoCode]);
+
+  const applyPromoCode = async () => {
+    setPromoMessage('');
+    if (!promoCode.trim()) { setAppliedPromo(null); return; }
+    const result = await evaluateBestPromotion(cart, promoCode);
+    if (!result) {
+      setPromoMessage('That code doesn\'t apply to this cart.');
+      setAppliedPromo(null);
+    } else {
+      setAppliedPromo(result);
+      setPromoMessage(`Applied: ${result.promotion.name}`);
+    }
+  };
 
   // Split-payment running total — lines must add up to cartTotal (in base
   // currency; a gift-card or cash line is always entered/stored in base
@@ -4027,6 +4076,26 @@ export default function AdminDashboard() {
                           <span className="text-sm text-muted font-medium">Subtotal</span>
                           <span className="font-mono font-semibold text-ink text-sm">৳{cartSubtotal}</span>
                         </div>
+                        {/* Promo code row */}
+                        <div className="px-4 py-3 flex justify-between items-center gap-2" style={{ borderBottom: '1px solid var(--card-border)' }}>
+                          <input
+                            type="text" placeholder="Promo code"
+                            className="p-input font-mono uppercase"
+                            style={{ width: 130, fontSize: 13 }}
+                            value={promoCode}
+                            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                          />
+                          <button onClick={applyPromoCode} className="text-xs font-bold uppercase text-oxblood hover:underline shrink-0">Apply</button>
+                        </div>
+                        {appliedPromo && (
+                          <div className="px-4 py-2 flex justify-between items-center gap-4 bg-brass/10" style={{ borderBottom: '1px solid var(--card-border)' }}>
+                            <span className="text-xs text-brass font-semibold">{appliedPromo.promotion.name}</span>
+                            <span className="font-mono font-bold text-brass text-sm">-৳{cartPromoValue}</span>
+                          </div>
+                        )}
+                        {promoMessage && !appliedPromo && (
+                          <div className="px-4 py-2 text-xs text-oxblood" style={{ borderBottom: '1px solid var(--card-border)' }}>{promoMessage}</div>
+                        )}
                         {/* Discount row */}
                         <div className="px-4 py-3 flex justify-between items-center gap-4" style={{ borderBottom: '1px solid var(--card-border)' }}>
                           <span className="text-sm text-muted font-medium shrink-0">Discount (৳)</span>
@@ -6088,6 +6157,30 @@ export default function AdminDashboard() {
                   </div>
                   <div className="pb-6" />
                 </div>
+              </div>
+            )}
+
+            {/* SELL: EXCHANGE */}
+            {activeTab === 'exchange' && (
+              <div className="print:hidden">
+                <h3 className="text-xl font-display text-ink mb-6">Exchange (Swap Size / Color)</h3>
+                <ExchangePanel />
+              </div>
+            )}
+
+            {/* SELL: LAYAWAY */}
+            {activeTab === 'layaway' && (
+              <div className="print:hidden">
+                <h3 className="text-xl font-display text-ink mb-6">Layaway / Installment Plans</h3>
+                <LayawayPanel />
+              </div>
+            )}
+
+            {/* SELL: PROMOTIONS */}
+            {activeTab === 'promotions' && (
+              <div className="print:hidden">
+                <h3 className="text-xl font-display text-ink mb-6">Promotions</h3>
+                <PromotionsPanel accountRole={userRole} />
               </div>
             )}
 

@@ -24,12 +24,13 @@ export type Permission =
   | 'process_refund'
   | 'void_action'
   | 'manage_staff'
-  | 'view_audit_log';
+  | 'view_audit_log'
+  | 'manage_promotions';
 
 // Permissions each role has WITHOUT needing a manager PIN override.
 // 'admin' implicitly has everything (see hasPermission) and isn't listed.
 const ROLE_PERMISSIONS: Record<Exclude<AccountRole, 'admin'>, Permission[]> = {
-  manager: ['view_purchases', 'edit_inventory', 'apply_discount', 'process_refund', 'void_action', 'manage_staff', 'view_audit_log'],
+  manager: ['view_purchases', 'edit_inventory', 'apply_discount', 'process_refund', 'void_action', 'manage_staff', 'view_audit_log', 'manage_promotions'],
   inventory_clerk: ['view_purchases', 'edit_inventory'],
   cashier: [],
   // Preserves the original behavior of the 'salesman' account exactly.
@@ -84,6 +85,12 @@ export const TAB_PERMISSIONS: Partial<Record<string, Permission>> = {
   'staff-manage': 'manage_staff',
   'audit-log': 'view_audit_log',
   // 'staff-clock' has no entry — every role can clock themselves in/out.
+  // 'promotions', 'exchange', and 'layaway' have no entry — every role can
+  // view active promotions, process an exchange, or run layaway (the
+  // sensitive parts inside each — creating a promo, a cash-back settlement,
+  // a forfeiture — are gated inline via requestManagerApproval and the
+  // 'manage_promotions' permission instead, checked directly by
+  // PromotionsPanel rather than through this tab-level map).
 };
 
 // Nav-group ids that are entirely hidden unless the role can reach at least
