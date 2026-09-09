@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import JsBarcode from 'jsbarcode';
-import { hasPermission, canReachTab, type AccountRole } from '@/lib/permissions';
+import { hasPermission, canReachTab, actingStaffRole, type AccountRole } from '@/lib/permissions';
 import { useStaffSession } from '@/lib/staffSession';
 import { logAudit } from '@/lib/audit';
 import StaffPanel from '@/components/StaffPanel';
@@ -1472,7 +1472,7 @@ export default function AdminDashboard() {
     // and tax are unaffected — this only covers the free-form Discount
     // field in the cart.)
     let discountApprover: { id: string; full_name: string } | null = null;
-    if (discount > 0 && !hasPermission(userRole, 'apply_discount')) {
+    if (discount > 0 && !hasPermission(actingStaffRole(currentStaff), 'apply_discount')) {
       discountApprover = await requestManagerApproval(`Applying a ৳${discount} discount`);
       if (!discountApprover) {
         setPosMessage({ type: 'error', text: 'Discount cancelled — manager approval was required.' });
@@ -1969,7 +1969,7 @@ export default function AdminDashboard() {
     if (!window.confirm(`Archive (void) "${item.name}"? It will be hidden from the POS and active stock list, but its sales history stays intact. You can restore it anytime.`)) return;
 
     let approver: { id: string; full_name: string } | null = null;
-    if (!hasPermission(userRole, 'void_action')) {
+    if (!hasPermission(actingStaffRole(currentStaff), 'void_action')) {
       approver = await requestManagerApproval(`Voiding "${item.name}"`);
       if (!approver) return; // cancelled or PIN rejected
     }
@@ -2344,7 +2344,7 @@ export default function AdminDashboard() {
 
   const updatePurchaseOrderStatus = async (id: any, status: string) => {
     let approver: { id: string; full_name: string } | null = null;
-    if (status === 'cancelled' && !hasPermission(userRole, 'void_action')) {
+    if (status === 'cancelled' && !hasPermission(actingStaffRole(currentStaff), 'void_action')) {
       approver = await requestManagerApproval('Cancelling this purchase order');
       if (!approver) return;
     }
@@ -2507,7 +2507,7 @@ export default function AdminDashboard() {
 
   const updateSalesOrderStatus = async (id: any, status: string) => {
     let approver: { id: string; full_name: string } | null = null;
-    if (status === 'cancelled' && !hasPermission(userRole, 'void_action')) {
+    if (status === 'cancelled' && !hasPermission(actingStaffRole(currentStaff), 'void_action')) {
       approver = await requestManagerApproval('Cancelling this sales order');
       if (!approver) return;
     }
@@ -2855,7 +2855,7 @@ export default function AdminDashboard() {
     if (!window.confirm(confirmText)) return;
 
     let refundApprover: { id: string; full_name: string } | null = null;
-    if (!hasPermission(userRole, 'process_refund')) {
+    if (!hasPermission(actingStaffRole(currentStaff), 'process_refund')) {
       refundApprover = await requestManagerApproval(`Refunding ${sale.dresses.name} (৳${sale.amount_paid})`);
       if (!refundApprover) {
         setRefundMessage({ type: 'error', text: 'Refund cancelled — manager approval was required.' });

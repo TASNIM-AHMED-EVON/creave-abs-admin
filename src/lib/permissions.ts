@@ -36,10 +36,27 @@ const ROLE_PERMISSIONS: Record<Exclude<AccountRole, 'admin'>, Permission[]> = {
   salesman: [],
 };
 
+// IMPORTANT: only an explicit 'admin' auto-grants everything. A missing/null
+// role must NOT silently behave like admin — that would defeat every PIN
+// check below whenever nobody has identified themselves yet.
 export function hasPermission(role: AccountRole | null | undefined, permission: Permission): boolean {
-  if (!role || role === 'admin') return true;
+  if (role === 'admin') return true;
+  if (!role) return false;
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 }
+
+// Who is actually performing a sensitive action (discount/refund/void) —
+// the individually PIN-identified staff member if one is clocked in,
+// otherwise nobody (never the shared login account). This is what makes
+// the PIN system meaningful on a single shared login: if Rina hasn't
+// clocked in, the system does NOT assume "whoever is logged into the
+// browser" (usually the shop's one admin account) is Rina — it requires
+// a PIN before any of these three actions proceed.
+export function actingStaffRole(currentStaff: { role: string } | null | undefined): AccountRole | null {
+  if (!currentStaff) return null;
+  return KNOWN_ROLES.includes(currentStaff.role as AccountRole) ? (currentStaff.role as AccountRole) : null;
+}
+const KNOWN_ROLES: AccountRole[] = ['admin', 'manager', 'cashier', 'inventory_clerk', 'salesman'];
 
 // tab id -> permission required to reach it. A tab with no entry here is
 // open to every signed-in role (POS, sell tabs, membership, reports, etc.

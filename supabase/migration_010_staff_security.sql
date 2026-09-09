@@ -7,7 +7,9 @@
 -- Safe to re-run: every statement is guarded with IF NOT EXISTS / OR REPLACE.
 -- ============================================================================
 
-create extension if not exists pgcrypto;
+-- Supabase installs pgcrypto into its `extensions` schema (not `public`),
+-- so every function below sets search_path to include both.
+create extension if not exists pgcrypto with schema extensions;
 
 -- ---------------------------------------------------------------------------
 -- 1. Granular roles beyond admin/salesman
@@ -83,7 +85,7 @@ create or replace function set_staff_pin(p_staff_id uuid, p_pin text)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
   if coalesce(auth.jwt() -> 'app_metadata' ->> 'role', 'admin') <> 'admin' then
@@ -104,7 +106,7 @@ create or replace function verify_manager_pin(p_pin text)
 returns table (id uuid, full_name text, role text)
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select s.id, s.full_name, s.role
   from staff s
@@ -121,7 +123,7 @@ create or replace function verify_staff_pin(p_pin text)
 returns table (id uuid, full_name text, role text)
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select s.id, s.full_name, s.role
   from staff s
