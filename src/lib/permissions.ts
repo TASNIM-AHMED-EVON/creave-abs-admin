@@ -25,12 +25,13 @@ export type Permission =
   | 'void_action'
   | 'manage_staff'
   | 'view_audit_log'
-  | 'manage_promotions';
+  | 'manage_promotions'
+  | 'manage_customers';
 
 // Permissions each role has WITHOUT needing a manager PIN override.
 // 'admin' implicitly has everything (see hasPermission) and isn't listed.
 const ROLE_PERMISSIONS: Record<Exclude<AccountRole, 'admin'>, Permission[]> = {
-  manager: ['view_purchases', 'edit_inventory', 'apply_discount', 'process_refund', 'void_action', 'manage_staff', 'view_audit_log', 'manage_promotions'],
+  manager: ['view_purchases', 'edit_inventory', 'apply_discount', 'process_refund', 'void_action', 'manage_staff', 'view_audit_log', 'manage_promotions', 'manage_customers'],
   inventory_clerk: ['view_purchases', 'edit_inventory'],
   cashier: [],
   // Preserves the original behavior of the 'salesman' account exactly.
@@ -68,6 +69,7 @@ export const TAB_PERMISSIONS: Partial<Record<string, Permission>> = {
   'products-price': 'edit_inventory',
   'products-reorder': 'edit_inventory',
   'products-locations': 'edit_inventory',
+  'products-writeoffs': 'edit_inventory',
   'products-units': 'edit_inventory',
   'products-categories': 'edit_inventory',
   'products-brands': 'edit_inventory',

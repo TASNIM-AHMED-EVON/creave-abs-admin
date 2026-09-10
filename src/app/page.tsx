@@ -9,6 +9,9 @@ import StaffPanel from '@/components/StaffPanel';
 import PromotionsPanel, { evaluateBestPromotion } from '@/components/PromotionsPanel';
 import ExchangePanel from '@/components/ExchangePanel';
 import LayawayPanel from '@/components/LayawayPanel';
+import CustomersPanel from '@/components/CustomersPanel';
+import WriteOffsPanel from '@/components/WriteOffsPanel';
+import { pointsEarnedFor, LOYALTY_REDEEM_VALUE } from '@/lib/loyalty';
 
 // ---------------------------------------------------------------------------
 // Icons — a single consistent line-icon set (1.5px stroke), drawn locally so
@@ -325,6 +328,7 @@ const NAV_GROUPS = [
       { tab: 'products-price', label: 'Update Price' },
       { tab: 'products-reorder', label: 'Reorder Suggestions' },
       { tab: 'products-locations', label: 'Locations & Transfers' },
+      { tab: 'products-writeoffs', label: 'Write-Offs' },
       { tab: 'products-units', label: 'Units' },
       { tab: 'products-categories', label: 'Categories' },
       { tab: 'products-brands', label: 'Brands' },
@@ -342,6 +346,12 @@ const NAV_GROUPS = [
     ],
   },
   { kind: 'single', id: 'daily-cost', tab: 'daily-cost', label: 'Daily Cost', icon: IconWallet },
+  {
+    kind: 'group', id: 'customers', label: 'Customers', icon: IconUsers,
+    children: [
+      { tab: 'customers', label: 'Customers & Loyalty' },
+    ],
+  },
   {
     kind: 'group', id: 'membership', label: 'Membership', icon: IconUsers,
     children: [
@@ -517,6 +527,10 @@ export default function AdminDashboard() {
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<{ promotion: any; discountAmount: number } | null>(null);
   const [promoMessage, setPromoMessage] = useState('');
+  const [customerLookup, setCustomerLookup] = useState('');
+  const [posCustomer, setPosCustomer] = useState<any>(null);
+  const [customerMessage, setCustomerMessage] = useState('');
+  const [redeemPoints, setRedeemPoints] = useState('');
 
   // POS — Currency (the sale is always recorded in the base currency
   // internally; this only controls what's displayed/printed and what a
@@ -1473,7 +1487,9 @@ export default function AdminDashboard() {
     const subtotal = cart.reduce((total, item) => total + item.price * item.cartQty, 0);
     const discount = Math.min(Math.max(parseFloat(discountAmount) || 0, 0), subtotal);
     const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, subtotal - discount) : 0;
-    const combinedDiscount = discount + promoDiscount;
+    const redeemValue = posCustomer ? Math.min(Math.max(parseInt(redeemPoints) || 0, 0), maxRedeemablePoints) * LOYALTY_REDEEM_VALUE : 0;
+    const redeemPointsUsed = LOYALTY_REDEEM_VALUE > 0 ? Math.round(redeemValue / LOYALTY_REDEEM_VALUE) : 0;
+    const combinedDiscount = discount + promoDiscount + redeemValue;
     const subtotalAfterDiscount = subtotal - combinedDiscount;
     const activeTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
     const taxTotal = activeTaxRate ? Math.round(subtotalAfterDiscount * (Number(activeTaxRate.rate_percent) / 100)) : 0;
@@ -1504,6 +1520,7 @@ export default function AdminDashboard() {
 
     let remainingDiscount = discount;
     let remainingPromoDiscount = promoDiscount;
+    let remainingRedeem = redeemValue;
     let remainingTax = taxTotal;
 
     const dbPaymentMethod = splitPaymentMode ? 'split' : (paymentMethod === 'bank/card' ? 'cash' : paymentMethod);
@@ -1517,6 +1534,8 @@ export default function AdminDashboard() {
       if (!isLast) remainingDiscount -= rowDiscount;
       const rowPromoDiscount = isLast ? remainingPromoDiscount : (subtotal > 0 ? Math.round((item.price / subtotal) * promoDiscount) : 0);
       if (!isLast) remainingPromoDiscount -= rowPromoDiscount;
+      const rowRedeem = isLast ? remainingRedeem : (subtotal > 0 ? Math.round((item.price / subtotal) * redeemValue) : 0);
+      if (!isLast) remainingRedeem -= rowRedeem;
       const rowTax = isLast ? remainingTax : (subtotal > 0 ? Math.round((item.price / subtotal) * taxTotal) : 0);
       if (!isLast) remainingTax -= rowTax;
 
@@ -1524,13 +1543,14 @@ export default function AdminDashboard() {
         dress_id: item.id,
         payment_method: dbPaymentMethod,
         transaction_id: dbTrxId,
-        amount_paid: item.price - rowDiscount - rowPromoDiscount + rowTax,
+        amount_paid: item.price - rowDiscount - rowPromoDiscount - rowRedeem + rowTax,
         discount_amount: rowDiscount,
         promo_discount_amount: rowPromoDiscount,
         promotion_id: promoDiscount > 0 ? appliedPromo?.promotion.id ?? null : null,
         tax_amount: rowTax,
         status: 'completed',
         staff_id: currentStaff?.id ?? null,
+        customer_id: posCustomer?.id ?? null,
       };
     });
 
@@ -1611,6 +1631,28 @@ export default function AdminDashboard() {
       supabase.from('promotions').update({ times_used: appliedPromo.promotion.times_used + 1 }).eq('id', appliedPromo.promotion.id);
     }
 
+    // Loyalty: redeem what was spent, earn on the final amount actually
+    // paid (after every discount, so points aren't earned on money that
+    // was never collected). Both best-effort — never blocks the sale.
+    if (posCustomer) {
+      const finalTotal = subtotalAfterDiscount + taxTotal;
+      const pointsEarned = pointsEarnedFor(finalTotal);
+      const netPoints = posCustomer.loyalty_points - redeemPointsUsed + pointsEarned;
+      supabase.from('customers').update({
+        loyalty_points: netPoints,
+        total_spent: Number(posCustomer.total_spent) + finalTotal,
+        visit_count: posCustomer.visit_count + 1,
+      }).eq('id', posCustomer.id).then();
+      const loyaltyRows: any[] = [];
+      if (redeemPointsUsed > 0) {
+        loyaltyRows.push({ customer_id: posCustomer.id, type: 'redeem', points: -redeemPointsUsed, related_sale_id: anchorSaleId, staff_id: currentStaff?.id ?? null });
+      }
+      if (pointsEarned > 0) {
+        loyaltyRows.push({ customer_id: posCustomer.id, type: 'earn', points: pointsEarned, related_sale_id: anchorSaleId, staff_id: currentStaff?.id ?? null });
+      }
+      if (loyaltyRows.length > 0) supabase.from('loyalty_transactions').insert(loyaltyRows);
+    }
+
     setPosMessage({ type: 'success', text: 'Sale recorded! Printing receipt...' });
 
     setTimeout(() => {
@@ -1622,6 +1664,10 @@ export default function AdminDashboard() {
       setPromoCode('');
       setAppliedPromo(null);
       setPromoMessage('');
+      setPosCustomer(null);
+      setCustomerLookup('');
+      setCustomerMessage('');
+      setRedeemPoints('');
       setCartPayments([]);
       setSplitPaymentDraft({ method: 'cash', amount: '', trxId: '', giftCardCode: '' });
       fetchRecentInventory();
@@ -1634,7 +1680,9 @@ export default function AdminDashboard() {
   const cartSubtotal = cart.reduce((total, item) => total + (item.price * item.cartQty), 0);
   const cartDiscountValue = Math.min(Math.max(parseFloat(discountAmount) || 0, 0), cartSubtotal);
   const cartPromoValue = appliedPromo ? Math.min(appliedPromo.discountAmount, cartSubtotal - cartDiscountValue) : 0;
-  const cartSubtotalAfterDiscount = cartSubtotal - cartDiscountValue - cartPromoValue;
+  const maxRedeemablePoints = posCustomer ? Math.min(posCustomer.loyalty_points, Math.floor((cartSubtotal - cartDiscountValue - cartPromoValue) / LOYALTY_REDEEM_VALUE)) : 0;
+  const cartRedeemValue = Math.min(Math.max(parseInt(redeemPoints) || 0, 0), maxRedeemablePoints) * LOYALTY_REDEEM_VALUE;
+  const cartSubtotalAfterDiscount = cartSubtotal - cartDiscountValue - cartPromoValue - cartRedeemValue;
   const cartActiveTaxRate = taxRates.find((t: any) => String(t.id) === selectedTaxRateId);
   const cartTaxValue = cartActiveTaxRate ? Math.round(cartSubtotalAfterDiscount * (Number(cartActiveTaxRate.rate_percent) / 100)) : 0;
   const cartTotal = cartSubtotalAfterDiscount + cartTaxValue;
@@ -1660,6 +1708,18 @@ export default function AdminDashboard() {
     } else {
       setAppliedPromo(result);
       setPromoMessage(`Applied: ${result.promotion.name}`);
+    }
+  };
+
+  const lookupPosCustomer = async () => {
+    setCustomerMessage('');
+    if (!customerLookup.trim()) { setPosCustomer(null); return; }
+    const { data } = await supabase.from('customers').select('*').eq('phone', customerLookup.trim()).limit(1);
+    if (data && data.length > 0) {
+      setPosCustomer(data[0]);
+    } else {
+      setPosCustomer(null);
+      setCustomerMessage('No customer with that phone. Add them from the Customers tab, or continue without one.');
     }
   };
 
@@ -3820,7 +3880,16 @@ export default function AdminDashboard() {
                   <IconCalculator className="w-3.5 h-3.5" /> Calculator
                 </button>
               </div>
-              <p className="text-xs font-mono text-muted uppercase tracking-wider">
+              <p className="text-xs font-mono text-muted uppercase tracking-wider flex items-center gap-3">
+                {lowStockItems.length > 0 && (
+                  <button
+                    onClick={() => goToTab('products-list', 'products')}
+                    className="flex items-center gap-1.5 px-2.5 py-1 border border-oxblood/40 text-oxblood hover:bg-oxblood hover:text-white transition-colors normal-case tracking-normal font-sans font-bold text-xs"
+                    title="Items at or below their reorder point"
+                  >
+                    <IconArchive className="w-3.5 h-3.5" /> {lowStockItems.length} low stock
+                  </button>
+                )}
                 {new Date().toLocaleDateString('en-BD', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             </div>
@@ -4076,6 +4145,43 @@ export default function AdminDashboard() {
                           <span className="text-sm text-muted font-medium">Subtotal</span>
                           <span className="font-mono font-semibold text-ink text-sm">৳{cartSubtotal}</span>
                         </div>
+                        {/* Customer lookup row */}
+                        <div className="px-4 py-3 flex justify-between items-center gap-2" style={{ borderBottom: '1px solid var(--card-border)' }}>
+                          <input
+                            type="text" placeholder="Customer phone (optional)"
+                            className="p-input font-mono"
+                            style={{ width: 150, fontSize: 13 }}
+                            value={customerLookup}
+                            onChange={(e) => setCustomerLookup(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') lookupPosCustomer(); }}
+                          />
+                          <button onClick={lookupPosCustomer} className="text-xs font-bold uppercase text-oxblood hover:underline shrink-0">Find</button>
+                        </div>
+                        {posCustomer && (
+                          <div className="px-4 py-2 flex justify-between items-center gap-4 bg-canvas" style={{ borderBottom: '1px solid var(--card-border)' }}>
+                            <span className="text-xs text-ink font-semibold">{posCustomer.name} · {posCustomer.loyalty_points} pts</span>
+                            <button onClick={() => { setPosCustomer(null); setRedeemPoints(''); }} className="text-xs text-muted underline">clear</button>
+                          </div>
+                        )}
+                        {posCustomer && maxRedeemablePoints > 0 && (
+                          <div className="px-4 py-3 flex justify-between items-center gap-2" style={{ borderBottom: '1px solid var(--card-border)' }}>
+                            <span className="text-xs text-muted">Redeem points (max {maxRedeemablePoints})</span>
+                            <input
+                              type="number" min={0} max={maxRedeemablePoints}
+                              className="p-input font-mono" style={{ width: 90, fontSize: 13 }}
+                              value={redeemPoints} onChange={(e) => setRedeemPoints(e.target.value)}
+                            />
+                          </div>
+                        )}
+                        {cartRedeemValue > 0 && (
+                          <div className="px-4 py-2 flex justify-between items-center gap-4 bg-brass/10" style={{ borderBottom: '1px solid var(--card-border)' }}>
+                            <span className="text-xs text-brass font-semibold">Points redeemed</span>
+                            <span className="font-mono font-bold text-brass text-sm">-৳{cartRedeemValue}</span>
+                          </div>
+                        )}
+                        {customerMessage && (
+                          <div className="px-4 py-2 text-xs text-oxblood" style={{ borderBottom: '1px solid var(--card-border)' }}>{customerMessage}</div>
+                        )}
                         {/* Promo code row */}
                         <div className="px-4 py-3 flex justify-between items-center gap-2" style={{ borderBottom: '1px solid var(--card-border)' }}>
                           <input
@@ -5140,6 +5246,15 @@ export default function AdminDashboard() {
                     </table>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* PRODUCTS: WRITE-OFFS */}
+            {activeTab === 'products-writeoffs' && (
+              <div className="print:hidden">
+                <h3 className="text-xl font-display text-ink mb-2">Write-Offs</h3>
+                <p className="text-sm text-muted mb-6">Damaged, defective, lost, or expired stock — removed from sellable inventory with a reason on record.</p>
+                <WriteOffsPanel />
               </div>
             )}
 
@@ -7101,6 +7216,14 @@ export default function AdminDashboard() {
                     <span className="font-bold text-ink"> never</span> as <code className="font-mono bg-paper-dim px-1">NEXT_PUBLIC_</code>, since that would ship the key to every visitor&rsquo;s browser.
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* TAB: CUSTOMERS & LOYALTY */}
+            {activeTab === 'customers' && (
+              <div className="print:hidden">
+                <h3 className="text-xl font-display text-ink mb-6">Customers & Loyalty</h3>
+                <CustomersPanel accountRole={userRole} />
               </div>
             )}
 
