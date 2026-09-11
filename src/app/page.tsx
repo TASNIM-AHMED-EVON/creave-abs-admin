@@ -3799,7 +3799,7 @@ export default function AdminDashboard() {
               add an entry there to add a button here, nothing in this
               block needs to change. */}
           <div className="sticky top-0 z-30 bg-black border-b border-thread/60 print:hidden">
-            <div className="max-w-6xl mx-auto px-5 sm:px-8 py-[22px] flex items-center justify-between flex-wrap gap-3">
+            <div className="w-full px-4 sm:px-6 py-[18px] flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2 flex-wrap">
                 {visibleHeaderActions.map((action) => {
                   const Icon = action.icon;
@@ -3834,7 +3834,11 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="max-w-6xl mx-auto px-5 sm:px-8 pt-8 pb-16 print:p-0 relative z-10">
+          {/* Full-bleed content well — spans the entire width next to the
+              sidebar (no centered max-width, no side gutters showing the
+              page background) so every tab reads as one continuous
+              surface instead of a card floating on empty space. */}
+          <div className="w-full px-4 sm:px-6 pt-4 pb-4 print:p-0 relative z-10">
 
             {/* key forces remount on tab switch → triggers .tab-enter animation */}
             <div key={activeTab} className="tab-enter">
@@ -4030,11 +4034,11 @@ export default function AdminDashboard() {
                 limited to scanning a physical barcode. Stacks to a single
                 column below lg. */}
             {activeTab === 'pos' && (
-              <div className="print:hidden grid grid-cols-1 lg:grid-cols-[440px_1fr] gap-6 items-start">
-              <div className="w-full max-w-full lg:max-w-none">
-                <div className="p-card">
-                  {/* POS scan header */}
-                  <div style={{ padding: '20px 24px 0' }}>
+              <div className="print:hidden grid grid-cols-1 lg:grid-cols-[440px_1fr] gap-4 items-stretch lg:h-[calc(100vh-108px)]">
+              <div className="w-full max-w-full lg:max-w-none lg:h-full">
+                <div className="p-card lg:h-full lg:overflow-y-auto">
+                  {/* POS scan header — pinned while the cart below scrolls */}
+                  <div className="sticky top-0 z-10" style={{ padding: '20px 24px 0', background: 'var(--card-bg)' }}>
                     {posMessage.text && (
                       <div className={`anim-alert p-alert mb-4 ${posMessage.type === 'error' ? 'text-oxblood' : 'text-moss'}`}>
                         {posMessage.text}
@@ -4346,7 +4350,7 @@ export default function AdminDashboard() {
                   one per barcode. Single-variant products add straight to
                   cart on click; multi-variant ones expand in place to a row
                   of variant chips so the correct barcode still gets sold. */}
-              <div className="p-card lg:sticky lg:top-[92px]">
+              <div className="p-card lg:h-full flex flex-col overflow-hidden">
                 <div className="flex items-center justify-between gap-3 flex-wrap" style={{ padding: '20px 24px 0' }}>
                   <div>
                     <h3 className="text-base font-bold text-ink">Browse Products</h3>
@@ -4395,7 +4399,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {posFilteredGroups.length === 0 ? (
-                  <div className="p-empty" style={{ paddingBottom: 40 }}>
+                  <div className="p-empty lg:flex-1 lg:flex lg:flex-col lg:justify-center" style={{ paddingBottom: 40 }}>
                     <div className="p-empty-icon">
                       <IconTag className="w-5 h-5" />
                     </div>
@@ -4403,7 +4407,7 @@ export default function AdminDashboard() {
                     <p className="p-empty-desc">Try a different search term or category.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3" style={{ padding: '0 24px 24px', maxHeight: 640, overflowY: 'auto' }}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 lg:flex-1 lg:overflow-y-auto" style={{ padding: '0 24px 24px' }}>
                     {posFilteredGroups.map((group) => {
                       const totalStock = group.variants.reduce((s: number, v: any) => s + (v.quantity || 0), 0);
                       const isExpanded = posExpandedGroupKey === group.key;
