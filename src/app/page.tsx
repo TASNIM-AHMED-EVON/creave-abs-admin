@@ -404,6 +404,18 @@ const HEADER_ACTIONS: { id: string; label: string; icon: any; tab: string; group
 
 const PAYMENT_METHODS = ['cash', 'bkash', 'nagad', 'upay', 'rocket', 'bank/card'] as const;
 
+// One brand-ish color per payment method so the picker reads at a glance
+// instead of every option looking identical. Selected = solid fill; unselected
+// = tinted background + colored border/text, so the color shows either way.
+const PAYMENT_METHOD_COLORS: Record<string, string> = {
+  cash: '#3a9d6f',      // green — universal "cash" color
+  bkash: '#e2136e',     // bKash brand pink
+  nagad: '#f6921e',     // Nagad brand orange
+  upay: '#00a99d',      // Upay brand teal
+  rocket: '#8c3494',    // Rocket brand purple
+  'bank/card': '#2563eb', // blue — card/bank
+};
+
 // Items at or below this remaining quantity surface as "Low Stock" on the
 // Overview tab and in the inventory list.
 const LOW_STOCK_THRESHOLD = 3;
@@ -4217,16 +4229,27 @@ export default function AdminDashboard() {
                         )}
                       </div>
 
-                      {/* Split Payment toggle */}
-                      <label className="flex items-center gap-2 mb-4 text-xs font-bold text-muted uppercase tracking-wide cursor-pointer select-none w-fit">
-                        <input
-                          type="checkbox"
-                          checked={splitPaymentMode}
-                          onChange={(e) => { setSplitPaymentMode(e.target.checked); setCartPayments([]); setSplitPaymentMessage({ type: '', text: '' }); }}
-                          className="accent-brass w-3.5 h-3.5"
-                        />
-                        Split across multiple payment methods
-                      </label>
+                      {/* Split Payment toggle — a real button now, not a
+                          checkbox, so it reads as an action like the
+                          payment method tiles above/below it. */}
+                      <button
+                        type="button"
+                        onClick={() => { setSplitPaymentMode(!splitPaymentMode); setCartPayments([]); setSplitPaymentMessage({ type: '', text: '' }); }}
+                        className="w-full mb-4 flex items-center justify-center gap-2 py-3 rounded-xl border-2 text-xs font-bold uppercase tracking-wide transition-all"
+                        style={splitPaymentMode ? {
+                          background: 'linear-gradient(135deg,#a8763b 0%,#c49a4a 100%)',
+                          borderColor: '#a8763b',
+                          color: '#fff',
+                          boxShadow: '0 4px 14px rgba(168,118,59,0.4)',
+                        } : {
+                          background: 'rgba(168,118,59,0.09)',
+                          borderColor: 'rgba(168,118,59,0.35)',
+                          color: 'var(--color-brass)',
+                        }}
+                      >
+                        <IconCard className="w-4 h-4" />
+                        {splitPaymentMode ? 'Split Payment: ON — tap to use one method' : 'Split Across Multiple Payment Methods'}
+                      </button>
 
                       {splitPaymentMode ? (
                         <div className="mb-5">
@@ -4301,26 +4324,29 @@ export default function AdminDashboard() {
                           {/* Payment Method */}
                           <p className="p-label mb-2">Payment Method</p>
                           <div className="grid grid-cols-3 gap-2 mb-5">
-                            {PAYMENT_METHODS.map((method) => (
-                              <button
-                                key={method}
-                                className={`py-2.5 text-[11px] font-bold uppercase tracking-wide rounded-xl border transition-all ${
-                                  paymentMethod === method
-                                    ? 'text-white border-transparent'
-                                    : 'text-muted border-thread hover:border-brass/40 hover:text-ink'
-                                }`}
-                                style={paymentMethod === method ? {
-                                  background: 'linear-gradient(180deg,#2a2620 0%,#1c1a17 100%)',
-                                  boxShadow: 'var(--shadow-sm)'
-                                } : {
-                                  background: 'var(--card-bg)',
-                                  boxShadow: 'var(--shadow-xs)'
-                                }}
-                                onClick={() => setPaymentMethod(method as any)}
-                              >
-                                {method}
-                              </button>
-                            ))}
+                            {PAYMENT_METHODS.map((method) => {
+                              const color = PAYMENT_METHOD_COLORS[method];
+                              const active = paymentMethod === method;
+                              return (
+                                <button
+                                  key={method}
+                                  className="py-2.5 text-[11px] font-bold uppercase tracking-wide rounded-xl border-2 transition-all"
+                                  style={active ? {
+                                    background: color,
+                                    borderColor: color,
+                                    color: '#fff',
+                                    boxShadow: `0 4px 14px ${color}55`,
+                                  } : {
+                                    background: `${color}17`,
+                                    borderColor: `${color}55`,
+                                    color,
+                                  }}
+                                  onClick={() => setPaymentMethod(method as any)}
+                                >
+                                  {method}
+                                </button>
+                              );
+                            })}
                           </div>
 
                           {(paymentMethod !== 'cash' && paymentMethod !== 'bank/card') && (
@@ -6225,17 +6251,29 @@ export default function AdminDashboard() {
                       <div>
                         <p className="text-[11px] font-bold text-muted uppercase tracking-widest mb-3">Payment Method</p>
                         <div className="grid grid-cols-3 gap-2 mb-4">
-                          {PAYMENT_METHODS.map((method) => (
-                            <button
-                              key={method}
-                              className={`py-2.5 text-[11px] font-bold uppercase tracking-wider border transition-colors ${
-                                addSalePaymentMethod === method ? 'bg-ink text-paper border-ink' : 'bg-canvas text-ink border-thread hover:border-thread-dark'
-                              }`}
-                              onClick={() => setAddSalePaymentMethod(method as any)}
-                            >
-                              {method}
-                            </button>
-                          ))}
+                          {PAYMENT_METHODS.map((method) => {
+                            const color = PAYMENT_METHOD_COLORS[method];
+                            const active = addSalePaymentMethod === method;
+                            return (
+                              <button
+                                key={method}
+                                className="py-2.5 text-[11px] font-bold uppercase tracking-wider rounded-xl border-2 transition-all"
+                                style={active ? {
+                                  background: color,
+                                  borderColor: color,
+                                  color: '#fff',
+                                  boxShadow: `0 4px 14px ${color}55`,
+                                } : {
+                                  background: `${color}17`,
+                                  borderColor: `${color}55`,
+                                  color,
+                                }}
+                                onClick={() => setAddSalePaymentMethod(method as any)}
+                              >
+                                {method}
+                              </button>
+                            );
+                          })}
                         </div>
                         {(addSalePaymentMethod !== 'cash' && addSalePaymentMethod !== 'bank/card') && (
                           <input type="text" placeholder="Mobile banking TrxID" className="w-full p-input mb-4" value={addSaleTrxId} onChange={(e) => setAddSaleTrxId(e.target.value)} />
