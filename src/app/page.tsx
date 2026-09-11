@@ -416,6 +416,18 @@ const PAYMENT_METHOD_COLORS: Record<string, string> = {
   'bank/card': '#2563eb', // blue — card/bank
 };
 
+// A small, repeatable color palette for anything that renders a dynamic
+// list of pill/chip buttons (product categories, tags, etc.) where the
+// labels aren't known ahead of time. Same label always gets the same
+// color within a session, so the UI doesn't jitter on re-render.
+const CHIP_COLOR_PALETTE = ['#2563eb', '#e2136e', '#0ea5a3', '#f6921e', '#8c3494', '#3a9d6f', '#d94f4f', '#0891b2'];
+const categoryPillColor = (label: string): string => {
+  if (label === 'All') return '#a8763b'; // brass — keeps "All" visually anchored as the default
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
+  return CHIP_COLOR_PALETTE[hash % CHIP_COLOR_PALETTE.length];
+};
+
 // Items at or below this remaining quantity surface as "Low Stock" on the
 // Overview tab and in the inventory list.
 const LOW_STOCK_THRESHOLD = 3;
@@ -4400,27 +4412,34 @@ export default function AdminDashboard() {
                     />
                   </div>
 
-                  {/* Category pills — All + every category that has stock */}
+                  {/* Category pills — All + every category that has stock.
+                      Each label gets a stable color from a small palette
+                      (hashed by name) so the row reads as colorful chips
+                      rather than one plain on/off toggle. */}
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-4" style={{ scrollbarWidth: 'none' }}>
-                    {posCategoryOptions.map((cat) => (
-                      <button
-                        key={cat}
-                        onClick={() => { setPosBrowseCategory(cat); setPosExpandedGroupKey(null); }}
-                        className="shrink-0 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-full border transition-all"
-                        style={posBrowseCategory === cat ? {
-                          background: 'linear-gradient(180deg,#2a2620 0%,#1c1a17 100%)',
-                          color: '#fff',
-                          borderColor: 'transparent',
-                          boxShadow: 'var(--shadow-sm)'
-                        } : {
-                          background: 'var(--card-bg)',
-                          color: 'var(--color-muted)',
-                          borderColor: 'var(--card-border)'
-                        }}
-                      >
-                        {cat}
-                      </button>
-                    ))}
+                    {posCategoryOptions.map((cat) => {
+                      const color = categoryPillColor(cat);
+                      const active = posBrowseCategory === cat;
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => { setPosBrowseCategory(cat); setPosExpandedGroupKey(null); }}
+                          className="shrink-0 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-full border-2 transition-all"
+                          style={active ? {
+                            background: color,
+                            color: '#fff',
+                            borderColor: color,
+                            boxShadow: `0 3px 10px ${color}55`,
+                          } : {
+                            background: `${color}17`,
+                            color,
+                            borderColor: `${color}55`,
+                          }}
+                        >
+                          {cat}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -4654,7 +4673,7 @@ export default function AdminDashboard() {
                                           <input type="number" min="0" value={editDraft.reorder_point} onChange={(e) => setEditDraft({ ...editDraft, reorder_point: e.target.value })} placeholder={`Reorder point (default: ${LOW_STOCK_THRESHOLD})`} className="w-full p-input text-xs" />
                                         </div>
                                         <div className="flex gap-2">
-                                          <button onClick={() => saveEditInventory(item.id)} className="flex-1 bg-ink text-paper text-[11px] font-bold uppercase tracking-wide py-2 hover:bg-brass-dark transition-colors">Save</button>
+                                          <button onClick={() => saveEditInventory(item.id)} className="flex-1 text-white text-[11px] font-bold uppercase tracking-wide py-2 transition-colors" style={{ background: '#2563eb' }} onMouseEnter={(e) => e.currentTarget.style.background = '#1d4ed8'} onMouseLeave={(e) => e.currentTarget.style.background = '#2563eb'}>Save</button>
                                           <button onClick={cancelEditInventory} className="flex-1 border border-thread text-ink text-[11px] font-bold uppercase tracking-wide py-2 hover:border-thread-dark transition-colors">Cancel</button>
                                         </div>
                                       </div>
@@ -5085,7 +5104,7 @@ export default function AdminDashboard() {
                                   onChange={(e) => setPriceDraftValue(e.target.value)}
                                   className="w-24 px-2 py-1.5 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-sm text-ink font-mono font-bold text-right transition-colors"
                                 />
-                                <button onClick={() => saveQuickPrice(item.id)} className="bg-ink text-paper px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide hover:bg-brass-dark transition-colors">Save</button>
+                                <button onClick={() => saveQuickPrice(item.id)} className="text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide transition-colors" style={{ background: '#2563eb' }} onMouseEnter={(e) => e.currentTarget.style.background = '#1d4ed8'} onMouseLeave={(e) => e.currentTarget.style.background = '#2563eb'}>Save</button>
                                 <button onClick={() => { setPriceDraftId(null); setPriceDraftValue(''); }} className="border border-thread text-ink px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide hover:border-thread-dark transition-colors">Cancel</button>
                               </div>
                             ) : (
@@ -5811,11 +5830,21 @@ export default function AdminDashboard() {
                       <div>
                         <label className="p-label">Payment Status</label>
                         <div className="grid grid-cols-3 gap-2">
-                          {(['paid', 'due', 'partial'] as const).map((s) => (
-                            <button key={s} type="button" onClick={() => setPurchasePaymentStatus(s)} className={`py-2.5 text-[11px] font-bold uppercase tracking-wider border transition-colors ${purchasePaymentStatus === s ? 'bg-ink text-paper border-ink' : 'bg-canvas text-ink border-thread hover:border-thread-dark'}`}>
-                              {s}
-                            </button>
-                          ))}
+                          {(['paid', 'due', 'partial'] as const).map((s) => {
+                            const color = s === 'paid' ? '#3a9d6f' : s === 'due' ? '#d94f4f' : '#f6921e';
+                            const active = purchasePaymentStatus === s;
+                            return (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => setPurchasePaymentStatus(s)}
+                                className="py-2.5 text-[11px] font-bold uppercase tracking-wider rounded-lg border-2 transition-all"
+                                style={active ? { background: color, borderColor: color, color: '#fff' } : { background: `${color}17`, borderColor: `${color}55`, color }}
+                              >
+                                {s}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                       <button onClick={handleRecordPurchase} className="p-btn p-btn-success btn-shimmer w-full py-3.5">
@@ -5979,7 +6008,7 @@ export default function AdminDashboard() {
                             <input type="text" className="w-full p-input text-sm" placeholder="Place" value={editSupplierDraft.place} onChange={(e) => setEditSupplierDraft({ ...editSupplierDraft, place: e.target.value })} />
                             <textarea rows={3} className="w-full p-input text-sm resize-none" placeholder="Product details" value={editSupplierDraft.product_details} onChange={(e) => setEditSupplierDraft({ ...editSupplierDraft, product_details: e.target.value })} />
                             <div className="flex gap-2">
-                              <button onClick={() => saveEditSupplier(s.id)} className="flex-1 bg-ink text-paper text-[11px] font-bold uppercase tracking-wide py-2 hover:bg-brass-dark transition-colors">
+                              <button onClick={() => saveEditSupplier(s.id)} className="flex-1 text-white text-[11px] font-bold uppercase tracking-wide py-2 transition-colors" style={{ background: '#2563eb' }} onMouseEnter={(e) => e.currentTarget.style.background = '#1d4ed8'} onMouseLeave={(e) => e.currentTarget.style.background = '#2563eb'}>
                                 Save
                               </button>
                               <button onClick={cancelEditSupplier} className="flex-1 border border-thread text-ink text-[11px] font-bold uppercase tracking-wide py-2 hover:border-thread-dark transition-colors">
@@ -6757,7 +6786,7 @@ export default function AdminDashboard() {
                     </div>
                     <button
                       type="submit"
-                      className={`px-7 py-3 font-bold text-sm uppercase tracking-wider transition-colors ${membershipSettingsSaved ? 'bg-moss text-white' : 'bg-ink text-paper hover:bg-brass-dark'}`}
+                      className="px-7 py-3 font-bold text-sm uppercase tracking-wider transition-colors text-white" style={{ background: membershipSettingsSaved ? '#3a9d6f' : '#2563eb' }}
                     >
                       {membershipSettingsSaved ? '✓ Saved' : 'Save Discount'}
                     </button>
@@ -6947,7 +6976,7 @@ export default function AdminDashboard() {
                   <button
                     onClick={exportLedgerCSV}
                     disabled={salesRecord.length === 0}
-                    className="px-5 py-2.5 bg-ink text-paper hover:bg-brass-dark font-bold text-xs uppercase tracking-wider transition-colors whitespace-nowrap flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="px-5 py-2.5 text-white font-bold text-xs uppercase tracking-wider transition-colors whitespace-nowrap flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: '#2563eb' }}
                   >
                     <IconDownload className="w-3.5 h-3.5" />
                     Export CSV

@@ -459,15 +459,15 @@ select.p-input {
 .p-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
 
 .p-btn-primary {
-  background: linear-gradient(180deg, #2a2620 0%, #1c1a17 100%);
-  color: #f5ede0;
-  border-color: rgba(0,0,0,0.35);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.25), var(--shadow-inset);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  border-color: rgba(29,78,216,0.5);
+  box-shadow: 0 2px 8px rgba(37,99,235,0.35), var(--shadow-inset);
 }
 .p-btn-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, var(--color-brass) 0%, var(--color-brass-dark) 100%);
-  border-color: var(--color-brass-dark);
-  box-shadow: 0 2px 8px rgba(168,118,59,0.4), 0 1px 0 rgba(255,255,255,0.1) inset;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border-color: #1d4ed8;
+  box-shadow: 0 4px 14px rgba(37,99,235,0.5), 0 1px 0 rgba(255,255,255,0.1) inset;
   color: #fff;
 }
 
@@ -494,14 +494,54 @@ select.p-input {
 }
 
 .p-btn-ghost {
-  background: transparent;
-  color: var(--color-ink);
-  border-color: var(--card-border);
+  background: rgba(196,154,74,0.1);
+  color: var(--color-brass-dark);
+  border-color: rgba(168,118,59,0.35);
   box-shadow: var(--shadow-xs), var(--shadow-inset);
 }
 .p-btn-ghost:hover:not(:disabled) {
-  background: var(--color-paper-dim);
-  border-color: var(--color-thread-dark);
+  background: rgba(196,154,74,0.2);
+  border-color: var(--color-brass);
+  color: var(--color-brass-dark);
+}
+
+/* Extra colorful variants — same shape/size as the ones above, for spots
+   that want a specific hue rather than the default brand blue. */
+.p-btn-teal {
+  background: linear-gradient(135deg, #0ea5a3 0%, #0b8482 100%);
+  color: #fff;
+  border-color: rgba(11,132,130,0.6);
+  box-shadow: 0 2px 8px rgba(14,165,163,0.35), var(--shadow-inset);
+}
+.p-btn-teal:hover:not(:disabled) {
+  box-shadow: 0 4px 14px rgba(14,165,163,0.5), 0 1px 0 rgba(255,255,255,0.1) inset;
+}
+.p-btn-purple {
+  background: linear-gradient(135deg, #8c3494 0%, #6f2a76 100%);
+  color: #fff;
+  border-color: rgba(111,42,118,0.6);
+  box-shadow: 0 2px 8px rgba(140,52,148,0.35), var(--shadow-inset);
+}
+.p-btn-purple:hover:not(:disabled) {
+  box-shadow: 0 4px 14px rgba(140,52,148,0.5), 0 1px 0 rgba(255,255,255,0.1) inset;
+}
+.p-btn-amber {
+  background: linear-gradient(135deg, #f6921e 0%, #d97a0f 100%);
+  color: #fff;
+  border-color: rgba(217,122,15,0.6);
+  box-shadow: 0 2px 8px rgba(246,146,30,0.35), var(--shadow-inset);
+}
+.p-btn-amber:hover:not(:disabled) {
+  box-shadow: 0 4px 14px rgba(246,146,30,0.5), 0 1px 0 rgba(255,255,255,0.1) inset;
+}
+.p-btn-pink {
+  background: linear-gradient(135deg, #e2136e 0%, #b80f59 100%);
+  color: #fff;
+  border-color: rgba(184,15,89,0.6);
+  box-shadow: 0 2px 8px rgba(226,19,110,0.35), var(--shadow-inset);
+}
+.p-btn-pink:hover:not(:disabled) {
+  box-shadow: 0 4px 14px rgba(226,19,110,0.5), 0 1px 0 rgba(255,255,255,0.1) inset;
 }
 
 /* ============================================================
