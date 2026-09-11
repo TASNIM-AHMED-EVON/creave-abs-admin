@@ -532,6 +532,14 @@ export default function AdminDashboard() {
   const [customerMessage, setCustomerMessage] = useState('');
   const [redeemPoints, setRedeemPoints] = useState('');
 
+  // POS — Product browser (right-hand grid): category filter, free-text
+  // search, and which product tile (if any) has its variant picker open.
+  // Kept separate from barcodeInput/stockSearchQuery since this filters a
+  // different list (the visual grid) than the scan box or the Inventory tab.
+  const [posBrowseCategory, setPosBrowseCategory] = useState<string>('All');
+  const [posBrowseQuery, setPosBrowseQuery] = useState('');
+  const [posExpandedGroupKey, setPosExpandedGroupKey] = useState<string | null>(null);
+
   // POS — Currency (the sale is always recorded in the base currency
   // internally; this only controls what's displayed/printed and what a
   // foreign-currency payment line is converted from).
@@ -1428,6 +1436,26 @@ export default function AdminDashboard() {
   };
 
   // --- POS FUNCTIONS ---
+  // Shared by barcode scan AND clicking a tile in the product grid — both
+  // paths land here so stock-limit checks and cart merging only live once.
+  // Returns true/false so callers (e.g. the variant picker) can react.
+  const addItemToCart = (data: any): boolean => {
+    setPosMessage({ type: '', text: '' });
+    const existingCartItem = cart.find(item => item.id === data.id);
+    const currentCartQty = existingCartItem ? existingCartItem.cartQty : 0;
+
+    if (currentCartQty + 1 > data.quantity) {
+      setPosMessage({ type: 'error', text: `Not enough stock available for "${variantLabel(data)}"!` });
+      return false;
+    }
+    if (existingCartItem) {
+      setCart(cart.map(item => item.id === data.id ? { ...item, cartQty: item.cartQty + 1 } : item));
+    } else {
+      setCart([...cart, { ...data, cartQty: 1 }]);
+    }
+    return true;
+  };
+
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPosMessage({ type: '', text: '' });
@@ -1442,18 +1470,7 @@ export default function AdminDashboard() {
     if (error || !data) {
       setPosMessage({ type: 'error', text: 'Dress not found! Check the barcode.' });
     } else {
-      const existingCartItem = cart.find(item => item.id === data.id);
-      const currentCartQty = existingCartItem ? existingCartItem.cartQty : 0;
-
-      if (currentCartQty + 1 > data.quantity) {
-         setPosMessage({ type: 'error', text: 'Not enough stock available for this item!' });
-      } else {
-         if (existingCartItem) {
-           setCart(cart.map(item => item.id === data.id ? { ...item, cartQty: item.cartQty + 1 } : item));
-         } else {
-           setCart([...cart, { ...data, cartQty: 1 }]);
-         }
-      }
+      addItemToCart(data);
     }
     setBarcodeInput('');
   };
@@ -3056,6 +3073,35 @@ export default function AdminDashboard() {
     }
     return Array.from(map.values());
   })();
+
+  // POS product grid — always excludes archived stock regardless of the
+  // Inventory tab's "show archived" toggle (those two views shouldn't be
+  // coupled), grouped the same way as List Products so multi-variant items
+  // show one tile.
+  const posAllGroups = (() => {
+    const active = recentInventory.filter((item: any) => item.status !== 'archived');
+    const map = new Map<string, any>();
+    for (const item of active) {
+      const key = item.group_id || `single-${item.id}`;
+      if (!map.has(key)) {
+        map.set(key, { key, name: item.name, category: item.category, brand: item.brand, unit: item.unit, image_url: item.image_url, variants: [] as any[] });
+      }
+      const group = map.get(key);
+      if (!group.image_url && item.image_url) group.image_url = item.image_url;
+      group.variants.push(item);
+    }
+    return Array.from(map.values());
+  })();
+  const posCategoryOptions = ['All', ...Array.from(new Set(posAllGroups.map((g: any) => g.category).filter(Boolean)))] as string[];
+  const posFilteredGroups = posAllGroups.filter((g: any) => {
+    const matchesCategory = posBrowseCategory === 'All' || g.category === posBrowseCategory;
+    const q = posBrowseQuery.trim().toLowerCase();
+    const matchesQuery = q === '' ||
+      g.name.toLowerCase().includes(q) ||
+      g.variants.some((v: any) => v.barcode.toLowerCase().includes(q));
+    return matchesCategory && matchesQuery;
+  });
+
   // A product matches if its name matches, or ANY of its variants' barcodes
   // do — so scanning/typing one variant's barcode still surfaces the card.
   const filteredInventory = stockSearchQuery === '' ? groupedProducts : groupedProducts.filter((p: any) =>
@@ -3741,113 +3787,6 @@ export default function AdminDashboard() {
         {/* ---- Main content ---- */}
         <div className="lg:pl-64 flex-1 print:pl-0 relative">
 
-          {/* ── VIDEO BACKGROUND ──
-              Fixed behind the main content only. Stays to the right of the
-              sidebar on desktop (left: 16rem). A dark overlay keeps text readable.
-              Place your video file in /public/bg.mp4 in the Next.js project. */}
-          <style>{`
-            .video-bg-wrap {
-              position: fixed;
-              top: 0; right: 0; bottom: 0; left: 0;
-              z-index: -2;
-              overflow: hidden;
-              pointer-events: none;
-            }
-            @media (min-width: 1024px) {
-              .video-bg-wrap { left: 16rem; }
-            }
-            .video-bg-wrap video {
-              width: 100%; height: 100%;
-              object-fit: cover;
-              object-position: center;
-            }
-            /* Dark overlay — tune opacity to taste.
-               0.72 keeps the video visible but text stays sharp. */
-            .video-bg-overlay {
-              position: absolute;
-              inset: 0;
-              background: rgba(6, 11, 22, 0.72);
-            }
-
-            /* ── Ambient falling dust (kept on top of video) ── */
-            .dust-layer {
-              position: fixed;
-              top: 0; right: 0; bottom: 0; left: 0;
-              z-index: 0;
-              pointer-events: none;
-              overflow: hidden;
-            }
-            @media (min-width: 1024px) {
-              .dust-layer { left: 16rem; }
-            }
-            .dust-mote {
-              position: absolute;
-              top: -5%;
-              border-radius: 50%;
-              background: radial-gradient(circle, rgba(196,154,74,0.9) 0%, transparent 75%);
-              opacity: 0;
-            }
-            @keyframes dust-fall-a { 0% { transform:translate(0,0); opacity:0; } 8% { opacity:0.45; } 92% { opacity:0.45; } 100% { transform:translate(18px,112vh); opacity:0; } }
-            @keyframes dust-fall-b { 0% { transform:translate(0,0); opacity:0; } 8% { opacity:0.35; } 92% { opacity:0.35; } 100% { transform:translate(-22px,112vh); opacity:0; } }
-            @keyframes dust-fall-c { 0% { transform:translate(0,0); opacity:0; } 8% { opacity:0.50; } 92% { opacity:0.50; } 100% { transform:translate(12px,112vh); opacity:0; } }
-            .dust-thread {
-              position: absolute;
-              top: -5%;
-              width: 1px;
-              background: linear-gradient(to bottom, transparent, rgba(196,154,74,0.5) 40%, transparent);
-              opacity: 0;
-              transform-origin: center;
-            }
-            @keyframes thread-fall-a { 0% { transform:translateY(0) rotate(0deg); opacity:0; } 8% { opacity:0.4; } 92% { opacity:0.4; } 100% { transform:translateY(112vh) rotate(140deg); opacity:0; } }
-            @keyframes thread-fall-b { 0% { transform:translateY(0) rotate(0deg); opacity:0; } 8% { opacity:0.3; } 92% { opacity:0.3; } 100% { transform:translateY(112vh) rotate(-160deg); opacity:0; } }
-
-            .dust-mote:nth-of-type(1)  { left:3%;  width:5px; height:5px; animation:dust-fall-a 22s 0s   linear infinite; }
-            .dust-mote:nth-of-type(2)  { left:9%;  width:3px; height:3px; animation:dust-fall-b 26s 3s   linear infinite; }
-            .dust-mote:nth-of-type(3)  { left:16%; width:4px; height:4px; animation:dust-fall-c 19s 6s   linear infinite; }
-            .dust-mote:nth-of-type(4)  { left:24%; width:6px; height:6px; animation:dust-fall-a 28s 1.5s linear infinite; }
-            .dust-mote:nth-of-type(5)  { left:31%; width:3px; height:3px; animation:dust-fall-b 21s 8s   linear infinite; }
-            .dust-mote:nth-of-type(6)  { left:39%; width:5px; height:5px; animation:dust-fall-c 25s 4s   linear infinite; }
-            .dust-mote:nth-of-type(7)  { left:47%; width:4px; height:4px; animation:dust-fall-a 23s 10s  linear infinite; }
-            .dust-mote:nth-of-type(8)  { left:55%; width:3px; height:3px; animation:dust-fall-b 27s 2s   linear infinite; }
-            .dust-mote:nth-of-type(9)  { left:63%; width:6px; height:6px; animation:dust-fall-c 20s 7s   linear infinite; }
-            .dust-mote:nth-of-type(10) { left:71%; width:4px; height:4px; animation:dust-fall-a 24s 5s   linear infinite; }
-            .dust-mote:nth-of-type(11) { left:79%; width:3px; height:3px; animation:dust-fall-b 29s 11s  linear infinite; }
-            .dust-mote:nth-of-type(12) { left:87%; width:5px; height:5px; animation:dust-fall-c 22s 9s   linear infinite; }
-            .dust-mote:nth-of-type(13) { left:94%; width:4px; height:4px; animation:dust-fall-a 26s 13s  linear infinite; }
-            .dust-mote:nth-of-type(14) { left:13%; width:3px; height:3px; animation:dust-fall-b 30s 15s  linear infinite; }
-            .dust-mote:nth-of-type(15) { left:58%; width:5px; height:5px; animation:dust-fall-c 18s 12s  linear infinite; }
-            .dust-thread:nth-of-type(16) { left:20%; height:22px; animation:thread-fall-a 17s 2s  linear infinite; }
-            .dust-thread:nth-of-type(17) { left:44%; height:18px; animation:thread-fall-b 20s 9s  linear infinite; }
-            .dust-thread:nth-of-type(18) { left:68%; height:24px; animation:thread-fall-a 16s 5s  linear infinite; }
-            .dust-thread:nth-of-type(19) { left:84%; height:16px; animation:thread-fall-b 19s 14s linear infinite; }
-            .dust-thread:nth-of-type(20) { left:36%; height:20px; animation:thread-fall-a 21s 7s  linear infinite; }
-
-            @media (prefers-reduced-motion: reduce) {
-              .dust-mote, .dust-thread { animation:none !important; opacity:0 !important; }
-              .video-bg-wrap video { display: none; }
-            }
-          `}</style>
-
-          {/* Video background — z-index: -2, behind everything */}
-          <div className="video-bg-wrap print:hidden" aria-hidden="true" style={{ backgroundColor: '#050c18' }}>
-            <video
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="auto"
-              src="/bg.mp4"
-            />
-            {/* Dark overlay for readability */}
-            <div className="video-bg-overlay" />
-          </div>
-
-          {/* Floating dust particles — z-index: 0, above video */}
-          <div className="dust-layer print:hidden" aria-hidden="true">
-            {[...Array(15)].map((_, i) => <span key={`mote-${i}`} className="dust-mote" />)}
-            {[...Array(5)].map((_, i) => <span key={`thread-${i}`} className="dust-thread" />)}
-          </div>
-
           {/* ── GLOBAL HEADER TOOLBAR ──
               Flush against the very top of the content column — same y as
               the sidebar's "CRAVE ABS / ADMIN CONSOLE" brand block, so the
@@ -4084,9 +4023,15 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* TAB 1: POS TERMINAL */}
+            {/* TAB 1: POS TERMINAL
+                Two-panel counter layout: a fixed-width cart/checkout column
+                on the left (unchanged logic — same state, same handlers),
+                and a browsable product grid on the right so staff aren't
+                limited to scanning a physical barcode. Stacks to a single
+                column below lg. */}
             {activeTab === 'pos' && (
-              <div className="max-w-2xl print:hidden">
+              <div className="print:hidden grid grid-cols-1 lg:grid-cols-[440px_1fr] gap-6 items-start">
+              <div className="w-full max-w-full lg:max-w-none">
                 <div className="p-card">
                   {/* POS scan header */}
                   <div style={{ padding: '20px 24px 0' }}>
@@ -4393,6 +4338,143 @@ export default function AdminDashboard() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* ── Product browser (right panel) ──
+                  Reuses the same variant-grouping logic as List Products so
+                  a product with several sizes/colors shows one tile, not
+                  one per barcode. Single-variant products add straight to
+                  cart on click; multi-variant ones expand in place to a row
+                  of variant chips so the correct barcode still gets sold. */}
+              <div className="p-card lg:sticky lg:top-[92px]">
+                <div className="flex items-center justify-between gap-3 flex-wrap" style={{ padding: '20px 24px 0' }}>
+                  <div>
+                    <h3 className="text-base font-bold text-ink">Browse Products</h3>
+                    <p className="text-xs text-muted mt-0.5">Tap an item to add it to the sale</p>
+                  </div>
+                  <span className="text-muted text-xs font-mono font-bold">{posFilteredGroups.length} SHOWN</span>
+                </div>
+
+                <div style={{ padding: '16px 24px 0' }}>
+                  <div className="relative mb-4">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-muted">
+                      <IconSearch className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search products by name..."
+                      className="p-input"
+                      style={{ paddingLeft: '38px' }}
+                      value={posBrowseQuery}
+                      onChange={(e) => setPosBrowseQuery(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Category pills — All + every category that has stock */}
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-4" style={{ scrollbarWidth: 'none' }}>
+                    {posCategoryOptions.map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => { setPosBrowseCategory(cat); setPosExpandedGroupKey(null); }}
+                        className="shrink-0 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-full border transition-all"
+                        style={posBrowseCategory === cat ? {
+                          background: 'linear-gradient(180deg,#2a2620 0%,#1c1a17 100%)',
+                          color: '#fff',
+                          borderColor: 'transparent',
+                          boxShadow: 'var(--shadow-sm)'
+                        } : {
+                          background: 'var(--card-bg)',
+                          color: 'var(--color-muted)',
+                          borderColor: 'var(--card-border)'
+                        }}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {posFilteredGroups.length === 0 ? (
+                  <div className="p-empty" style={{ paddingBottom: 40 }}>
+                    <div className="p-empty-icon">
+                      <IconTag className="w-5 h-5" />
+                    </div>
+                    <p className="p-empty-title">No products match</p>
+                    <p className="p-empty-desc">Try a different search term or category.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3" style={{ padding: '0 24px 24px', maxHeight: 640, overflowY: 'auto' }}>
+                    {posFilteredGroups.map((group) => {
+                      const totalStock = group.variants.reduce((s: number, v: any) => s + (v.quantity || 0), 0);
+                      const isExpanded = posExpandedGroupKey === group.key;
+                      const singleVariant = group.variants.length === 1 ? group.variants[0] : null;
+                      const priceLow = Math.min(...group.variants.map((v: any) => v.price));
+                      const priceHigh = Math.max(...group.variants.map((v: any) => v.price));
+                      return (
+                        <div
+                          key={group.key}
+                          className="rounded-xl border overflow-hidden transition-all"
+                          style={{ borderColor: isExpanded ? 'var(--color-brass)' : 'var(--card-border)', background: 'var(--card-bg)', boxShadow: isExpanded ? 'var(--shadow-glow-brass)' : 'var(--shadow-xs)' }}
+                        >
+                          <button
+                            type="button"
+                            disabled={totalStock === 0}
+                            onClick={() => {
+                              if (totalStock === 0) return;
+                              if (singleVariant) { addItemToCart(singleVariant); return; }
+                              setPosExpandedGroupKey(isExpanded ? null : group.key);
+                            }}
+                            className="w-full text-left disabled:opacity-45 disabled:cursor-not-allowed"
+                          >
+                            <div className="aspect-square w-full flex items-center justify-center overflow-hidden" style={{ background: 'var(--color-paper-dim)' }}>
+                              {group.image_url ? (
+                                <img src={group.image_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <IconImage className="w-6 h-6 text-muted" />
+                              )}
+                            </div>
+                            <div className="px-2.5 py-2">
+                              <p className="text-xs font-semibold text-ink leading-snug line-clamp-2">{group.name}</p>
+                              <div className="flex items-center justify-between mt-1.5">
+                                <span className="font-mono text-xs font-bold p-stat-brass">
+                                  ৳{priceLow}{priceHigh !== priceLow ? `–${priceHigh}` : ''}
+                                </span>
+                                <span className={`text-[10px] font-mono font-bold ${totalStock === 0 ? 'text-oxblood' : 'text-muted'}`}>
+                                  {totalStock === 0 ? 'OUT' : `${totalStock} in stock`}
+                                </span>
+                              </div>
+                              {group.variants.length > 1 && (
+                                <span className="text-[10px] text-muted">{group.variants.length} variants{isExpanded ? ' · pick one ↓' : ''}</span>
+                              )}
+                            </div>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="px-2.5 pb-2.5 flex flex-wrap gap-1.5" style={{ borderTop: '1px solid var(--card-border)', paddingTop: 8 }}>
+                              {group.variants.map((v: any) => {
+                                const out = (v.quantity || 0) <= 0;
+                                return (
+                                  <button
+                                    key={v.id}
+                                    type="button"
+                                    disabled={out}
+                                    onClick={() => addItemToCart(v)}
+                                    className="px-2 py-1 text-[10px] font-bold rounded-md border disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    style={{ borderColor: 'var(--card-border)', color: out ? 'var(--color-muted)' : 'var(--color-ink)', background: 'var(--color-paper-dim)' }}
+                                    title={out ? 'Out of stock' : `৳${v.price} · ${v.quantity} in stock`}
+                                  >
+                                    {variantTag(v) || v.barcode} · ৳{v.price}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               </div>
             )}
 
