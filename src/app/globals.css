@@ -839,38 +839,9 @@ html.dark .p-alert.text-moss    { background: rgba(76,175,128,0.08); border-colo
 
 .sparkline path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
-
-/* ============================================================
-   VIDEO WALLPAPER — body must be transparent so the fixed
-   video background shows through. The dark tint comes from
-   .video-bg-overlay inside the video wrapper instead.
-   ============================================================ */
-
-html.dark body {
-  background: transparent !important;
-}
-
-/* Light mode keeps its warm paper tone (no video) */
-html:not(.dark) body {
-  background: var(--background);
-}
-
-/* The sidebar keeps its own opaque bg so the video
-   doesn't bleed through the navigation panel. */
+/* The sidebar keeps its own opaque background in dark mode too — this
+   has nothing to do with the video hack removed above, it just makes
+   sure the nav panel never reads as translucent. */
 html.dark aside {
   background: var(--color-canvas);
-}
-
-/* ============================================================
-   VIDEO WALLPAPER — body transparent so fixed video shows.
-   Dark tint comes from .video-bg-overlay inside the wrapper.
-   ============================================================ */
-html.dark body {
-  background: transparent !important;
-}
-html:not(.dark) body {
-  background: var(--background);
-}
-html.dark aside {
-  background: var(--color-canvas) !important;
 }
