@@ -652,6 +652,17 @@ export default function AdminDashboard() {
   const [editingId, setEditingId] = useState<any>(null);
   const [editDraft, setEditDraft] = useState({ name: '', category: '', brand: '', unit: '', size: '', color: '', price: '', quantity: '', reorder_point: '' });
 
+  // List Products table (flat, one row per barcode — see the redesign
+  // below). openRowMenuId tracks which row's "Actions ▾" dropdown is open;
+  // viewingItem/historyItem drive the two read-only modals that dropdown
+  // opens; selectedRowIds backs the checkbox column.
+  const [openRowMenuId, setOpenRowMenuId] = useState<any>(null);
+  const [viewingItem, setViewingItem] = useState<any>(null);
+  const [historyItem, setHistoryItem] = useState<any>(null);
+  const [historyRows, setHistoryRows] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<any>>(new Set());
+
   // Products reference data: Categories / Units / Brands
   const [categories, setCategories] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
@@ -2158,6 +2169,24 @@ export default function AdminDashboard() {
     }
   };
 
+  // "Product Stock History" — every completed/refunded sale row that
+  // touched this exact barcode, newest first. Reuses the same `sales`
+  // table the Reports/Refunds tabs already query, just filtered to one
+  // dress_id instead of a date range.
+  const openStockHistory = async (item: any) => {
+    setHistoryItem(item);
+    setHistoryLoading(true);
+    setHistoryRows([]);
+    const { data, error } = await supabase
+      .from('sales')
+      .select('*')
+      .eq('dress_id', item.id)
+      .order('sold_at', { ascending: false })
+      .limit(100);
+    if (!error && data) setHistoryRows(data);
+    setHistoryLoading(false);
+  };
+
   // --- UPDATE PRICE (focused quick-edit) ---
   const saveQuickPrice = async (id: any) => {
     const newPrice = parseFloat(priceDraftValue);
@@ -3132,11 +3161,20 @@ export default function AdminDashboard() {
     p.name.toLowerCase().includes(stockSearchQuery.toLowerCase()) ||
     p.variants.some((v: any) => v.barcode.toLowerCase().includes(stockSearchQuery.toLowerCase()))
   );
+
+  // The List Products table (below) is flat — one row per barcode/SKU,
+  // matching a standard inventory table — rather than the grouped cards
+  // used elsewhere. Flatten here so search/pagination count rows, not
+  // product groups. groupVariantCount rides along so "Product Type" can
+  // show Single vs Variable per row without recomputing it per cell.
+  const flatInventoryRows = filteredInventory.flatMap((group: any) =>
+    group.variants.map((v: any) => ({ ...v, groupImage: group.image_url, groupVariantCount: group.variants.length }))
+  );
   // Search/filter above runs against the full inventory first, so a match on
   // any page is found — pagination below only slices what's already matched.
-  const stockTotalPages = Math.max(1, Math.ceil(filteredInventory.length / STOCK_PAGE_SIZE));
+  const stockTotalPages = Math.max(1, Math.ceil(flatInventoryRows.length / STOCK_PAGE_SIZE));
   const stockPageClamped = Math.min(stockPage, stockTotalPages);
-  const paginatedInventory = filteredInventory.slice(
+  const paginatedInventory = flatInventoryRows.slice(
     (stockPageClamped - 1) * STOCK_PAGE_SIZE,
     stockPageClamped * STOCK_PAGE_SIZE
   );
@@ -4571,169 +4609,164 @@ export default function AdminDashboard() {
 
                     <div className="p-divider mx-7 mb-2" />
 
-                    <div className="px-7 py-2 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-3">
-                      {filteredInventory.length === 0 ? (
-                        <div className="col-span-full text-center py-12 text-muted">
-                          <IconArchive className="mx-auto h-9 w-9 mb-3 text-thread-dark" />
-                          <p className="text-sm font-medium">No items found matching your search.</p>
-                        </div>
-                      ) : (
-                        paginatedInventory.map((group: any) => {
-                          const anyEditingInGroup = group.variants.some((v: any) => editingId === v.id);
-                          const categoryOptions = categories.length > 0 ? categories.map((c: any) => c.name) : FALLBACK_CATEGORIES;
-
-                          return (
-                            <div key={group.key} className={`p-card overflow-hidden flex flex-col ${anyEditingInGroup ? 'col-span-full' : ''}`}>
-                              {!hasPermission(userRole, 'edit_inventory') ? (
-                                <div className="relative w-full aspect-square bg-paper-dim overflow-hidden">
-                                  {group.image_url ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={group.image_url} alt="" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-muted">
-                                      <IconImage className="w-6 h-6" />
-                                    </div>
-                                  )}
+                    {/* Flat inventory table — one row per barcode/SKU,
+                        matching a standard POS admin product list rather
+                        than the grouped variant cards used elsewhere. */}
+                    <div className="overflow-x-auto">
+                      <table className="p-table w-full">
+                        <thead>
+                          <tr>
+                            <th style={{ width: 40 }}>
+                              <input
+                                type="checkbox"
+                                className="accent-brass w-3.5 h-3.5"
+                                checked={paginatedInventory.length > 0 && paginatedInventory.every((r: any) => selectedRowIds.has(r.id))}
+                                onChange={(e) => {
+                                  const next = new Set(selectedRowIds);
+                                  if (e.target.checked) paginatedInventory.forEach((r: any) => next.add(r.id));
+                                  else paginatedInventory.forEach((r: any) => next.delete(r.id));
+                                  setSelectedRowIds(next);
+                                }}
+                              />
+                            </th>
+                            <th>Image</th>
+                            <th>Action</th>
+                            <th>Product</th>
+                            <th>Business Location</th>
+                            <th>Selling Price</th>
+                            <th>Current Stock</th>
+                            <th>Product Type</th>
+                            <th>Category</th>
+                            <th>Brand</th>
+                            <th>Tax</th>
+                            <th>Barcode</th>
+                            <th>Size</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedInventory.length === 0 ? (
+                            <tr>
+                              <td colSpan={13}>
+                                <div className="text-center py-12 text-muted">
+                                  <IconArchive className="mx-auto h-9 w-9 mb-3 text-thread-dark" />
+                                  <p className="text-sm font-medium">No items found matching your search.</p>
                                 </div>
-                              ) : (
-                                <label className="relative block w-full aspect-square bg-paper-dim overflow-hidden cursor-pointer group" title="Click to add/change photo">
-                                  {group.image_url ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={group.image_url} alt="" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-muted">
-                                      <IconImage className="w-6 h-6" />
+                              </td>
+                            </tr>
+                          ) : (
+                            paginatedInventory.map((item: any) => {
+                              const isArchived = item.status === 'archived';
+                              const isLow = !isArchived && item.quantity > 0 && item.quantity <= effectiveReorderPoint(item);
+                              const isChecked = selectedRowIds.has(item.id);
+                              const menuOpen = openRowMenuId === item.id;
+                              return (
+                                <tr key={item.id}>
+                                  <td>
+                                    <input
+                                      type="checkbox"
+                                      className="accent-brass w-3.5 h-3.5"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        const next = new Set(selectedRowIds);
+                                        if (e.target.checked) next.add(item.id); else next.delete(item.id);
+                                        setSelectedRowIds(next);
+                                      }}
+                                    />
+                                  </td>
+                                  <td>
+                                    <div className="w-10 h-10 rounded-md overflow-hidden bg-paper-dim shrink-0 flex items-center justify-center">
+                                      {(item.image_url || item.groupImage) ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={item.image_url || item.groupImage} alt="" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <IconImage className="w-4 h-4 text-muted" />
+                                      )}
                                     </div>
-                                  )}
-                                  {photoUploadingId === group.variants[0].id ? (
-                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                      <span className="text-[10px] text-white font-bold uppercase">Saving…</span>
-                                    </div>
-                                  ) : (
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                      <IconPencil className="w-5 h-5 text-white" />
-                                    </div>
-                                  )}
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    disabled={photoUploadingId === group.variants[0].id}
-                                    onChange={(e) => {
-                                      const file = e.target.files?.[0];
-                                      if (file) handleReplacePhoto(group.variants[0], file);
-                                      e.target.value = '';
-                                    }}
-                                  />
-                                </label>
-                              )}
-
-                              <div className="p-2.5 flex flex-col gap-2 flex-1">
-                                <div className="min-w-0">
-                                  <p className="font-bold text-ink text-sm leading-snug line-clamp-2">{group.name}</p>
-                                  <p className="text-xs text-muted mt-0.5 truncate">
-                                    {group.category}{group.brand ? ` · ${group.brand}` : ''} · {group.unit || 'Piece'}
-                                  </p>
-                                </div>
-
-                                <div className="flex flex-col gap-2">
-                                  {group.variants.map((item: any) => {
-                                    const isEditing = editingId === item.id;
-                                    const isArchived = item.status === 'archived';
-                                    const isLow = !isArchived && item.quantity > 0 && item.quantity <= effectiveReorderPoint(item);
-                                    const tag = variantTag(item);
-
-                                    return isEditing ? (
-                                      <div key={item.id} className="p-2.5 bg-paper-dim border border-thread space-y-2">
-                                        <div className="grid grid-cols-2 gap-2">
-                                          <input value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })} placeholder="Item title" className="p-input text-xs" />
-                                          <select value={editDraft.category} onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })} className="p-input text-xs">
-                                            {categoryOptions.map((name: string) => (<option key={name} value={name}>{name}</option>))}
-                                          </select>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                          <input value={editDraft.size} onChange={(e) => setEditDraft({ ...editDraft, size: e.target.value })} placeholder="Size" className="p-input text-xs" />
-                                          <input value={editDraft.color} onChange={(e) => setEditDraft({ ...editDraft, color: e.target.value })} placeholder="Color" className="p-input text-xs" />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                          <select value={editDraft.brand} onChange={(e) => setEditDraft({ ...editDraft, brand: e.target.value })} className="p-input text-xs">
-                                            <option value="">No brand</option>
-                                            {brands.map((b: any) => (<option key={b.id} value={b.name}>{b.name}</option>))}
-                                          </select>
-                                          <select value={editDraft.unit} onChange={(e) => setEditDraft({ ...editDraft, unit: e.target.value })} className="p-input text-xs">
-                                            <option value="Piece">Piece</option>
-                                            {units.filter((u: any) => u.name !== 'Piece').map((u: any) => (<option key={u.id} value={u.name}>{u.name}</option>))}
-                                          </select>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                          <input type="number" value={editDraft.price} onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })} placeholder="Price" className="p-input text-xs" />
-                                          <input type="number" value={editDraft.quantity} onChange={(e) => setEditDraft({ ...editDraft, quantity: e.target.value })} placeholder="Quantity" className="px-3 py-2 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-xs text-ink font-mono font-bold transition-colors" />
-                                        </div>
-                                        <div>
-                                          <input type="number" min="0" value={editDraft.reorder_point} onChange={(e) => setEditDraft({ ...editDraft, reorder_point: e.target.value })} placeholder={`Reorder point (default: ${LOW_STOCK_THRESHOLD})`} className="w-full p-input text-xs" />
-                                        </div>
-                                        <div className="flex gap-2">
-                                          <button onClick={() => saveEditInventory(item.id)} className="flex-1 text-white text-[11px] font-bold uppercase tracking-wide py-2 transition-colors" style={{ background: '#2563eb' }} onMouseEnter={(e) => e.currentTarget.style.background = '#1d4ed8'} onMouseLeave={(e) => e.currentTarget.style.background = '#2563eb'}>Save</button>
-                                          <button onClick={cancelEditInventory} className="flex-1 border border-thread text-ink text-[11px] font-bold uppercase tracking-wide py-2 hover:border-thread-dark transition-colors">Cancel</button>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div key={item.id} className="pb-2 border-b border-thread/50 last:border-0 last:pb-0">
-                                        {/* Barcode gets its own full-width line — at 6-7 cards per
-                                            row the price/badge/buttons on the right already claim
-                                            most of the row, so sharing a row with them squeezed this
-                                            down to ~0px and made it invisible. Own line = always room. */}
-                                        <p className="text-[11px] text-ink font-mono font-bold truncate mb-1" title={item.barcode}>
-                                          {item.barcode || '— no barcode —'}
-                                        </p>
-                                        <div className="flex items-center justify-between gap-2">
-                                        <div className="min-w-0">
-                                          {tag && <p className="text-[10px] font-bold text-brass uppercase tracking-wide truncate">{tag}</p>}
-                                        </div>
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                          <div className="text-right">
-                                            <p className="font-mono font-bold text-ink text-xs">৳{item.price}</p>
-                                            <span className={`text-[9px] px-1.5 py-0.5 font-bold uppercase tracking-wide inline-block mt-0.5 ${
-                                              isArchived ? 'p-badge p-badge-muted'
-                                              : isLow || item.quantity === 0 ? 'p-badge p-badge-danger'
-                                              : 'p-badge p-badge-success'
-                                            }`}>
-                                              {isArchived ? 'archived' : `${item.quantity} left`}
-                                            </span>
-                                          </div>
-                                          <div className="flex gap-1">
-                                            {!hasPermission(userRole, 'edit_inventory') ? null : isArchived ? (
-                                              <button onClick={() => restoreInventoryItem(item)} title="Restore item" className="w-6 h-6 flex items-center justify-center border border-thread text-moss hover:border-moss transition-colors">
-                                                <IconUndo className="w-3 h-3" />
+                                  </td>
+                                  <td className="relative">
+                                    <button
+                                      onClick={() => setOpenRowMenuId(menuOpen ? null : item.id)}
+                                      className="p-btn p-btn-ghost py-1.5 px-3 text-[11px]"
+                                    >
+                                      Actions <IconChevronDown className={`w-3 h-3 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {menuOpen && (
+                                      <>
+                                        {/* Backdrop to catch outside clicks and close the menu */}
+                                        <div className="fixed inset-0 z-10" onClick={() => setOpenRowMenuId(null)} />
+                                        <div className="absolute left-0 top-full mt-1 z-20 w-48 bg-canvas border border-thread rounded-lg shadow-2xl overflow-hidden py-1">
+                                          <button
+                                            onClick={() => { setViewingItem(item); setOpenRowMenuId(null); }}
+                                            className="w-full text-left px-3.5 py-2 text-xs font-semibold text-ink hover:bg-paper-dim transition-colors flex items-center gap-2"
+                                          >
+                                            <IconTag className="w-3.5 h-3.5 text-muted" /> View
+                                          </button>
+                                          <button
+                                            onClick={() => { openStockHistory(item); setOpenRowMenuId(null); }}
+                                            className="w-full text-left px-3.5 py-2 text-xs font-semibold text-ink hover:bg-paper-dim transition-colors flex items-center gap-2"
+                                          >
+                                            <IconClock className="w-3.5 h-3.5 text-muted" /> Product Stock History
+                                          </button>
+                                          {hasPermission(userRole, 'edit_inventory') && !isArchived && (
+                                            <button
+                                              onClick={() => { startEditInventory(item); setOpenRowMenuId(null); }}
+                                              className="w-full text-left px-3.5 py-2 text-xs font-semibold text-ink hover:bg-paper-dim transition-colors flex items-center gap-2"
+                                            >
+                                              <IconPencil className="w-3.5 h-3.5 text-muted" /> Edit
+                                            </button>
+                                          )}
+                                          {hasPermission(userRole, 'edit_inventory') && (
+                                            isArchived ? (
+                                              <button
+                                                onClick={() => { restoreInventoryItem(item); setOpenRowMenuId(null); }}
+                                                className="w-full text-left px-3.5 py-2 text-xs font-semibold hover:bg-paper-dim transition-colors flex items-center gap-2"
+                                                style={{ color: '#3a9d6f' }}
+                                              >
+                                                <IconUndo className="w-3.5 h-3.5" /> Restore
                                               </button>
                                             ) : (
-                                              <>
-                                                <button onClick={() => startEditInventory(item)} title="Edit item" className="w-6 h-6 flex items-center justify-center border border-thread text-ink hover:border-brass hover:text-brass transition-colors">
-                                                  <IconPencil className="w-3 h-3" />
-                                                </button>
-                                                <button onClick={() => archiveInventoryItem(item)} title="Archive item" className="w-6 h-6 flex items-center justify-center border border-thread text-muted hover:border-oxblood hover:text-oxblood transition-colors">
-                                                  <IconArchive className="w-3 h-3" />
-                                                </button>
-                                              </>
-                                            )}
-                                          </div>
+                                              <button
+                                                onClick={() => { archiveInventoryItem(item); setOpenRowMenuId(null); }}
+                                                className="w-full text-left px-3.5 py-2 text-xs font-semibold text-oxblood hover:bg-paper-dim transition-colors flex items-center gap-2"
+                                              >
+                                                <IconArchive className="w-3.5 h-3.5" /> Delete (Archive)
+                                              </button>
+                                            )
+                                          )}
                                         </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
+                                      </>
+                                    )}
+                                  </td>
+                                  <td className="font-semibold max-w-[220px]">
+                                    <span className="line-clamp-2">{item.name}</span>
+                                    {item.color && <span className="block text-[11px] text-muted font-normal">{item.color}</span>}
+                                  </td>
+                                  <td className="text-muted">{businessSettings.business_name || 'Main Store'}</td>
+                                  <td className="font-mono font-bold">৳{item.price}</td>
+                                  <td>
+                                    <span className={`p-badge ${isArchived ? 'p-badge-muted' : isLow || item.quantity === 0 ? 'p-badge-danger' : 'p-badge-success'}`}>
+                                      {isArchived ? 'archived' : `${item.quantity} Pieces`}
+                                    </span>
+                                  </td>
+                                  <td className="text-muted">{item.groupVariantCount > 1 ? 'Variable' : 'Single'}</td>
+                                  <td className="text-muted">{item.category || '—'}</td>
+                                  <td className="text-muted">{item.brand || '—'}</td>
+                                  <td className="text-muted">—</td>
+                                  <td className="font-mono text-xs text-muted">{item.barcode}</td>
+                                  <td className="text-muted">{item.size || '—'}</td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
                     </div>
-                    {filteredInventory.length > 0 && (
+                    {flatInventoryRows.length > 0 && (
                       <div className="flex items-center justify-between px-7 pt-5 pb-2 gap-4 border-t border-thread/60 mt-2">
                         <p className="text-xs text-muted font-medium">
                           Showing {(stockPageClamped - 1) * STOCK_PAGE_SIZE + 1}
-                          –{Math.min(stockPageClamped * STOCK_PAGE_SIZE, filteredInventory.length)} of {filteredInventory.length}
+                          –{Math.min(stockPageClamped * STOCK_PAGE_SIZE, flatInventoryRows.length)} of {flatInventoryRows.length}
+                          {selectedRowIds.size > 0 && <span className="text-brass font-bold"> · {selectedRowIds.size} selected</span>}
                         </p>
                         <div className="flex items-center gap-2">
                           <button
@@ -4761,6 +4794,159 @@ export default function AdminDashboard() {
                     <div className="pb-7" />
                   </div>
                </div>
+            )}
+
+            {/* ── View Product modal (Actions ▾ → View) ── */}
+            {viewingItem && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 print:hidden" onClick={() => setViewingItem(null)}>
+                <div className="bg-canvas border border-thread rounded-xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between px-5 py-3.5 border-b border-thread">
+                    <h3 className="text-sm font-bold text-ink">Product Details</h3>
+                    <button onClick={() => setViewingItem(null)} className="text-muted hover:text-ink text-lg leading-none">×</button>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <div className="w-full aspect-square max-h-56 rounded-lg overflow-hidden bg-paper-dim flex items-center justify-center">
+                      {(viewingItem.image_url || viewingItem.groupImage) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={viewingItem.image_url || viewingItem.groupImage} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <IconImage className="w-8 h-8 text-muted" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-bold text-ink text-base">{viewingItem.name}</p>
+                      <p className="text-xs text-muted mt-0.5">{viewingItem.category}{viewingItem.brand ? ` · ${viewingItem.brand}` : ''} · {viewingItem.unit || 'Piece'}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Business Location</p><p className="text-ink">{businessSettings.business_name || 'Main Store'}</p></div>
+                      <div><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Selling Price</p><p className="text-ink font-mono font-bold">৳{viewingItem.price}</p></div>
+                      <div><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Current Stock</p><p className="text-ink">{viewingItem.quantity} Pieces</p></div>
+                      <div><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Product Type</p><p className="text-ink">{viewingItem.groupVariantCount > 1 ? 'Variable' : 'Single'}</p></div>
+                      <div><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Size</p><p className="text-ink">{viewingItem.size || '—'}</p></div>
+                      <div><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Color</p><p className="text-ink">{viewingItem.color || '—'}</p></div>
+                      <div className="col-span-2"><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Barcode</p><p className="text-ink font-mono">{viewingItem.barcode}</p></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Product Stock History modal (Actions ▾ → Product Stock History) ──
+                Every sale row that touched this barcode, newest first. */}
+            {historyItem && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 print:hidden" onClick={() => setHistoryItem(null)}>
+                <div className="bg-canvas border border-thread rounded-xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between px-5 py-3.5 border-b border-thread">
+                    <div>
+                      <h3 className="text-sm font-bold text-ink">Product Stock History</h3>
+                      <p className="text-xs text-muted mt-0.5">{historyItem.name} · {historyItem.barcode}</p>
+                    </div>
+                    <button onClick={() => setHistoryItem(null)} className="text-muted hover:text-ink text-lg leading-none">×</button>
+                  </div>
+                  <div className="max-h-[60vh] overflow-y-auto">
+                    {historyLoading ? (
+                      <p className="text-sm text-muted text-center py-10">Loading…</p>
+                    ) : historyRows.length === 0 ? (
+                      <div className="text-center py-10 text-muted">
+                        <IconClock className="mx-auto h-8 w-8 mb-2 text-thread-dark" />
+                        <p className="text-sm font-medium">No sales recorded for this item yet.</p>
+                      </div>
+                    ) : (
+                      <table className="p-table w-full">
+                        <thead>
+                          <tr><th>Date</th><th>Method</th><th>Amount</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                          {historyRows.map((row: any) => (
+                            <tr key={row.id}>
+                              <td className="text-xs">{row.sold_at ? new Date(row.sold_at).toLocaleString() : '—'}</td>
+                              <td className="text-xs uppercase text-muted">{row.payment_method}</td>
+                              <td className="font-mono font-bold text-xs">৳{row.amount_paid}</td>
+                              <td>
+                                <span className={`p-badge ${row.status === 'refunded' ? 'p-badge-danger' : 'p-badge-success'}`}>{row.status}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Edit Product modal (Actions ▾ → Edit) ──
+                Same editDraft state/save logic the app already used inline —
+                just rendered as a modal now that the list is a flat table. */}
+            {editingId !== null && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 print:hidden" onClick={cancelEditInventory}>
+                <div className="bg-canvas border border-thread rounded-xl shadow-2xl w-full max-w-md overflow-hidden max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between px-5 py-3.5 border-b border-thread shrink-0">
+                    <h3 className="text-sm font-bold text-ink">Edit Product</h3>
+                    <button onClick={cancelEditInventory} className="text-muted hover:text-ink text-lg leading-none">×</button>
+                  </div>
+                  <div className="p-5 space-y-3 overflow-y-auto">
+                    <div>
+                      <label className="p-label">Product Photo</label>
+                      <label className="relative block w-20 h-20 rounded-lg overflow-hidden bg-paper-dim cursor-pointer group" title="Click to change photo">
+                        {(() => {
+                          const current = recentInventory.find((it: any) => it.id === editingId);
+                          return current?.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={current.image_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-muted"><IconImage className="w-5 h-5" /></div>
+                          );
+                        })()}
+                        {photoUploadingId === editingId ? (
+                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                            <span className="text-[9px] text-white font-bold uppercase">Saving…</span>
+                          </div>
+                        ) : (
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                            <IconPencil className="w-4 h-4 text-white" />
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={photoUploadingId === editingId}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            const current = recentInventory.find((it: any) => it.id === editingId);
+                            if (file && current) handleReplacePhoto(current, file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })} placeholder="Item title" className="p-input text-xs col-span-2" />
+                      <select value={editDraft.category} onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })} className="p-input text-xs col-span-2">
+                        {(categories.length > 0 ? categories.map((c: any) => c.name) : FALLBACK_CATEGORIES).map((name: string) => (<option key={name} value={name}>{name}</option>))}
+                      </select>
+                      <input value={editDraft.size} onChange={(e) => setEditDraft({ ...editDraft, size: e.target.value })} placeholder="Size" className="p-input text-xs" />
+                      <input value={editDraft.color} onChange={(e) => setEditDraft({ ...editDraft, color: e.target.value })} placeholder="Color" className="p-input text-xs" />
+                      <select value={editDraft.brand} onChange={(e) => setEditDraft({ ...editDraft, brand: e.target.value })} className="p-input text-xs">
+                        <option value="">No brand</option>
+                        {brands.map((b: any) => (<option key={b.id} value={b.name}>{b.name}</option>))}
+                      </select>
+                      <select value={editDraft.unit} onChange={(e) => setEditDraft({ ...editDraft, unit: e.target.value })} className="p-input text-xs">
+                        <option value="Piece">Piece</option>
+                        {units.filter((u: any) => u.name !== 'Piece').map((u: any) => (<option key={u.id} value={u.name}>{u.name}</option>))}
+                      </select>
+                      <input type="number" value={editDraft.price} onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })} placeholder="Price" className="p-input text-xs" />
+                      <input type="number" value={editDraft.quantity} onChange={(e) => setEditDraft({ ...editDraft, quantity: e.target.value })} placeholder="Quantity" className="px-3 py-2 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-xs text-ink font-mono font-bold transition-colors" />
+                      <input type="number" min="0" value={editDraft.reorder_point} onChange={(e) => setEditDraft({ ...editDraft, reorder_point: e.target.value })} placeholder={`Reorder point (default: ${LOW_STOCK_THRESHOLD})`} className="w-full p-input text-xs col-span-2" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 p-5 pt-0 shrink-0">
+                    <button onClick={() => saveEditInventory(editingId)} className="flex-1 p-btn p-btn-primary justify-center">Save</button>
+                    <button onClick={cancelEditInventory} className="flex-1 p-btn p-btn-ghost justify-center">Cancel</button>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* PRODUCTS: ADD PRODUCT */}
