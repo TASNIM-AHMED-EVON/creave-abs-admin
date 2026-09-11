@@ -4720,7 +4720,7 @@ export default function AdminDashboard() {
 
             {/* PRODUCTS: ADD PRODUCT */}
             {activeTab === 'products-add' && (
-              <div className="max-w-2xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconPlus className="w-4 h-4 text-brass" />
@@ -4904,7 +4904,7 @@ export default function AdminDashboard() {
 
             {/* PRODUCTS: PRINT LABELS */}
             {activeTab === 'products-labels' && (
-              <div className="max-w-2xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconPrinter className="w-4 h-4 text-brass" />
@@ -5013,7 +5013,7 @@ export default function AdminDashboard() {
 
             {/* PRODUCTS: UPDATE PRICE */}
             {activeTab === 'products-price' && (
-              <div className="max-w-2xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card">
                   <div className="px-7 pt-7 pb-5">
                     <h3 className="text-base font-bold text-ink flex items-center gap-2">
@@ -5346,7 +5346,7 @@ export default function AdminDashboard() {
 
             {/* PRODUCTS: CATEGORIES */}
             {activeTab === 'products-categories' && (
-              <div className="max-w-xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card">
                   <div className="px-7 pt-7 pb-5">
                     <h3 className="text-base font-bold text-ink flex items-center gap-2">
@@ -5389,7 +5389,7 @@ export default function AdminDashboard() {
 
             {/* PRODUCTS: UNITS */}
             {activeTab === 'products-units' && (
-              <div className="max-w-xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card">
                   <div className="px-7 pt-7 pb-5">
                     <h3 className="text-base font-bold text-ink flex items-center gap-2">
@@ -5439,7 +5439,7 @@ export default function AdminDashboard() {
 
             {/* PRODUCTS: BRANDS */}
             {activeTab === 'products-brands' && (
-              <div className="max-w-xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card">
                   <div className="px-7 pt-7 pb-5">
                     <h3 className="text-base font-bold text-ink flex items-center gap-2">
@@ -5739,7 +5739,7 @@ export default function AdminDashboard() {
 
             {/* PURCHASES: ADD PURCHASE (the action that moves stock) */}
             {activeTab === 'purchases-add' && (
-              <div className="max-w-2xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconTruck className="w-4 h-4 text-brass" />
@@ -5887,7 +5887,7 @@ export default function AdminDashboard() {
 
             {/* PURCHASES: SUPPLIERS */}
             {activeTab === 'purchases-suppliers' && (
-              <div className="max-w-2xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card p-7 mb-6">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconUsers className="w-4 h-4 text-brass" />
@@ -6173,7 +6173,7 @@ export default function AdminDashboard() {
 
             {/* SELL: ADD SALE (search-based quick sale, no scanner needed) */}
             {activeTab === 'sell-add' && (
-              <div className="max-w-xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconBag className="w-4 h-4 text-brass" />
@@ -6283,7 +6283,7 @@ export default function AdminDashboard() {
 
             {/* TAB 3: REFUND */}
             {activeTab === 'refund' && (
-              <div className="max-w-3xl print:hidden">
+              <div className="print:hidden">
                 <div className="bg-canvas p-8 border border-oxblood/25">
                   <div className="text-center mb-8">
                     <div className="w-12 h-12 bg-oxblood-light flex items-center justify-center mx-auto mb-4">
@@ -6295,12 +6295,12 @@ export default function AdminDashboard() {
 
                   {refundMessage.text && <div className={`px-4 py-3 mb-6 text-sm font-semibold border text-center ${refundMessage.type === 'error' ? 'p-badge p-badge-danger' : 'p-badge p-badge-success'}`}>{refundMessage.text}</div>}
 
-                  <form onSubmit={handleRefundSearch} className="mb-9 max-w-xl mx-auto flex gap-2">
+                  <form onSubmit={handleRefundSearch} className="mb-9 flex gap-2">
                     <input type="text" autoFocus placeholder="Scan barcode..." className="flex-1 px-5 py-3.5 bg-paper border border-thread focus:bg-canvas focus:border-oxblood outline-none text-ink font-mono transition-colors text-lg" value={refundBarcode} onChange={(e) => setRefundBarcode(e.target.value)} />
                     <button type="submit" className="p-btn p-btn-danger px-7">Search</button>
                   </form>
 
-                  <div className="divide-y divide-dashed divide-thread-dark max-w-2xl mx-auto">
+                  <div className="divide-y divide-dashed divide-thread-dark ">
                     {refundItemSales.map((sale) => (
                       <div key={sale.id} className="py-5 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                         <div>
@@ -6387,7 +6387,7 @@ export default function AdminDashboard() {
 
             {/* SELL: GIFT CARDS */}
             {activeTab === 'gift-cards' && (
-              <div className="max-w-2xl print:hidden space-y-6">
+              <div className="print:hidden space-y-6">
                 {/* Sell a new gift card */}
                 <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
@@ -6603,7 +6603,7 @@ export default function AdminDashboard() {
             )}
             {/* MEMBERSHIP: ADD MEMBER */}
             {activeTab === 'membership-add' && (
-              <div className="max-w-lg print:hidden">
+              <div className="print:hidden">
                 <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconUserPlus className="w-4 h-4 text-brass" />
@@ -6688,7 +6688,7 @@ export default function AdminDashboard() {
 
             {/* MEMBERSHIP: SETTINGS */}
             {activeTab === 'membership-settings' && (
-              <div className="max-w-xl print:hidden space-y-6">
+              <div className="print:hidden space-y-6">
                 {/* Discount control */}
                 <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
@@ -7071,7 +7071,7 @@ export default function AdminDashboard() {
 
             {/* SETTINGS: BUSINESS SETTINGS */}
             {activeTab === 'settings-business' && (
-              <div className="max-w-xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconSettingsGear className="w-4 h-4 text-brass" />
@@ -7106,7 +7106,7 @@ export default function AdminDashboard() {
 
             {/* SETTINGS: INVOICE SETTINGS */}
             {activeTab === 'settings-invoice' && (
-              <div className="max-w-xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconReceipt className="w-4 h-4 text-brass" />
@@ -7141,7 +7141,7 @@ export default function AdminDashboard() {
 
             {/* SETTINGS: BARCODE SETTINGS */}
             {activeTab === 'settings-barcode' && (
-              <div className="max-w-xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconScan className="w-4 h-4 text-brass" />
@@ -7168,7 +7168,7 @@ export default function AdminDashboard() {
 
             {/* SETTINGS: TAX RATES */}
             {activeTab === 'settings-tax' && (
-              <div className="max-w-xl print:hidden">
+              <div className="print:hidden">
                 <div className="p-card">
                   <div className="px-7 pt-7 pb-5">
                     <h3 className="text-base font-bold text-ink flex items-center gap-2">
@@ -7222,7 +7222,7 @@ export default function AdminDashboard() {
 
             {/* SETTINGS: CURRENCY & EXCHANGE RATES */}
             {activeTab === 'settings-currency' && (
-              <div className="max-w-xl print:hidden space-y-6">
+              <div className="print:hidden space-y-6">
                 <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconWallet className="w-4 h-4 text-brass" />
