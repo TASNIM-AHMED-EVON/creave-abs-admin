@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // ---------------------------------------------------------------------------
-// GET  /api/staff-accounts        — list every login account + its role
-// POST /api/staff-accounts        — { userId, role } change one account's role
-// PUT  /api/staff-accounts        — { email, password, role } create a new login
+// GET    /api/staff-accounts      — list every login account + its role
+// POST   /api/staff-accounts      — { userId, role } change one account's role
+// PUT    /api/staff-accounts      — { email, password, role } create a new login
+// PATCH  /api/staff-accounts      — { userId, newPassword } reset a login's password
+// DELETE /api/staff-accounts      — { userId } permanently remove a login
 //
 // This exists because app_metadata.role (the field that decides which tabs
 // a login can reach — see src/lib/permissions.ts) can ONLY be written by
@@ -19,6 +21,15 @@ import { createClient } from '@supabase/supabase-js';
 //      only an account whose role is already 'admin' may use this route.
 //   3. An admin can't use this to demote themselves (prevents accidentally
 //      locking yourself out with no other admin able to fix it).
+//   4. Same protection applies to DELETE — an admin can't delete their own
+//      account through this route either.
+//
+// Note: deleting a login here does NOT touch that person's staff PIN
+// identity (Manage Staff tab) — those are two separate systems on purpose
+// (see the comment above AccountsTab in StaffPanel.tsx). If someone who
+// resigned also had a PIN, deactivate that separately in Manage Staff so
+// their old sales/audit history keeps its attribution instead of pointing
+// at a deleted record.
 //
 // Setup:
 //   1. Supabase dashboard -> Settings -> API -> copy the "service_role" key
@@ -135,4 +146,54 @@ export async function PUT(request: Request) {
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true, account: { id: data.user?.id, email: data.user?.email, role } });
+}
+
+// Reset a forgotten password. The person doesn't need access to their old
+// password or any inbox for this — an admin sets a new one directly, then
+// tells them what it is.
+export async function PATCH(request: Request) {
+  const admin = getAdminClient();
+  if (!admin) return NextResponse.json(SERVICE_KEY_MISSING, { status: 500 });
+
+  const caller = await requireAdminCaller(request, admin);
+  if (!caller) return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
+
+  const body = await request.json().catch(() => null);
+  const userId = body?.userId;
+  const newPassword = typeof body?.newPassword === 'string' ? body.newPassword : '';
+
+  if (!userId || newPassword.length < 6) {
+    return NextResponse.json({ error: 'Provide a valid userId and a new password (6+ characters).' }, { status: 400 });
+  }
+
+  const { error } = await admin.auth.admin.updateUserById(userId, { password: newPassword });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
+}
+
+// Permanently remove a login — for when someone resigns. This is a real
+// delete, not a deactivate: Supabase Auth accounts aren't referenced by any
+// foreign key elsewhere in this schema (staff PIN identities are entirely
+// separate rows, unaffected), so there's nothing left dangling afterward.
+export async function DELETE(request: Request) {
+  const admin = getAdminClient();
+  if (!admin) return NextResponse.json(SERVICE_KEY_MISSING, { status: 500 });
+
+  const caller = await requireAdminCaller(request, admin);
+  if (!caller) return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
+
+  const body = await request.json().catch(() => null);
+  const userId = body?.userId;
+  if (!userId) return NextResponse.json({ error: 'Provide a userId.' }, { status: 400 });
+
+  if (userId === caller.id) {
+    return NextResponse.json(
+      { error: "You can't delete your own account from here — have another admin account do it." },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
 }
