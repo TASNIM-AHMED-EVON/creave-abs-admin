@@ -681,6 +681,17 @@ export default function AdminDashboard() {
   // Locations & Stock Transfer
   const [locations, setLocations] = useState<any[]>([]);
   const [locationStock, setLocationStock] = useState<any[]>([]);
+
+  // Which physical shop this terminal is currently "acting as" for checkout
+  // (tags every sale, and decrements that shop's location_stock). Persisted
+  // per-browser so a terminal that's always in the same shop doesn't need
+  // reselecting on every reload. Defaults to the logged-in staff member's
+  // home location (see migration_013) once one is known, otherwise the
+  // first location in the list.
+  const [activeLocationId, setActiveLocationId] = useState<string>('');
+  // Separate from the above: which location's numbers Overview/Reports show.
+  // '' means "all locations combined."
+  const [reportLocationId, setReportLocationId] = useState<string>('');
   const [newLocationName, setNewLocationName] = useState('');
   const [newLocationAddress, setNewLocationAddress] = useState('');
   const [locationMessage, setLocationMessage] = useState({ type: '', text: '' });
@@ -847,6 +858,7 @@ export default function AdminDashboard() {
       end.setHours(23, 59, 59, 999);
       query = query.lte('sold_at', end.toISOString());
     }
+    if (reportLocationId) query = query.eq('location_id', reportLocationId);
 
     const { data } = await query;
     if (data) {
@@ -868,7 +880,7 @@ export default function AdminDashboard() {
       setTotalRevenue(total);
       setRevenueByMethod(methods);
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, reportLocationId]);
 
   // --- OVERVIEW MEMOIZED FETCH ---
   // Independent of the Reports date filters so the dashboard always shows
@@ -881,11 +893,13 @@ export default function AdminDashboard() {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    const { data: todayData } = await supabase
+    let todayQuery = supabase
       .from('sales')
       .select('amount_paid, status')
       .gte('sold_at', startOfDay.toISOString())
       .lte('sold_at', endOfDay.toISOString());
+    if (reportLocationId) todayQuery = todayQuery.eq('location_id', reportLocationId);
+    const { data: todayData } = await todayQuery;
 
     if (todayData) {
       const completedToday = todayData.filter((s: any) => s.status === 'completed');
@@ -895,12 +909,14 @@ export default function AdminDashboard() {
 
     // Tally units sold per item across the most recent completed sales to
     // surface a top-sellers leaderboard without needing a SQL view.
-    const { data: recentSales } = await supabase
+    let recentQuery = supabase
       .from('sales')
       .select('dress_id, amount_paid, status, dresses ( name, barcode, size, color )')
       .eq('status', 'completed')
       .order('sold_at', { ascending: false })
       .limit(500);
+    if (reportLocationId) recentQuery = recentQuery.eq('location_id', reportLocationId);
+    const { data: recentSales } = await recentQuery;
 
     if (recentSales) {
       const tally: Record<string, { name: string; barcode: string; size: string; color: string; unitsSold: number; revenue: number }> = {};
@@ -924,7 +940,7 @@ export default function AdminDashboard() {
     }
 
     setOverviewLoading(false);
-  }, []);
+  }, [reportLocationId]);
 
   // --- PRODUCTS REFERENCE DATA ---
   const fetchCategories = useCallback(async () => {
@@ -1252,6 +1268,29 @@ export default function AdminDashboard() {
       document.documentElement.classList.remove('dark');
       localStorage.setItem('crave_abs_theme', 'light');
     }
+  };
+
+  // --- ACTIVE SELLING LOCATION ---
+  // Reads a saved terminal location on first load (a shop's till is almost
+  // always physically the same shop every day). Once `locations` loads from
+  // the server, fills in a sensible default if nothing was saved yet:
+  // the logged-in staff member's home location, or just the first location.
+  useEffect(() => {
+    const saved = localStorage.getItem('crave_abs_active_location');
+    if (saved) setActiveLocationId(saved);
+  }, []);
+
+  useEffect(() => {
+    if (activeLocationId || locations.length === 0) return;
+    const fallback = (currentStaff as any)?.location_id
+      ? String((currentStaff as any).location_id)
+      : String(locations[0].id);
+    setActiveLocationId(fallback);
+  }, [locations, currentStaff, activeLocationId]);
+
+  const changeActiveLocation = (id: string) => {
+    setActiveLocationId(id);
+    localStorage.setItem('crave_abs_active_location', id);
   };
 
   // --- PRINT MODE ---
@@ -1603,6 +1642,7 @@ export default function AdminDashboard() {
         status: 'completed',
         staff_id: currentStaff?.id ?? null,
         customer_id: posCustomer?.id ?? null,
+        location_id: activeLocationId || null,
       };
     });
 
@@ -1663,6 +1703,24 @@ export default function AdminDashboard() {
           status: newQuantity === 0 ? 'sold' : 'available'
         })
         .eq('id', item.id);
+
+      // Keep the per-location breakdown in sync too — only if this exact
+      // product has actually been assigned to the active location before
+      // (via Stock Transfer). If it hasn't, there's no location_stock row
+      // to decrement yet; the business-wide total above still moves either
+      // way, this just skips updating a per-shop number that was never set.
+      if (activeLocationId) {
+        const { data: locRow } = await supabase
+          .from('location_stock')
+          .select('id, quantity')
+          .eq('dress_id', item.id)
+          .eq('location_id', activeLocationId)
+          .maybeSingle();
+        if (locRow) {
+          const newLocQty = Math.max(0, Number(locRow.quantity) - item.cartQty);
+          await supabase.from('location_stock').update({ quantity: newLocQty, updated_at: new Date().toISOString() }).eq('id', locRow.id);
+        }
+      }
     }
 
     if (discount > 0 && discountApprover) {
@@ -3880,6 +3938,21 @@ export default function AdminDashboard() {
                 <button onClick={() => setShowCalculator(true)} className="p-btn p-btn-ghost">
                   <IconCalculator className="w-3.5 h-3.5" /> Calculator
                 </button>
+                {/* Which physical shop this terminal is selling as — tags
+                    every sale and decrements that shop's stock breakdown.
+                    Only shown once at least one location exists. */}
+                {locations.length > 0 && (
+                  <label className="flex items-center gap-1.5 px-2.5 py-1.5 border border-brass/40 bg-brass/10 rounded-lg" title="Sales from this terminal are recorded against this location">
+                    <IconTag className="w-3.5 h-3.5 text-brass shrink-0" />
+                    <select
+                      value={activeLocationId}
+                      onChange={(e) => changeActiveLocation(e.target.value)}
+                      className="bg-transparent text-xs font-bold text-brass-dark uppercase tracking-wide outline-none cursor-pointer"
+                    >
+                      {locations.map((loc: any) => (<option key={loc.id} value={loc.id}>{loc.name}</option>))}
+                    </select>
+                  </label>
+                )}
               </div>
               <p className="text-xs font-mono text-muted uppercase tracking-wider flex items-center gap-3">
                 {lowStockItems.length > 0 && (
@@ -3908,6 +3981,23 @@ export default function AdminDashboard() {
             {/* TAB 0: OVERVIEW */}
             {activeTab === 'overview' && (
               <div className="space-y-6 print:hidden">
+
+                {/* Location filter — only shown once there's more than one
+                    location to distinguish. Every number below (today's
+                    revenue, items sold, top sellers) reacts to this. */}
+                {locations.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-muted uppercase tracking-wide">Showing:</span>
+                    <select
+                      value={reportLocationId}
+                      onChange={(e) => setReportLocationId(e.target.value)}
+                      className="p-input text-xs w-auto py-1.5"
+                    >
+                      <option value="">All Locations</option>
+                      {locations.map((loc: any) => (<option key={loc.id} value={loc.id}>{loc.name}</option>))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Shopify-style stat cards with mini sparklines */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -7156,6 +7246,19 @@ export default function AdminDashboard() {
                     <label className="p-label">Filter End Date</label>
                     <input type="date" className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink font-mono text-sm transition-colors" value={endDate} onChange={(e) => { setEndDate(e.target.value); setReportsPage(1); }} />
                   </div>
+                  {locations.length > 0 && (
+                    <div className="flex-1 min-w-[180px]">
+                      <label className="p-label">Location</label>
+                      <select
+                        className="w-full px-4 py-2.5 bg-paper border border-thread focus:bg-canvas focus:border-brass outline-none text-ink text-sm transition-colors"
+                        value={reportLocationId}
+                        onChange={(e) => { setReportLocationId(e.target.value); setReportsPage(1); }}
+                      >
+                        <option value="">All Locations</option>
+                        {locations.map((loc: any) => (<option key={loc.id} value={loc.id}>{loc.name}</option>))}
+                      </select>
+                    </div>
+                  )}
                   <button onClick={clearDateFilters} className="p-btn p-btn-ghost">
                     Clear Filters
                   </button>

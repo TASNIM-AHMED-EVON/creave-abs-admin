@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-export type StaffIdentity = { id: string; full_name: string; role: string };
+export type StaffIdentity = { id: string; full_name: string; role: string; location_id?: number | null };
 
 type PendingApproval = {
   actionLabel: string;
