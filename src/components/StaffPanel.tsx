@@ -184,6 +184,13 @@ function AccountsTab() {
   const [message, setMessage] = useState<{ type: string; text: string }>({ type: '', text: '' });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
+  // New-login form state, kept separate from the existing-accounts list
+  // above so editing one doesn't interfere with the other.
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState('cashier');
+  const [creating, setCreating] = useState(false);
+
   const load = async () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
@@ -232,6 +239,33 @@ function AccountsTab() {
     setSavingId(null);
   };
 
+  const createAccount = async () => {
+    setCreating(true);
+    setMessage({ type: '', text: '' });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    try {
+      const res = await fetch('/api/staff-accounts', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: newEmail.trim(), password: newPassword, role: newRole }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setMessage({ type: 'error', text: body.error || 'Failed to create account.' });
+      } else {
+        setMessage({ type: 'success', text: `Account created for ${newEmail.trim()}. Share the password with them directly — it won't be shown again here.` });
+        setNewEmail('');
+        setNewPassword('');
+        setNewRole('cashier');
+        load();
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Could not reach the server.' });
+    }
+    setCreating(false);
+  };
+
   if (loading) return <p className="text-sm text-muted">Loading accounts…</p>;
 
   return (
@@ -240,6 +274,40 @@ function AccountsTab() {
         These are login accounts (email + password) — the everyday sign-in for the app, separate from staff PIN identities above.
         Each one's role decides which tabs it can reach.
       </p>
+
+      {/* Create a new login — the piece that used to require the Supabase
+          dashboard entirely; opening an account for a manager, cashier, or
+          inventory clerk now takes just this form. */}
+      <div className="p-card p-4 mb-5">
+        <p className="p-label mb-3">Create New Login</p>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+          <input
+            type="email" placeholder="Email" value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            className="p-input text-sm sm:col-span-2"
+          />
+          <input
+            type="password" placeholder="Password (6+ characters)" value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="p-input text-sm"
+          />
+          <select value={newRole} onChange={(e) => setNewRole(e.target.value)} className="p-input text-sm">
+            {ASSIGNABLE_ROLES.map((r) => (<option key={r} value={r}>{r}</option>))}
+          </select>
+        </div>
+        <button
+          onClick={createAccount}
+          disabled={creating || !newEmail.trim() || newPassword.length < 6}
+          className="p-btn p-btn-primary mt-3 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {creating ? 'Creating…' : 'Create Account'}
+        </button>
+        <p className="text-xs text-muted mt-2">
+          They'll sign in with this email and password directly — no confirmation email, no separate setup step.
+          Tell them the password yourself; it isn't stored anywhere retrievable after this.
+        </p>
+      </div>
+
       {message.text && (
         <div className={`p-alert mb-4 ${message.type === 'error' ? 'text-oxblood' : 'text-moss'}`}>{message.text}</div>
       )}

@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 // ---------------------------------------------------------------------------
 // GET  /api/staff-accounts        — list every login account + its role
 // POST /api/staff-accounts        — { userId, role } change one account's role
+// PUT  /api/staff-accounts        — { email, password, role } create a new login
 //
 // This exists because app_metadata.role (the field that decides which tabs
 // a login can reach — see src/lib/permissions.ts) can ONLY be written by
@@ -105,4 +106,33 @@ export async function POST(request: Request) {
   const { error } = await admin.auth.admin.updateUserById(userId, { app_metadata: { role } });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
+}
+
+export async function PUT(request: Request) {
+  const admin = getAdminClient();
+  if (!admin) return NextResponse.json(SERVICE_KEY_MISSING, { status: 500 });
+
+  const caller = await requireAdminCaller(request, admin);
+  if (!caller) return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
+
+  const body = await request.json().catch(() => null);
+  const email = typeof body?.email === 'string' ? body.email.trim() : '';
+  const password = typeof body?.password === 'string' ? body.password : '';
+  const role = body?.role;
+
+  if (!email || password.length < 6 || !ALLOWED_ROLES.includes(role)) {
+    return NextResponse.json(
+      { error: `Provide an email, a password (6+ characters), and one of: ${ALLOWED_ROLES.join(', ')}` },
+      { status: 400 }
+    );
+  }
+
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true, // an admin is creating this directly — no confirmation inbox to check
+    app_metadata: { role },
+  });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true, account: { id: data.user?.id, email: data.user?.email, role } });
 }
