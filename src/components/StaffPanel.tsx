@@ -26,6 +26,7 @@ type AuditRow = {
 const SUBTAB_LABEL: Record<string, string> = {
   clock: 'Clock In / Out',
   manage: 'Manage Staff',
+  accounts: 'Account Logins',
   commission: 'Commission Report',
   audit: 'Audit Log',
 };
@@ -42,10 +43,14 @@ export default function StaffPanel({ accountRole, navTab }: { accountRole: Accou
   const { currentStaff, identifyStaff, clearStaff } = useStaffSession();
   const canManage = hasPermission(accountRole, 'manage_staff');
   const canViewAudit = hasPermission(accountRole, 'view_audit_log');
+  // Deliberately stricter than canManage — this tab can grant full admin
+  // access to any login, so only an actual admin account sees it, not
+  // managers who otherwise have broad staff-management rights.
+  const isAdminAccount = accountRole === 'admin';
 
-  const availableSubtabs = ['clock', ...(canManage ? ['manage', 'commission'] : []), ...(canViewAudit ? ['audit'] : [])];
+  const availableSubtabs = ['clock', ...(canManage ? ['manage', 'commission'] : []), ...(isAdminAccount ? ['accounts'] : []), ...(canViewAudit ? ['audit'] : [])];
   const [subtab, setSubtab] = useState<string>(() => (navTab && NAV_TAB_TO_SUBTAB[navTab]) || 'clock');
-  useEffect(() => { if (!availableSubtabs.includes(subtab)) setSubtab('clock'); }, [canManage, canViewAudit]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!availableSubtabs.includes(subtab)) setSubtab('clock'); }, [canManage, canViewAudit, isAdminAccount]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (navTab && NAV_TAB_TO_SUBTAB[navTab]) setSubtab(NAV_TAB_TO_SUBTAB[navTab]); }, [navTab]);
 
   return (
@@ -63,6 +68,7 @@ export default function StaffPanel({ accountRole, navTab }: { accountRole: Accou
       </div>
       {subtab === 'clock' && <ClockTab currentStaff={currentStaff} identifyStaff={identifyStaff} clearStaff={clearStaff} />}
       {subtab === 'manage' && canManage && <ManageTab />}
+      {subtab === 'accounts' && isAdminAccount && <AccountsTab />}
       {subtab === 'commission' && canManage && <CommissionTab />}
       {subtab === 'audit' && canViewAudit && <AuditTab />}
     </div>
@@ -157,6 +163,123 @@ function ClockTab({ currentStaff, identifyStaff, clearStaff }: any) {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Account Logins — admin-only. Lets an admin change which role a *login*
+// (email/password account) has — admin / manager / cashier / inventory
+// clerk — without needing the Supabase dashboard. This is different from
+// "Manage Staff" above: that manages individual PIN identities used for
+// per-person attribution at the till; this manages the shared login
+// accounts that decide which tabs a browser can even reach.
+//
+// Requires SUPABASE_SERVICE_ROLE_KEY to be set on the server (see
+// src/app/api/staff-accounts/route.ts) — only the server can list/edit
+// other people's login accounts, the browser never gets that key.
+// ---------------------------------------------------------------------------
+const ASSIGNABLE_ROLES = ['admin', 'manager', 'cashier', 'inventory_clerk'];
+
+function AccountsTab() {
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: string; text: string }>({ type: '', text: '' });
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  const load = async () => {
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) { setLoading(false); return; }
+
+    try {
+      const res = await fetch('/api/staff-accounts', { headers: { Authorization: `Bearer ${token}` } });
+      const body = await res.json();
+      if (!res.ok) {
+        setMessage({ type: 'error', text: body.error || 'Failed to load accounts.' });
+      } else {
+        setAccounts(body.accounts);
+        setDrafts(Object.fromEntries(body.accounts.map((a: any) => [a.id, a.role])));
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Could not reach the server. Is SUPABASE_SERVICE_ROLE_KEY set?' });
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const saveRole = async (userId: string) => {
+    setSavingId(userId);
+    setMessage({ type: '', text: '' });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    try {
+      const res = await fetch('/api/staff-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ userId, role: drafts[userId] }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setMessage({ type: 'error', text: body.error || 'Failed to update role.' });
+      } else {
+        setMessage({ type: 'success', text: 'Role updated.' });
+        load();
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Could not reach the server.' });
+    }
+    setSavingId(null);
+  };
+
+  if (loading) return <p className="text-sm text-muted">Loading accounts…</p>;
+
+  return (
+    <div>
+      <p className="text-sm text-muted mb-4">
+        These are login accounts (email + password) — the everyday sign-in for the app, separate from staff PIN identities above.
+        Each one's role decides which tabs it can reach.
+      </p>
+      {message.text && (
+        <div className={`p-alert mb-4 ${message.type === 'error' ? 'text-oxblood' : 'text-moss'}`}>{message.text}</div>
+      )}
+      {accounts.length === 0 && !message.text ? (
+        <p className="text-sm text-muted">No accounts found.</p>
+      ) : (
+        <div className="space-y-2">
+          {accounts.map((a: any) => (
+            <div key={a.id} className="p-card p-4 flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="font-semibold text-ink text-sm">{a.email}</p>
+                <p className="text-xs text-muted">
+                  Currently: <span className="font-bold uppercase">{a.role}</span>
+                  {a.last_sign_in_at && <> · last signed in {new Date(a.last_sign_in_at).toLocaleDateString()}</>}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={drafts[a.id] ?? a.role}
+                  onChange={(e) => setDrafts({ ...drafts, [a.id]: e.target.value })}
+                  className="p-input text-xs py-1.5"
+                >
+                  {ASSIGNABLE_ROLES.map((r) => (<option key={r} value={r}>{r}</option>))}
+                </select>
+                <button
+                  onClick={() => saveRole(a.id)}
+                  disabled={savingId === a.id || (drafts[a.id] ?? a.role) === a.role}
+                  className="p-btn p-btn-primary py-1.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {savingId === a.id ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ManageTab() {
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [name, setName] = useState('');
@@ -207,7 +330,6 @@ function ManageTab() {
             <option value="manager">Manager</option>
             <option value="cashier">Cashier</option>
             <option value="inventory_clerk">Inventory Clerk</option>
-            <option value="salesman">Salesman</option>
           </select>
         </div>
         <div>
