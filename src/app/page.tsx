@@ -680,6 +680,7 @@ export default function AdminDashboard() {
 
   // Locations & Stock Transfer
   const [locations, setLocations] = useState<any[]>([]);
+  const [locationsLoaded, setLocationsLoaded] = useState(false);
   const [locationStock, setLocationStock] = useState<any[]>([]);
 
   // Which physical shop this terminal is currently "acting as" for checkout
@@ -990,6 +991,10 @@ export default function AdminDashboard() {
     } catch (_) {
       // table not yet created — stays empty until migration_009 is run
     }
+    // Set regardless of success/failure/empty-result — this just marks
+    // "we've asked at least once," so the stale-location cleanup effect
+    // can tell a real zero-locations state apart from not-loaded-yet.
+    setLocationsLoaded(true);
   }, []);
 
   const fetchLocationStock = useCallback(async () => {
@@ -1287,6 +1292,24 @@ export default function AdminDashboard() {
       : String(locations[0].id);
     setActiveLocationId(fallback);
   }, [locations, currentStaff, activeLocationId]);
+
+  // If the location this terminal was set to (or the one Reports/Overview
+  // was filtered to) gets deleted — including deleting every location
+  // there is — fall back to "no location" / "All Locations" instead of
+  // silently keeping a dangling id. Without this, checkout would try to
+  // insert a sale referencing a location_id that no longer exists and the
+  // whole sale would fail with a foreign-key error at the worst possible
+  // moment (mid-checkout).
+  useEffect(() => {
+    if (!locationsLoaded) return; // don't act until we know the real list, not just the initial []
+    if (activeLocationId && !locations.some((l: any) => String(l.id) === activeLocationId)) {
+      setActiveLocationId('');
+      localStorage.removeItem('crave_abs_active_location');
+    }
+    if (reportLocationId && !locations.some((l: any) => String(l.id) === reportLocationId)) {
+      setReportLocationId('');
+    }
+  }, [locations, locationsLoaded, activeLocationId, reportLocationId]);
 
   const changeActiveLocation = (id: string) => {
     setActiveLocationId(id);
@@ -2346,7 +2369,14 @@ export default function AdminDashboard() {
   const deleteLocation = async (id: any, name: string) => {
     if (!window.confirm(`Remove "${name}"? Its stock-transfer history stays, but it won't be selectable for new transfers.`)) return;
     const { error } = await supabase.from('locations').delete().eq('id', id);
-    if (!error) fetchLocations();
+    if (error) {
+      // Most likely cause: this location is still the destination of a
+      // stock transfer (that one reference is intentionally left blocking
+      // — see migration_014). Surfacing it beats silently doing nothing.
+      alert(`Couldn't remove "${name}": ${error.message}`);
+      return;
+    }
+    fetchLocations();
   };
 
   // --- STOCK TRANSFER ---
