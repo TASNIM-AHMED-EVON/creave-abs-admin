@@ -49,11 +49,18 @@ export default function CustomersPanel({ accountRole }: { accountRole: AccountRo
 
   const openCustomer = async (c: Customer) => {
     setSelected(c);
+    // NOTE: `sales` uses `sold_at` as its timestamp column, not
+    // `created_at` (every other query against `sales` elsewhere in this
+    // app already uses `sold_at`). Ordering by a column that doesn't
+    // exist makes Supabase return an error here, `data` comes back
+    // undefined, and this silently fell back to an empty list — which is
+    // why every customer's purchase history showed "No purchases on
+    // record yet" even for customers who'd actually bought something.
     const { data: sales } = await supabase
       .from('sales')
       .select('*, dresses ( name, size, color )')
       .eq('customer_id', c.id)
-      .order('created_at', { ascending: false })
+      .order('sold_at', { ascending: false })
       .limit(50);
     setHistory(sales || []);
     const { data: loyalty } = await supabase
