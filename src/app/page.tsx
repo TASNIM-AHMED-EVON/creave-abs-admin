@@ -555,6 +555,14 @@ export default function AdminDashboard() {
   const [posCustomer, setPosCustomer] = useState<any>(null);
   const [customerMessage, setCustomerMessage] = useState('');
   const [redeemPoints, setRedeemPoints] = useState('');
+  // Live search-as-you-type results for the customer lookup below (name OR
+  // phone, partial match) — replaces the old exact-phone-only lookup, which
+  // silently found nothing on the smallest formatting mismatch and made the
+  // whole feature feel broken/missing.
+  const [customerSearchResults, setCustomerSearchResults] = useState<any[]>([]);
+  const [showQuickAddCustomer, setShowQuickAddCustomer] = useState(false);
+  const [quickAddName, setQuickAddName] = useState('');
+  const [quickAddPhone, setQuickAddPhone] = useState('');
 
   // POS — Product browser (right-hand grid): category filter, free-text
   // search, and which product tile (if any) has its variant picker open.
@@ -1846,14 +1854,44 @@ export default function AdminDashboard() {
 
   const lookupPosCustomer = async () => {
     setCustomerMessage('');
-    if (!customerLookup.trim()) { setPosCustomer(null); return; }
-    const { data } = await supabase.from('customers').select('*').eq('phone', customerLookup.trim()).limit(1);
-    if (data && data.length > 0) {
-      setPosCustomer(data[0]);
-    } else {
-      setPosCustomer(null);
-      setCustomerMessage('No customer with that phone. Add them from the Customers tab, or continue without one.');
+    const q = customerLookup.trim();
+    if (!q) { setCustomerSearchResults([]); return; }
+    // Partial match on name OR phone — the old version required the phone
+    // to match exactly, so a leading zero, a space, or searching by name
+    // instead of phone all silently returned nothing. This is what made
+    // the customer-lookup step feel like it wasn't there at all.
+    const { data } = await supabase
+      .from('customers')
+      .select('*')
+      .or(`name.ilike.%${q}%,phone.ilike.%${q}%`)
+      .limit(6);
+    setCustomerSearchResults(data || []);
+    if (!data || data.length === 0) {
+      setCustomerMessage('No match — add them below, or continue without a customer.');
     }
+  };
+  // Search as you type (debounced), same pattern as the Customers tab.
+  useEffect(() => {
+    if (posCustomer) return; // already picked one — no need to keep searching
+    const t = setTimeout(() => { if (customerLookup.trim()) lookupPosCustomer(); else setCustomerSearchResults([]); }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerLookup]);
+
+  const quickAddPosCustomer = async () => {
+    if (!quickAddName.trim()) return;
+    const { data, error } = await supabase
+      .from('customers')
+      .insert([{ name: quickAddName.trim(), phone: quickAddPhone.trim() || null }])
+      .select()
+      .single();
+    if (error) { setCustomerMessage("Couldn't add customer — try the Customers tab instead."); return; }
+    setPosCustomer(data);
+    setCustomerSearchResults([]);
+    setShowQuickAddCustomer(false);
+    setQuickAddName('');
+    setQuickAddPhone('');
+    setCustomerMessage('');
   };
 
   // Split-payment running total — lines must add up to cartTotal (in base
@@ -4276,17 +4314,34 @@ export default function AdminDashboard() {
                           <span className="text-sm text-muted font-medium">Subtotal</span>
                           <span className="font-mono font-semibold text-ink text-sm">৳{cartSubtotal}</span>
                         </div>
-                        {/* Customer lookup row */}
-                        <div className="px-4 py-3 flex justify-between items-center gap-2" style={{ borderBottom: '1px solid var(--card-border)' }}>
-                          <input
-                            type="text" placeholder="Customer phone (optional)"
-                            className="p-input font-mono"
-                            style={{ width: 150, fontSize: 13 }}
-                            value={customerLookup}
-                            onChange={(e) => setCustomerLookup(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') lookupPosCustomer(); }}
-                          />
-                          <button onClick={lookupPosCustomer} className="text-xs font-bold uppercase text-oxblood hover:underline shrink-0">Find</button>
+                        {/* Customer lookup — search-as-you-type by name or
+                            phone (partial match), not the old exact-phone
+                            lookup that silently found nothing on the
+                            smallest formatting mismatch. */}
+                        <div className="px-4 py-3 relative" style={{ borderBottom: posCustomer ? 'none' : '1px solid var(--card-border)' }}>
+                          {!posCustomer && (
+                            <input
+                              type="text" placeholder="Find customer by name or phone…"
+                              className="p-input font-mono w-full"
+                              style={{ fontSize: 13 }}
+                              value={customerLookup}
+                              onChange={(e) => { setCustomerLookup(e.target.value); setCustomerMessage(''); setShowQuickAddCustomer(false); }}
+                            />
+                          )}
+                          {!posCustomer && customerSearchResults.length > 0 && (
+                            <div className="absolute left-4 right-4 z-20 mt-1 bg-canvas border border-thread rounded-lg shadow-2xl overflow-hidden">
+                              {customerSearchResults.map((c: any) => (
+                                <button
+                                  key={c.id}
+                                  onClick={() => { setPosCustomer(c); setCustomerLookup(''); setCustomerSearchResults([]); setCustomerMessage(''); }}
+                                  className="w-full text-left px-3.5 py-2 text-xs hover:bg-paper-dim transition-colors flex items-center justify-between gap-2"
+                                >
+                                  <span className="font-semibold text-ink">{c.name}</span>
+                                  <span className="text-muted font-mono">{c.phone || '—'} · {c.loyalty_points} pts</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         {posCustomer && (
                           <div className="px-4 py-2 flex justify-between items-center gap-4 bg-canvas" style={{ borderBottom: '1px solid var(--card-border)' }}>
@@ -4310,8 +4365,37 @@ export default function AdminDashboard() {
                             <span className="font-mono font-bold text-brass text-sm">-৳{cartRedeemValue}</span>
                           </div>
                         )}
-                        {customerMessage && (
-                          <div className="px-4 py-2 text-xs text-oxblood" style={{ borderBottom: '1px solid var(--card-border)' }}>{customerMessage}</div>
+                        {customerMessage && !posCustomer && (
+                          <div className="px-4 py-2 text-xs" style={{ borderBottom: '1px solid var(--card-border)' }}>
+                            <p className="text-muted mb-1.5">{customerMessage}</p>
+                            {!showQuickAddCustomer ? (
+                              <button
+                                onClick={() => { setShowQuickAddCustomer(true); setQuickAddName(/\d/.test(customerLookup) ? '' : customerLookup); setQuickAddPhone(/\d/.test(customerLookup) ? customerLookup : ''); }}
+                                className="text-oxblood font-bold uppercase tracking-wide hover:underline"
+                              >
+                                + Add new customer
+                              </button>
+                            ) : (
+                              <div className="space-y-1.5 mt-1">
+                                <input
+                                  type="text" placeholder="Name" autoFocus
+                                  className="p-input w-full" style={{ fontSize: 12 }}
+                                  value={quickAddName} onChange={(e) => setQuickAddName(e.target.value)}
+                                />
+                                <input
+                                  type="text" placeholder="Phone (optional)"
+                                  className="p-input w-full font-mono" style={{ fontSize: 12 }}
+                                  value={quickAddPhone} onChange={(e) => setQuickAddPhone(e.target.value)}
+                                />
+                                <div className="flex gap-1.5">
+                                  <button onClick={quickAddPosCustomer} disabled={!quickAddName.trim()} className="flex-1 p-btn p-btn-primary justify-center py-1.5 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed">
+                                    Add & Select
+                                  </button>
+                                  <button onClick={() => setShowQuickAddCustomer(false)} className="p-btn p-btn-ghost justify-center py-1.5 text-[11px]">Cancel</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         )}
                         {/* Promo code row */}
                         <div className="px-4 py-3 flex justify-between items-center gap-2" style={{ borderBottom: '1px solid var(--card-border)' }}>
