@@ -191,6 +191,26 @@ function AccountsTab() {
   const [newRole, setNewRole] = useState('cashier');
   const [creating, setCreating] = useState(false);
 
+  // Which account's "reset password" row is currently expanded, and the
+  // draft password typed into it.
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [resetDraft, setResetDraft] = useState('');
+  const [resetBusy, setResetBusy] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Every action below needs the caller's current session token — this just
+  // saves repeating the same two lines in each one.
+  const authedFetch = async (method: string, body: any) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    const res = await fetch('/api/staff-accounts', {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    return { res, body: await res.json() };
+  };
+
   const load = async () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
@@ -266,6 +286,43 @@ function AccountsTab() {
     setCreating(false);
   };
 
+  const resetPassword = async (userId: string) => {
+    if (resetDraft.length < 6) { setMessage({ type: 'error', text: 'New password needs to be at least 6 characters.' }); return; }
+    setResetBusy(true);
+    setMessage({ type: '', text: '' });
+    try {
+      const { res, body } = await authedFetch('PATCH', { userId, newPassword: resetDraft });
+      if (!res.ok) {
+        setMessage({ type: 'error', text: body.error || 'Failed to reset password.' });
+      } else {
+        setMessage({ type: 'success', text: 'Password reset — tell them the new one directly, it won\'t be shown again here.' });
+        setResettingId(null);
+        setResetDraft('');
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Could not reach the server.' });
+    }
+    setResetBusy(false);
+  };
+
+  const deleteAccount = async (userId: string, email: string) => {
+    if (!window.confirm(`Permanently delete the login for "${email}"? They won't be able to sign in anymore. This doesn't touch their staff PIN or past sales history — only the login itself.`)) return;
+    setDeletingId(userId);
+    setMessage({ type: '', text: '' });
+    try {
+      const { res, body } = await authedFetch('DELETE', { userId });
+      if (!res.ok) {
+        setMessage({ type: 'error', text: body.error || 'Failed to delete account.' });
+      } else {
+        setMessage({ type: 'success', text: `Removed ${email}.` });
+        load();
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Could not reach the server.' });
+    }
+    setDeletingId(null);
+  };
+
   if (loading) return <p className="text-sm text-muted">Loading accounts…</p>;
 
   return (
@@ -316,30 +373,67 @@ function AccountsTab() {
       ) : (
         <div className="space-y-2">
           {accounts.map((a: any) => (
-            <div key={a.id} className="p-card p-4 flex items-center justify-between gap-4 flex-wrap">
-              <div>
-                <p className="font-semibold text-ink text-sm">{a.email}</p>
-                <p className="text-xs text-muted">
-                  Currently: <span className="font-bold uppercase">{a.role}</span>
-                  {a.last_sign_in_at && <> · last signed in {new Date(a.last_sign_in_at).toLocaleDateString()}</>}
-                </p>
+            <div key={a.id} className="p-card p-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="font-semibold text-ink text-sm">{a.email}</p>
+                  <p className="text-xs text-muted">
+                    Currently: <span className="font-bold uppercase">{a.role}</span>
+                    {a.last_sign_in_at && <> · last signed in {new Date(a.last_sign_in_at).toLocaleDateString()}</>}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={drafts[a.id] ?? a.role}
+                    onChange={(e) => setDrafts({ ...drafts, [a.id]: e.target.value })}
+                    className="p-input text-xs py-1.5"
+                  >
+                    {ASSIGNABLE_ROLES.map((r) => (<option key={r} value={r}>{r}</option>))}
+                  </select>
+                  <button
+                    onClick={() => saveRole(a.id)}
+                    disabled={savingId === a.id || (drafts[a.id] ?? a.role) === a.role}
+                    className="p-btn p-btn-primary py-1.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {savingId === a.id ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => { setResettingId(resettingId === a.id ? null : a.id); setResetDraft(''); }}
+                    className="p-btn p-btn-ghost py-1.5 text-xs"
+                  >
+                    Reset Password
+                  </button>
+                  <button
+                    onClick={() => deleteAccount(a.id, a.email)}
+                    disabled={deletingId === a.id}
+                    className="p-btn p-btn-danger py-1.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {deletingId === a.id ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={drafts[a.id] ?? a.role}
-                  onChange={(e) => setDrafts({ ...drafts, [a.id]: e.target.value })}
-                  className="p-input text-xs py-1.5"
-                >
-                  {ASSIGNABLE_ROLES.map((r) => (<option key={r} value={r}>{r}</option>))}
-                </select>
-                <button
-                  onClick={() => saveRole(a.id)}
-                  disabled={savingId === a.id || (drafts[a.id] ?? a.role) === a.role}
-                  className="p-btn p-btn-primary py-1.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {savingId === a.id ? 'Saving…' : 'Save'}
-                </button>
-              </div>
+              {/* Someone forgot their password — set a new one directly, no
+                  email/inbox involved. Only shown when this row's Reset
+                  Password button has been clicked. */}
+              {resettingId === a.id && (
+                <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: '1px solid var(--card-border)' }}>
+                  <input
+                    type="text"
+                    placeholder="New password (6+ characters)"
+                    value={resetDraft}
+                    onChange={(e) => setResetDraft(e.target.value)}
+                    className="p-input text-xs flex-1"
+                  />
+                  <button
+                    onClick={() => resetPassword(a.id)}
+                    disabled={resetBusy || resetDraft.length < 6}
+                    className="p-btn p-btn-primary py-1.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {resetBusy ? 'Setting…' : 'Set New Password'}
+                  </button>
+                  <button onClick={() => { setResettingId(null); setResetDraft(''); }} className="p-btn p-btn-ghost py-1.5 text-xs">Cancel</button>
+                </div>
+              )}
             </div>
           ))}
         </div>
