@@ -537,6 +537,14 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginSubmitting, setLoginSubmitting] = useState(false);
+  // Forgot-password flow — swaps the login form for an email-only form that
+  // sends a Supabase recovery link (a real emailed confirmation link, not
+  // just an in-app reset) to /reset-password.
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState('');
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -1534,6 +1542,33 @@ export default function AdminDashboard() {
     }
     // On success, onAuthStateChange (above) fires SIGNED_IN and handles
     // setting isAuthenticated + loading data — nothing else to do here.
+  };
+
+  // Sends a real emailed confirmation link (via Supabase Auth's own
+  // recovery-email system — Gmail, or whatever inbox the account uses)
+  // rather than resetting anything directly here. The person has to click
+  // that link — which proves they control the inbox — before they land on
+  // /reset-password and can actually set a new password. This is the
+  // self-service counterpart to the admin-only "Reset Password" button in
+  // Account Logins: that one is for an admin resetting someone else's
+  // password directly; this one is for someone resetting their own without
+  // needing an admin at all.
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+    setForgotSubmitting(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setForgotSubmitting(false);
+    if (error) {
+      setForgotError('Something went wrong sending that email. Try again in a moment.');
+    } else {
+      // Deliberately the same message whether or not that email actually
+      // has an account — confirming which emails are registered would let
+      // someone probe for valid staff logins.
+      setForgotSent(true);
+    }
   };
 
   // Logout Handler
@@ -3578,6 +3613,28 @@ export default function AdminDashboard() {
             margin-top: 28px;
             font-family: monospace;
           }
+          .glow-forgot-link {
+            display: block;
+            width: 100%;
+            text-align: center;
+            background: none;
+            border: none;
+            margin-top: 16px;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(0,243,255,0.6);
+            cursor: pointer;
+            transition: color 0.2s;
+          }
+          .glow-forgot-link:hover { color: #00f3ff; }
+          .glow-forgot-copy {
+            font-size: 12.5px;
+            line-height: 1.6;
+            color: rgba(255,255,255,0.55);
+            margin-bottom: 18px;
+          }
+          .glow-forgot-copy strong { color: rgba(255,255,255,0.85); }
         `}</style>
 
         <div className="glow-card-wrap">
@@ -3586,41 +3643,103 @@ export default function AdminDashboard() {
             <div className="glow-subtitle">Admin Console</div>
             <hr className="glow-divider" />
 
-            {loginError && (
-              <div className="glow-error">{loginError}</div>
-            )}
+            {!showForgotPassword ? (
+              <>
+                {loginError && (
+                  <div className="glow-error">{loginError}</div>
+                )}
 
-            <form onSubmit={handleLogin}>
-              <label className="glow-label">Email</label>
-              <input
-                type="email"
-                required
-                placeholder="you@example.com"
-                className="glow-input rounded-md"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoCapitalize="none"
-                autoCorrect="off"
-                autoComplete="username"
-              />
-              <label className="glow-label">Password</label>
-              <input
-                type="password"
-                required
-                placeholder="••••••••"
-                className="glow-input rounded-md"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-              <button
-                type="submit"
-                disabled={loginSubmitting}
-                className="glow-btn"
-              >
-                {loginSubmitting ? 'Signing in…' : 'Access System'}
-              </button>
-            </form>
+                <form onSubmit={handleLogin}>
+                  <label className="glow-label">Email</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="you@example.com"
+                    className="glow-input rounded-md"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    autoComplete="username"
+                  />
+                  <label className="glow-label">Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    className="glow-input rounded-md"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loginSubmitting}
+                    className="glow-btn"
+                  >
+                    {loginSubmitting ? 'Signing in…' : 'Access System'}
+                  </button>
+                </form>
+
+                <button
+                  type="button"
+                  onClick={() => { setShowForgotPassword(true); setForgotEmail(email); setForgotSent(false); setForgotError(''); }}
+                  className="glow-forgot-link"
+                >
+                  Forgot password?
+                </button>
+              </>
+            ) : forgotSent ? (
+              <div>
+                <p className="glow-forgot-copy">
+                  If <strong>{forgotEmail.trim()}</strong> has an account, a confirmation link was just sent to that inbox.
+                  Open it on this device and follow the link to set a new password — it expires after a while, so use it soon.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setShowForgotPassword(false); setForgotSent(false); }}
+                  className="glow-btn"
+                  style={{ marginTop: 18 }}
+                >
+                  Back to sign in
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword}>
+                <p className="glow-forgot-copy">
+                  Enter the account's email — we'll send a confirmation link there. Click it to set a new password; nothing changes until then.
+                </p>
+                {forgotError && (
+                  <div className="glow-error">{forgotError}</div>
+                )}
+                <label className="glow-label">Email</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="you@example.com"
+                  className="glow-input rounded-md"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  autoComplete="username"
+                />
+                <button
+                  type="submit"
+                  disabled={forgotSubmitting}
+                  className="glow-btn"
+                >
+                  {forgotSubmitting ? 'Sending…' : 'Send Reset Link'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(false)}
+                  className="glow-forgot-link"
+                >
+                  Back to sign in
+                </button>
+              </form>
+            )}
 
             <div className="glow-footer">{businessSettings.address}</div>
           </div>
