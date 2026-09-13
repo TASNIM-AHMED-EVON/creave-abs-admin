@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import JsBarcode from 'jsbarcode';
 import { hasPermission, canReachTab, actingStaffRole, type AccountRole } from '@/lib/permissions';
 import { useStaffSession } from '@/lib/staffSession';
+import { useNotify } from '@/lib/notify';
 import { logAudit } from '@/lib/audit';
 import StaffPanel from '@/components/StaffPanel';
 import PromotionsPanel, { evaluateBestPromotion } from '@/components/PromotionsPanel';
@@ -531,6 +532,7 @@ export default function AdminDashboard() {
   const [authChecked, setAuthChecked] = useState(false);
   const [userRole, setUserRole] = useState<AccountRole | null>(null);
   const { currentStaff, requestManagerApproval } = useStaffSession();
+  const { toast, confirm } = useNotify();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -1234,7 +1236,7 @@ export default function AdminDashboard() {
   };
 
   const revokeMember = async (member: any) => {
-    if (!window.confirm(`Revoke membership for ${member.phone}?`)) return;
+    if (!(await confirm({ message: `Revoke membership for ${member.phone}?`, danger: true }))) return;
     const { error } = await supabase
       .from('memberships')
       .update({ status: 'revoked' })
@@ -1254,7 +1256,7 @@ export default function AdminDashboard() {
       setMembershipSettingsSaved(true);
       setTimeout(() => setMembershipSettingsSaved(false), 2500);
     } else {
-      alert('Failed to save. Make sure migration_006 has been run.');
+      toast.error('Failed to save. Make sure migration_006 has been run.');
     }
   };
 
@@ -2125,14 +2127,14 @@ export default function AdminDashboard() {
     setPhotoUploadingId(item.id);
     const imageUrl = await uploadProductImage(file, item.barcode);
     if (!imageUrl) {
-      alert('Photo upload failed. Make sure the "product-images" storage bucket exists (see setup note).');
+      toast.error('Photo upload failed. Make sure the "product-images" storage bucket exists (see setup note).');
       setPhotoUploadingId(null);
       return;
     }
     const { error } = await supabase.from('dresses').update({ image_url: imageUrl }).eq('id', item.id);
     setPhotoUploadingId(null);
     if (error) {
-      alert('Failed to save the new photo. Please try again.');
+      toast.error('Failed to save the new photo. Please try again.');
     } else {
       fetchRecentInventory();
     }
@@ -2223,7 +2225,7 @@ export default function AdminDashboard() {
     const { error } = await supabase.from('dresses').update(afterPayload).eq('id', id);
 
     if (error) {
-      alert('Failed to save changes. Please try again.');
+      toast.error('Failed to save changes. Please try again.');
     } else {
       setEditingId(null);
       fetchRecentInventory();
@@ -2246,7 +2248,7 @@ export default function AdminDashboard() {
   // trigger it, but needs a manager/admin PIN to actually go through — same
   // "approve or cancel" pattern as a refund below.
   const archiveInventoryItem = async (item: any) => {
-    if (!window.confirm(`Archive (void) "${item.name}"? It will be hidden from the POS and active stock list, but its sales history stays intact. You can restore it anytime.`)) return;
+    if (!(await confirm({ message: `Archive (void) "${item.name}"? It will be hidden from the POS and active stock list, but its sales history stays intact. You can restore it anytime.`, danger: true }))) return;
 
     let approver: { id: string; full_name: string } | null = null;
     if (!hasPermission(actingStaffRole(currentStaff), 'void_action')) {
@@ -2259,7 +2261,7 @@ export default function AdminDashboard() {
       .update({ status: 'archived', quantity: 0 })
       .eq('id', item.id);
     if (error) {
-      alert('Failed to archive item.');
+      toast.error('Failed to archive item.');
     } else {
       fetchRecentInventory();
       logAudit({
@@ -2282,7 +2284,7 @@ export default function AdminDashboard() {
       .update({ status: 'available' })
       .eq('id', item.id);
     if (error) {
-      alert('Failed to restore item.');
+      toast.error('Failed to restore item.');
     } else {
       fetchRecentInventory();
     }
@@ -2310,13 +2312,13 @@ export default function AdminDashboard() {
   const saveQuickPrice = async (id: any) => {
     const newPrice = parseFloat(priceDraftValue);
     if (isNaN(newPrice) || newPrice < 0) {
-      alert('Enter a valid price.');
+      toast.error('Enter a valid price.');
       return;
     }
     const before = priceSearchResults.find((it: any) => it.id === id) || null;
     const { error } = await supabase.from('dresses').update({ price: newPrice }).eq('id', id);
     if (error) {
-      alert('Failed to update price.');
+      toast.error('Failed to update price.');
     } else {
       setPriceDraftId(null);
       setPriceDraftValue('');
@@ -2339,7 +2341,7 @@ export default function AdminDashboard() {
     if (!newCategoryName.trim()) return;
     const { error } = await supabase.from('categories').insert([{ name: newCategoryName.trim() }]);
     if (error) {
-      alert('Failed to add category. It may already exist.');
+      toast.error('Failed to add category. It may already exist.');
     } else {
       setNewCategoryName('');
       fetchCategories();
@@ -2347,7 +2349,7 @@ export default function AdminDashboard() {
   };
 
   const deleteCategory = async (id: any, name: string) => {
-    if (!window.confirm(`Remove "${name}" from your category list? Existing products keep their value — it just won't be offered as a dropdown option anymore.`)) return;
+    if (!(await confirm({ message: `Remove "${name}" from your category list? Existing products keep their value — it just won't be offered as a dropdown option anymore.`, danger: true }))) return;
     const { error } = await supabase.from('categories').delete().eq('id', id);
     if (!error) fetchCategories();
   };
@@ -2358,7 +2360,7 @@ export default function AdminDashboard() {
     if (!newUnitName.trim()) return;
     const { error } = await supabase.from('units').insert([{ name: newUnitName.trim(), short_code: newUnitCode.trim() || null }]);
     if (error) {
-      alert('Failed to add unit. It may already exist.');
+      toast.error('Failed to add unit. It may already exist.');
     } else {
       setNewUnitName(''); setNewUnitCode('');
       fetchUnits();
@@ -2366,7 +2368,7 @@ export default function AdminDashboard() {
   };
 
   const deleteUnit = async (id: any) => {
-    if (!window.confirm('Remove this unit?')) return;
+    if (!(await confirm({ message: 'Remove this unit?', danger: true }))) return;
     const { error } = await supabase.from('units').delete().eq('id', id);
     if (!error) fetchUnits();
   };
@@ -2377,7 +2379,7 @@ export default function AdminDashboard() {
     if (!newBrandName.trim()) return;
     const { error } = await supabase.from('brands').insert([{ name: newBrandName.trim() }]);
     if (error) {
-      alert('Failed to add brand. It may already exist.');
+      toast.error('Failed to add brand. It may already exist.');
     } else {
       setNewBrandName('');
       fetchBrands();
@@ -2385,7 +2387,7 @@ export default function AdminDashboard() {
   };
 
   const deleteBrand = async (id: any) => {
-    if (!window.confirm('Remove this brand?')) return;
+    if (!(await confirm({ message: 'Remove this brand?', danger: true }))) return;
     const { error } = await supabase.from('brands').delete().eq('id', id);
     if (!error) fetchBrands();
   };
@@ -2405,13 +2407,13 @@ export default function AdminDashboard() {
   };
 
   const deleteLocation = async (id: any, name: string) => {
-    if (!window.confirm(`Remove "${name}"? Its stock-transfer history stays, but it won't be selectable for new transfers.`)) return;
+    if (!(await confirm({ message: `Remove "${name}"? Its stock-transfer history stays, but it won't be selectable for new transfers.`, danger: true }))) return;
     const { error } = await supabase.from('locations').delete().eq('id', id);
     if (error) {
       // Most likely cause: this location is still the destination of a
       // stock transfer (that one reference is intentionally left blocking
       // — see migration_014). Surfacing it beats silently doing nothing.
-      alert(`Couldn't remove "${name}": ${error.message}`);
+      toast.error(`Couldn't remove "${name}": ${error.message}`);
       return;
     }
     fetchLocations();
@@ -2537,7 +2539,7 @@ export default function AdminDashboard() {
 
   const saveEditSupplier = async (id: any) => {
     if (!editSupplierDraft.name.trim() || !editSupplierDraft.phone.trim()) {
-      alert('Name and phone number are required.');
+      toast.error('Name and phone number are required.');
       return;
     }
     const { error } = await supabase.from('suppliers').update({
@@ -2547,7 +2549,7 @@ export default function AdminDashboard() {
       product_details: editSupplierDraft.product_details.trim() || null,
     }).eq('id', id);
     if (error) {
-      alert('Failed to save changes. Please try again.');
+      toast.error('Failed to save changes. Please try again.');
     } else {
       setEditingSupplierId(null);
       fetchSuppliers();
@@ -2555,7 +2557,7 @@ export default function AdminDashboard() {
   };
 
   const deleteSupplier = async (id: any, name: string) => {
-    if (!window.confirm(`Remove supplier "${name}"? This can't be undone.`)) return;
+    if (!(await confirm({ message: `Remove supplier "${name}"? This can't be undone.`, danger: true }))) return;
     const { error } = await supabase.from('suppliers').delete().eq('id', id);
     if (!error) fetchSuppliers();
   };
@@ -2886,7 +2888,7 @@ export default function AdminDashboard() {
       setSettingsSaved(savedLabel);
       setTimeout(() => setSettingsSaved(''), 2500);
     } else {
-      alert('Failed to save settings. Make sure the business_settings table exists (run migration_003).');
+      toast.error('Failed to save settings. Make sure the business_settings table exists (run migration_003).');
     }
   };
 
@@ -2896,7 +2898,7 @@ export default function AdminDashboard() {
     if (!newTaxName.trim() || !newTaxRate) return;
     const { error } = await supabase.from('tax_rates').insert([{ name: newTaxName.trim(), rate_percent: parseFloat(newTaxRate) }]);
     if (error) {
-      alert('Failed to add tax rate.');
+      toast.error('Failed to add tax rate.');
     } else {
       setNewTaxName(''); setNewTaxRate('');
       fetchTaxRates();
@@ -2904,7 +2906,7 @@ export default function AdminDashboard() {
   };
 
   const deleteTaxRate = async (id: any) => {
-    if (!window.confirm('Remove this tax rate?')) return;
+    if (!(await confirm({ message: 'Remove this tax rate?', danger: true }))) return;
     const { error } = await supabase.from('tax_rates').delete().eq('id', id);
     if (!error) fetchTaxRates();
   };
@@ -2929,7 +2931,7 @@ export default function AdminDashboard() {
   };
 
   const deleteCurrency = async (id: any, code: string) => {
-    if (!window.confirm(`Remove ${code}? It won't be offered at checkout anymore.`)) return;
+    if (!(await confirm({ message: `Remove ${code}? It won't be offered at checkout anymore.`, danger: true }))) return;
     const { error } = await supabase.from('currencies').delete().eq('id', id);
     if (!error) fetchCurrencies();
   };
@@ -3062,7 +3064,7 @@ export default function AdminDashboard() {
   };
 
   const revokeGiftCard = async (id: any) => {
-    if (!window.confirm('Revoke this gift card? It can no longer be redeemed.')) return;
+    if (!(await confirm({ message: 'Revoke this gift card? It can no longer be redeemed.', danger: true }))) return;
     const { error } = await supabase.from('gift_cards').update({ status: 'revoked' }).eq('id', id);
     if (!error) fetchGiftCards();
   };
@@ -3124,7 +3126,7 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteDailyCost = async (id: any) => {
-    if (!window.confirm('Remove this cost entry?')) return;
+    if (!(await confirm({ message: 'Remove this cost entry?', danger: true }))) return;
     const { error } = await supabase.from('daily_costs').delete().eq('id', id);
     if (!error) fetchDailyCosts();
   };
@@ -3157,7 +3159,7 @@ export default function AdminDashboard() {
     const confirmText = asStoreCredit
       ? `Refund this purchase of ${sale.dresses.name} as store credit instead of cash?`
       : `Are you sure you want to refund this purchase of ${sale.dresses.name}?`;
-    if (!window.confirm(confirmText)) return;
+    if (!(await confirm({ message: confirmText, danger: true }))) return;
 
     let refundApprover: { id: string; full_name: string } | null = null;
     if (!hasPermission(actingStaffRole(currentStaff), 'process_refund')) {

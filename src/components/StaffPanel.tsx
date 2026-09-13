@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useStaffSession } from '@/lib/staffSession';
+import { useNotify } from '@/lib/notify';
 import { hasPermission, type AccountRole } from '@/lib/permissions';
 
 type StaffRow = {
@@ -178,6 +179,7 @@ function ClockTab({ currentStaff, identifyStaff, clearStaff }: any) {
 const ASSIGNABLE_ROLES = ['admin', 'manager', 'cashier', 'inventory_clerk'];
 
 function AccountsTab() {
+  const { confirm } = useNotify();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -306,7 +308,7 @@ function AccountsTab() {
   };
 
   const deleteAccount = async (userId: string, email: string) => {
-    if (!window.confirm(`Permanently delete the login for "${email}"? They won't be able to sign in anymore. This doesn't touch their staff PIN or past sales history — only the login itself.`)) return;
+    if (!(await confirm({ message: `Permanently delete the login for "${email}"? They won't be able to sign in anymore. This doesn't touch their staff PIN or past sales history — only the login itself.`, danger: true }))) return;
     setDeletingId(userId);
     setMessage({ type: '', text: '' });
     try {

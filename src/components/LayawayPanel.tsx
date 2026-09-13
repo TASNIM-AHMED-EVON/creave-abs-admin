@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { hasPermission, actingStaffRole } from '@/lib/permissions';
 import { useStaffSession } from '@/lib/staffSession';
+import { useNotify } from '@/lib/notify';
 import { logAudit } from '@/lib/audit';
 
 type Layaway = {
@@ -21,6 +22,7 @@ type Layaway = {
 
 export default function LayawayPanel() {
   const { currentStaff, requestManagerApproval } = useStaffSession();
+  const { confirm } = useNotify();
 
   const [barcode, setBarcode] = useState('');
   const [item, setItem] = useState<any>(null);
@@ -123,7 +125,7 @@ export default function LayawayPanel() {
 
   const endLayaway = async (l: Layaway, outcome: 'cancelled' | 'forfeited') => {
     const label = outcome === 'cancelled' ? 'Cancel (refund deposit) this layaway' : 'Forfeit (keep deposit) this layaway';
-    if (!window.confirm(`${label} for ${l.customer_name}? The reserved stock will be returned to available inventory.`)) return;
+    if (!(await confirm({ message: `${label} for ${l.customer_name}? The reserved stock will be returned to available inventory.`, danger: true }))) return;
 
     let approver: { id: string; full_name: string } | null = null;
     if (!hasPermission(actingStaffRole(currentStaff), 'void_action')) {

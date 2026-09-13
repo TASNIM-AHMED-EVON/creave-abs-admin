@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Manrope, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { StaffSessionProvider } from "@/lib/staffSession";
+import { NotifyProvider } from "@/lib/notify";
 
 // Display face — used with restraint, for the wordmark and page titles only.
 const fraunces = Fraunces({
@@ -45,7 +46,9 @@ export default function RootLayout({
       className={`${fraunces.variable} ${manrope.variable} ${spaceMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <StaffSessionProvider>{children}</StaffSessionProvider>
+        <StaffSessionProvider>
+          <NotifyProvider>{children}</NotifyProvider>
+        </StaffSessionProvider>
       </body>
       
     </html>

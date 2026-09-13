@@ -879,6 +879,21 @@ html.dark .p-alert.text-moss    { background: rgba(76,175,128,0.08); border-colo
 
 .sparkline path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
+/* ============================================================
+   NOTIFY — toast stack + confirm modal (src/lib/notify.tsx)
+   ============================================================ */
+@keyframes notify-toast-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.notify-toast { animation: notify-toast-in 0.22s ease-out; }
+
+@keyframes notify-confirm-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.notify-confirm-card { animation: notify-confirm-in 0.16s ease-out; }
+
 /* The sidebar keeps its own opaque background in dark mode too — this
    has nothing to do with the video hack removed above, it just makes
    sure the nav panel never reads as translucent. */
