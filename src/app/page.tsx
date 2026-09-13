@@ -614,6 +614,7 @@ export default function AdminDashboard() {
   const [invCategory, setInvCategory] = useState('');
   const [invBrand, setInvBrand] = useState('');
   const [invUnit, setInvUnit] = useState('Piece');
+  const [invTaxRateId, setInvTaxRateId] = useState('');
   const [invVariants, setInvVariants] = useState<{ barcode: string; size: string; color: string; price: string; quantity: string; reorderPoint: string; generating: boolean }[]>([
     { barcode: '', size: '', color: '', price: '', quantity: '1', reorderPoint: '', generating: false }
   ]);
@@ -660,7 +661,7 @@ export default function AdminDashboard() {
   // Inventory: archive visibility + inline edit
   const [showArchived, setShowArchived] = useState(false);
   const [editingId, setEditingId] = useState<any>(null);
-  const [editDraft, setEditDraft] = useState({ name: '', category: '', brand: '', unit: '', size: '', color: '', price: '', quantity: '', reorder_point: '' });
+  const [editDraft, setEditDraft] = useState({ name: '', category: '', brand: '', unit: '', size: '', color: '', price: '', quantity: '', reorder_point: '', tax_rate_id: '' });
 
   // List Products table (flat, one row per barcode — see the redesign
   // below). openRowMenuId tracks which row's "Actions ▾" dropdown is open;
@@ -721,7 +722,7 @@ export default function AdminDashboard() {
 
   // Print Labels (search a product, queue it with a quantity, print the batch)
   const [labelSearchQuery, setLabelSearchQuery] = useState('');
-  const [labelQueue, setLabelQueue] = useState<{ id: any; barcode: string; name: string; category: string; brand: string; variant: string; price: number; qty: number }[]>([]);
+  const [labelQueue, setLabelQueue] = useState<{ id: any; barcode: string; name: string; category: string; brand: string; variant: string; price: number; qty: number; taxLabel: string }[]>([]);
   const [labelQtyDraft, setLabelQtyDraft] = useState<Record<string, string>>({});
 
   // Purchase Requisition
@@ -2102,6 +2103,7 @@ export default function AdminDashboard() {
         reorder_point: v.reorderPoint.trim() ? parseInt(v.reorderPoint) : null,
         status: qty > 0 ? 'available' : 'sold',
         image_url: imageUrl,
+        tax_rate_id: invTaxRateId || null,
       };
     });
 
@@ -2111,7 +2113,7 @@ export default function AdminDashboard() {
     } else {
       const totalQty = rows.reduce((sum, r) => sum + r.quantity, 0);
       setInvMessage({ type: 'success', text: `Successfully stocked ${rows.length} variant(s), ${totalQty} item(s) total!` });
-      setInvName(''); setInvCategory(''); setInvBrand(''); setInvUnit('Piece');
+      setInvName(''); setInvCategory(''); setInvBrand(''); setInvUnit('Piece'); setInvTaxRateId('');
       setInvVariants([{ barcode: '', size: '', color: '', price: '', quantity: '1', reorderPoint: '', generating: false }]);
       setMatrixSizesInput(''); setMatrixColorsInput(''); setMatrixPrice(''); setMatrixQty('1');
       setMatrixCombos([]); setMatrixSelected({});
@@ -2161,9 +2163,10 @@ export default function AdminDashboard() {
 
   // --- PRINT LABELS ---
   const addToLabelQueue = (item: any) => {
+    const rate = taxRates.find((t: any) => t.id === item.tax_rate_id);
     setLabelQueue(prev => {
       if (prev.some(l => l.id === item.id)) return prev;
-      return [...prev, { id: item.id, barcode: item.barcode, name: item.name, category: item.category || '', brand: item.brand || '', variant: variantTag(item), price: item.price, qty: 1 }];
+      return [...prev, { id: item.id, barcode: item.barcode, name: item.name, category: item.category || '', brand: item.brand || '', variant: variantTag(item), price: item.price, qty: 1, taxLabel: rate ? `${rate.name} ${rate.rate_percent}%` : '' }];
     });
     setLabelQtyDraft(prev => ({ ...prev, [item.id]: '1' }));
     setLabelSearchQuery('');
@@ -2198,6 +2201,7 @@ export default function AdminDashboard() {
       price: String(item.price),
       quantity: String(item.quantity),
       reorder_point: item.reorder_point != null ? String(item.reorder_point) : '',
+      tax_rate_id: item.tax_rate_id || '',
     });
   };
 
@@ -2221,6 +2225,7 @@ export default function AdminDashboard() {
       quantity: qty,
       reorder_point: editDraft.reorder_point.trim() ? parseInt(editDraft.reorder_point) : null,
       status: qty > 0 ? 'available' : 'sold',
+      tax_rate_id: editDraft.tax_rate_id || null,
     };
     const { error } = await supabase.from('dresses').update(afterPayload).eq('id', id);
 
@@ -4957,7 +4962,12 @@ export default function AdminDashboard() {
                                   <td className="text-muted">{item.groupVariantCount > 1 ? 'Variable' : 'Single'}</td>
                                   <td className="text-muted">{item.category || '—'}</td>
                                   <td className="text-muted">{item.brand || '—'}</td>
-                                  <td className="text-muted">—</td>
+                                  <td className="text-muted">
+                                    {(() => {
+                                      const rate = taxRates.find((t: any) => t.id === item.tax_rate_id);
+                                      return rate ? `${rate.name} (${rate.rate_percent}%)` : '—';
+                                    })()}
+                                  </td>
                                   <td className="font-mono text-xs text-muted">{item.barcode}</td>
                                   <td className="text-muted">{item.size || '—'}</td>
                                 </tr>
@@ -5030,6 +5040,7 @@ export default function AdminDashboard() {
                       <div><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Product Type</p><p className="text-ink">{viewingItem.groupVariantCount > 1 ? 'Variable' : 'Single'}</p></div>
                       <div><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Size</p><p className="text-ink">{viewingItem.size || '—'}</p></div>
                       <div><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Color</p><p className="text-ink">{viewingItem.color || '—'}</p></div>
+                      <div><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Tax</p><p className="text-ink">{(() => { const rate = taxRates.find((t: any) => t.id === viewingItem.tax_rate_id); return rate ? `${rate.name} (${rate.rate_percent}%)` : '—'; })()}</p></div>
                       <div className="col-span-2"><p className="text-[11px] text-muted uppercase font-bold tracking-wide">Barcode</p><p className="text-ink font-mono">{viewingItem.barcode}</p></div>
                     </div>
                   </div>
@@ -5145,6 +5156,10 @@ export default function AdminDashboard() {
                       <input type="number" value={editDraft.price} onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })} placeholder="Price" className="p-input text-xs" />
                       <input type="number" value={editDraft.quantity} onChange={(e) => setEditDraft({ ...editDraft, quantity: e.target.value })} placeholder="Quantity" className="px-3 py-2 bg-brass-light/40 border border-brass/40 focus:border-brass outline-none text-xs text-ink font-mono font-bold transition-colors" />
                       <input type="number" min="0" value={editDraft.reorder_point} onChange={(e) => setEditDraft({ ...editDraft, reorder_point: e.target.value })} placeholder={`Reorder point (default: ${LOW_STOCK_THRESHOLD})`} className="w-full p-input text-xs col-span-2" />
+                      <select value={editDraft.tax_rate_id} onChange={(e) => setEditDraft({ ...editDraft, tax_rate_id: e.target.value })} className="p-input text-xs col-span-2">
+                        <option value="">No tax</option>
+                        {taxRates.map((t: any) => (<option key={t.id} value={t.id}>{t.name} ({t.rate_percent}%)</option>))}
+                      </select>
                     </div>
                   </div>
                   <div className="flex gap-2 p-5 pt-0 shrink-0">
@@ -5224,6 +5239,29 @@ export default function AdminDashboard() {
                           ))}
                         </select>
                       </div>
+                    </div>
+
+                    {/* Tax — assigns one of your configured Tax Rates
+                        (Settings -> Tax Rates) to this product specifically,
+                        shown in List Products and printed on labels. Not
+                        the same as the order-level tax picked at checkout —
+                        this is the rate that applies to this exact item,
+                        which can differ shop to shop if your Tax Rates are
+                        set up per location. Optional — leave as "No tax"
+                        for items that aren't taxed individually. */}
+                    <div>
+                      <label className="p-label">Tax</label>
+                      <select className="w-full px-4 py-2.5 p-input appearance-none cursor-pointer" value={invTaxRateId} onChange={(e) => setInvTaxRateId(e.target.value)}>
+                        <option value="">No tax</option>
+                        {taxRates.map((t: any) => (
+                          <option key={t.id} value={t.id}>{t.name} ({t.rate_percent}%)</option>
+                        ))}
+                      </select>
+                      {taxRates.length === 0 && (
+                        <p className="text-xs text-muted mt-2">
+                          No tax rates set up yet. <button type="button" onClick={() => goToTab('settings-tax', 'settings')} className="text-brass font-bold hover:text-brass-dark">Add one in Settings →</button>
+                        </p>
+                      )}
                     </div>
 
                     <div className="pt-2 border-t border-thread">
@@ -5426,6 +5464,9 @@ export default function AdminDashboard() {
                             <p className="text-[10px] font-bold text-black mt-0.5">{labelQueue[labelQueue.length - 1].variant}</p>
                           )}
                           <p className="text-[15px] font-bold text-black my-0.5">৳{labelQueue[labelQueue.length - 1].price}</p>
+                          {labelQueue[labelQueue.length - 1].taxLabel && (
+                            <p className="text-[9px] font-bold text-black mb-0.5">{labelQueue[labelQueue.length - 1].taxLabel}</p>
+                          )}
                           <div className="flex justify-center">
                             <BarcodeSVG value={labelQueue[labelQueue.length - 1].barcode} height={40} barWidth={1.4} fontSize={11} />
                           </div>
@@ -8086,6 +8127,9 @@ export default function AdminDashboard() {
                   <div style={{ fontWeight: 700, fontSize: '10px', marginTop: 1 }}>{item.variant}</div>
                 )}
                 <div style={{ fontWeight: 700, fontSize: '15px', margin: '2px 0' }}>৳{item.price}</div>
+                {item.taxLabel && (
+                  <div style={{ fontWeight: 700, fontSize: '9px', marginBottom: '1mm' }}>{item.taxLabel}</div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <BarcodeSVG value={item.barcode} height={40} barWidth={1.4} fontSize={11} />
                 </div>
