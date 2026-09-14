@@ -376,6 +376,8 @@ const NAV_GROUPS = [
     children: [
       { tab: 'staff-clock', label: 'Clock In / Out' },
       { tab: 'staff-manage', label: 'Manage Staff' },
+      { tab: 'staff-commission', label: 'Commission Report' },
+      { tab: 'staff-accounts', label: 'Account Logins' },
       { tab: 'audit-log', label: 'Audit Log' },
     ],
   },
@@ -8018,7 +8020,7 @@ export default function AdminDashboard() {
             )}
 
             {/* TAB: STAFF (clock in/out, staff management, audit log) */}
-            {(activeTab === 'staff-clock' || activeTab === 'staff-manage' || activeTab === 'audit-log') && (
+            {(activeTab === 'staff-clock' || activeTab === 'staff-manage' || activeTab === 'staff-commission' || activeTab === 'staff-accounts' || activeTab === 'audit-log') && (
               <div className="space-y-6 print:hidden">
                 <h3 className="text-xl font-display text-ink mb-2">Staff & Security</h3>
                 <StaffPanel accountRole={userRole} navTab={activeTab} />

@@ -37,6 +37,8 @@ const SUBTAB_LABEL: Record<string, string> = {
 const NAV_TAB_TO_SUBTAB: Record<string, string> = {
   'staff-clock': 'clock',
   'staff-manage': 'manage',
+  'staff-commission': 'commission',
+  'staff-accounts': 'accounts',
   'audit-log': 'audit',
 };
 
@@ -218,17 +220,34 @@ function AccountsTab() {
     return { res, body: await res.json() };
   };
 
-  const load = async () => {
+  // Right after a fresh sign-in there can be a brief window where this
+  // component mounts before the browser's Supabase session has fully
+  // settled — getSession() comes back empty, or the token it returns gets
+  // a transient 403 from the server. A manual page reload always "fixed"
+  // it because by the time you reload and click back in, that window has
+  // long passed. Retrying automatically does the same thing without
+  // making the person notice or do it themselves.
+  const load = async (attempt = 1) => {
     setLoading(true);
-    setMessage({ type: '', text: '' });
+    if (attempt === 1) setMessage({ type: '', text: '' });
+
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
-    if (!token) { setLoading(false); return; }
+    if (!token) {
+      if (attempt < 4) { setTimeout(() => load(attempt + 1), 400 * attempt); return; }
+      setLoading(false);
+      setMessage({ type: 'error', text: 'Not signed in yet — try switching tabs and back.' });
+      return;
+    }
 
     try {
       const res = await fetch('/api/staff-accounts', { headers: { Authorization: `Bearer ${token}` } });
       const body = await res.json();
       if (!res.ok) {
+        // A 403 this early is almost always the same startup race, not an
+        // actual permissions problem — retry quietly before showing an
+        // error an admin would otherwise (wrongly) think is permanent.
+        if (res.status === 403 && attempt < 3) { setTimeout(() => load(attempt + 1), 500 * attempt); return; }
         setMessage({ type: 'error', text: body.error || 'Failed to load accounts.' });
       } else {
         setAccounts(body.accounts);
