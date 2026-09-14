@@ -730,7 +730,7 @@ export default function AdminDashboard() {
 
   // Print Labels (search a product, queue it with a quantity, print the batch)
   const [labelSearchQuery, setLabelSearchQuery] = useState('');
-  const [labelQueue, setLabelQueue] = useState<{ id: any; barcode: string; name: string; category: string; brand: string; variant: string; price: number; qty: number; taxLabel: string }[]>([]);
+  const [labelQueue, setLabelQueue] = useState<{ id: any; barcode: string; name: string; category: string; brand: string; variant: string; price: number; qty: number; taxLabel: string; total: number }[]>([]);
   const [labelQtyDraft, setLabelQtyDraft] = useState<Record<string, string>>({});
 
   // Purchase Requisition
@@ -815,8 +815,10 @@ export default function AdminDashboard() {
     receipt_footer_line1: 'THANK YOU FOR SHOPPING!',
     receipt_footer_line2: 'No refunds without receipt.',
     barcode_prefix: 'CRV',
+    logo_url: '',
   });
   const [settingsSaved, setSettingsSaved] = useState<string>('');
+  const [logoUploading, setLogoUploading] = useState(false);
 
   // Tax Rates (reference list — not yet applied automatically at checkout)
   const [taxRates, setTaxRates] = useState<any[]>([]);
@@ -2177,6 +2179,37 @@ export default function AdminDashboard() {
     }
   };
 
+  // Business logo — uploaded once here instead of being a static file
+  // shipped with the code, so it can be changed without a redeploy. Reuses
+  // the same "product-images" Storage bucket as product photos (no need
+  // for a second bucket/policy just for one image), under a "branding/"
+  // path so it's easy to spot in the bucket. Saved straight to
+  // business_settings.logo_url on upload — no separate Save click, same
+  // as replacing a product photo.
+  const handleLogoUpload = async (file: File) => {
+    setLogoUploading(true);
+    const ext = file.name.split('.').pop() || 'png';
+    const path = `branding/logo-${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage.from('product-images').upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+    if (uploadError) {
+      toast.error('Logo upload failed. Make sure the "product-images" storage bucket exists.');
+      setLogoUploading(false);
+      return;
+    }
+    const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+    const { error } = await supabase.from('business_settings').update({ logo_url: data.publicUrl }).eq('id', 1);
+    setLogoUploading(false);
+    if (error) {
+      toast.error('Uploaded, but failed to save it to Business Settings. Try again.');
+    } else {
+      setBusinessSettings((prev) => ({ ...prev, logo_url: data.publicUrl }));
+      toast.success('Logo updated — it\'ll now print on labels and receipts.');
+    }
+  };
+
   // Short "Size / Color" tag for a variant, used anywhere a product name is
   // shown (POS, cart, receipts, ledgers, labels) so the specific variant is
   // never ambiguous once a product has more than one.
@@ -2199,9 +2232,13 @@ export default function AdminDashboard() {
   // --- PRINT LABELS ---
   const addToLabelQueue = (item: any) => {
     const rate = taxRates.find((t: any) => t.id === item.tax_rate_id);
+    // Rounded to match how money is shown everywhere else in the app (no
+    // decimals) — a label showing ৳2512.5 would look like a typo next to
+    // every other whole-taka price on it.
+    const total = rate ? Math.round(item.price * (1 + rate.rate_percent / 100)) : item.price;
     setLabelQueue(prev => {
       if (prev.some(l => l.id === item.id)) return prev;
-      return [...prev, { id: item.id, barcode: item.barcode, name: item.name, category: item.category || '', brand: item.brand || '', variant: variantTag(item), price: item.price, qty: 1, taxLabel: rate ? `${rate.name} ${rate.rate_percent}%` : '' }];
+      return [...prev, { id: item.id, barcode: item.barcode, name: item.name, category: item.category || '', brand: item.brand || '', variant: variantTag(item), price: item.price, qty: 1, taxLabel: rate ? `${rate.name} ${rate.rate_percent}%` : '', total }];
     });
     setLabelQtyDraft(prev => ({ ...prev, [item.id]: '1' }));
     setLabelSearchQuery('');
@@ -5569,7 +5606,7 @@ export default function AdminDashboard() {
                       <div className="p-4 bg-paper-dim border border-thread flex items-center justify-center">
                         <div className="bg-white border border-thread rounded p-3 text-center" style={{ width: '62mm' }}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src="/logo-ac.png" alt="" className="h-[9mm] w-auto mx-auto mb-1" />
+                          <img src={businessSettings.logo_url || "/logo-ac.png"} alt="" className="h-[9mm] w-auto mx-auto mb-1" />
                           {labelQueue[labelQueue.length - 1].brand && (
                             <p className="text-[13px] font-bold text-black uppercase tracking-wide mb-0.5" style={{ fontFamily: 'var(--font-display), Georgia, serif' }}>{labelQueue[labelQueue.length - 1].brand}</p>
                           )}
@@ -5584,7 +5621,10 @@ export default function AdminDashboard() {
                           )}
                           <p className="text-[15px] font-bold text-black my-0.5">৳{labelQueue[labelQueue.length - 1].price}</p>
                           {labelQueue[labelQueue.length - 1].taxLabel && (
-                            <p className="text-[9px] font-bold text-black mb-0.5">{labelQueue[labelQueue.length - 1].taxLabel}</p>
+                            <>
+                              <p className="text-[9px] font-bold text-black">{labelQueue[labelQueue.length - 1].taxLabel}</p>
+                              <p className="text-[11px] font-bold text-black mb-0.5">Total: ৳{labelQueue[labelQueue.length - 1].total}</p>
+                            </>
                           )}
                           <div className="flex justify-center">
                             <BarcodeSVG value={labelQueue[labelQueue.length - 1].barcode} height={40} barWidth={1.4} fontSize={11} />
@@ -7713,6 +7753,31 @@ export default function AdminDashboard() {
                   {settingsSaved === 'business' && <div className="px-4 py-3 mb-5 text-sm font-semibold border p-badge p-badge-success">Saved.</div>}
                   <div className="space-y-5">
                     <div>
+                      <label className="p-label">Logo</label>
+                      <p className="text-xs text-muted mb-2">Printed at the top of every label and receipt. Upload once here instead of it being a file in the site's code — replacing it takes effect immediately, no redeploy.</p>
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-lg overflow-hidden bg-paper-dim border border-thread flex items-center justify-center shrink-0">
+                          {businessSettings.logo_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={businessSettings.logo_url} alt="" className="w-full h-full object-contain p-1.5" />
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src="/logo-ac.png" alt="" className="w-full h-full object-contain p-1.5" />
+                          )}
+                        </div>
+                        <label className="p-btn p-btn-ghost cursor-pointer">
+                          {logoUploading ? 'Uploading…' : businessSettings.logo_url ? 'Replace Logo' : 'Upload Logo'}
+                          <input
+                            type="file" accept="image/*" className="hidden" disabled={logoUploading}
+                            onChange={(e) => { const file = e.target.files?.[0]; if (file) handleLogoUpload(file); e.target.value = ''; }}
+                          />
+                        </label>
+                      </div>
+                      {!businessSettings.logo_url && (
+                        <p className="text-xs text-muted mt-2">Nothing uploaded yet — labels and receipts are using the default logo built into the site.</p>
+                      )}
+                    </div>
+                    <div>
                       <label className="p-label">Business Name</label>
                       <input type="text" className="w-full p-input" value={businessSettings.business_name} onChange={(e) => setBusinessSettings({ ...businessSettings, business_name: e.target.value })} />
                       <p className="text-xs text-muted mt-1.5">Stored for your records — the sidebar wordmark stays "CRAVE ABS" by design.</p>
@@ -8233,7 +8298,7 @@ export default function AdminDashboard() {
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo-ac.png" alt="" style={{ height: '9mm', width: 'auto', margin: '0 auto 1mm', display: 'block' }} />
+                <img src={businessSettings.logo_url || '/logo-ac.png'} alt="" style={{ height: '9mm', width: 'auto', margin: '0 auto 1mm', display: 'block' }} />
                 {item.brand && (
                   <div style={{ fontFamily: 'var(--font-display), Georgia, serif', fontWeight: 700, fontSize: '13px', color: '#000', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>
                     {item.brand}
@@ -8247,7 +8312,10 @@ export default function AdminDashboard() {
                 )}
                 <div style={{ fontWeight: 700, fontSize: '15px', margin: '2px 0' }}>৳{item.price}</div>
                 {item.taxLabel && (
-                  <div style={{ fontWeight: 700, fontSize: '9px', marginBottom: '1mm' }}>{item.taxLabel}</div>
+                  <>
+                    <div style={{ fontWeight: 700, fontSize: '9px' }}>{item.taxLabel}</div>
+                    <div style={{ fontWeight: 700, fontSize: '11px', marginBottom: '1mm' }}>Total: ৳{item.total}</div>
+                  </>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <BarcodeSVG value={item.barcode} height={40} barWidth={1.4} fontSize={11} />
