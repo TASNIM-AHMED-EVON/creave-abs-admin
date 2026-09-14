@@ -14,6 +14,11 @@
   --color-muted: #7a7168;
   --color-thread: #d8d0be;
   --color-thread-dark: #c4b99e;
+  /* Sidebar inactive-item text specifically — the sidebar (bg-canvas,
+     white in light mode) is high-contrast enough with regular --color-muted
+     already, so this just mirrors it in light mode. Dark mode gets its own
+     brighter value below — see the note there. */
+  --color-nav-muted: var(--color-muted);
 
   /* Brand */
   --color-brass: #a8763b;
@@ -54,6 +59,13 @@ html.dark {
   --color-muted: #5f7fa8;
   --color-thread: #132035;
   --color-thread-dark: #1a2f50;
+  /* Regular --color-muted (#5f7fa8, a dim blue-gray) is legible enough for
+     secondary text throughout the rest of the app, but reads low-contrast
+     specifically against the near-black sidebar. Warm ivory at reduced
+     opacity is noticeably more readable there AND matches the brass/gold
+     accent already used for active nav items, instead of a cool blue-gray
+     that sits slightly off the app's warm palette. */
+  --color-nav-muted: rgba(230, 222, 205, 0.64);
   --color-brass: #c49a4a;
   --color-brass-dark: #a8763b;
   --color-brass-light: #13203a;

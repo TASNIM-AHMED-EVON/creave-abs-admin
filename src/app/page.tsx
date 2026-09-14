@@ -3917,6 +3917,16 @@ export default function AdminDashboard() {
               z-index: 1;
               border: 1px solid transparent;
               transition: all 0.25s cubic-bezier(0.22,1,0.36,1);
+              /* Was relying on the global --color-muted (a dim blue-gray,
+                 #5f7fa8 in dark mode) for inactive labels — legible enough
+                 elsewhere in the app but too low-contrast against this
+                 near-black sidebar specifically. Warm ivory at reduced
+                 opacity reads clearly here AND matches the brass/gold
+                 accent used for active items, instead of the slightly
+                 off-theme cool blue-gray. Only overrides color inside the
+                 sidebar — --color-muted itself is untouched everywhere
+                 else in the app. */
+              color: var(--color-nav-muted) !important;
             }
             .nav-btn:hover {
               border-color: rgba(168,118,59,0.4);
