@@ -5621,10 +5621,7 @@ export default function AdminDashboard() {
                           )}
                           <p className="text-[15px] font-bold text-black my-0.5">৳{labelQueue[labelQueue.length - 1].price}</p>
                           {labelQueue[labelQueue.length - 1].taxLabel && (
-                            <>
-                              <p className="text-[9px] font-bold text-black">{labelQueue[labelQueue.length - 1].taxLabel}</p>
-                              <p className="text-[11px] font-bold text-black mb-0.5">Total: ৳{labelQueue[labelQueue.length - 1].total}</p>
-                            </>
+                            <p className="text-[9px] font-bold text-black mb-0.5">{labelQueue[labelQueue.length - 1].taxLabel} · Total ৳{labelQueue[labelQueue.length - 1].total}</p>
                           )}
                           <div className="flex justify-center">
                             <BarcodeSVG value={labelQueue[labelQueue.length - 1].barcode} height={40} barWidth={1.4} fontSize={11} />
@@ -8312,10 +8309,7 @@ export default function AdminDashboard() {
                 )}
                 <div style={{ fontWeight: 700, fontSize: '15px', margin: '2px 0' }}>৳{item.price}</div>
                 {item.taxLabel && (
-                  <>
-                    <div style={{ fontWeight: 700, fontSize: '9px' }}>{item.taxLabel}</div>
-                    <div style={{ fontWeight: 700, fontSize: '11px', marginBottom: '1mm' }}>Total: ৳{item.total}</div>
-                  </>
+                  <div style={{ fontWeight: 700, fontSize: '9px', marginBottom: '1mm' }}>{item.taxLabel} · Total ৳{item.total}</div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <BarcodeSVG value={item.barcode} height={40} barWidth={1.4} fontSize={11} />
