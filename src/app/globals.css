@@ -569,7 +569,18 @@ select.p-input {
 .p-table thead tr {
   background: linear-gradient(180deg, var(--color-paper) 0%, var(--color-paper-dim) 100%);
 }
-.p-table thead th {
+/* Wrapped in :where() so this rule's specificity is zero — a normal
+   Tailwind utility class (text-right, text-center) on a specific <th>
+   should always win over this default, not the other way around. Before
+   this fix, ".p-table thead th { text-align: left }" (specificity from
+   the class+2 elements) beat a plain ".text-right" utility (specificity
+   from 1 class) on any header that tried to right-align itself — so a
+   numeric column's header rendered left-aligned while its data cells
+   (no competing rule on <td>) rendered right-aligned, visibly splitting
+   the header label from its own column's numbers (see the Gift Cards
+   table: "Issued"/"Balance" headers sat left while the ৳ amounts under
+   them sat right, looking like the whole row had shifted). */
+:where(.p-table thead th) {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.07em;
