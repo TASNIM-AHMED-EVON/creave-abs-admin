@@ -48,10 +48,15 @@ export default function StaffPanel({ accountRole, navTab }: { accountRole: Accou
   // access to any login, so only an actual admin account sees it, not
   // managers who otherwise have broad staff-management rights.
   const isAdminAccount = accountRole === 'admin';
+  // Commission Report shows payroll-sensitive numbers across EVERY staff
+  // member, not just the one PIN a cashier might register — so it stays
+  // manager+ only even though cashiers now have canManage (manage_staff)
+  // for adding/deactivating staff.
+  const canViewCommission = accountRole === 'admin' || accountRole === 'manager';
 
-  const availableSubtabs = ['clock', ...(canManage ? ['manage', 'commission'] : []), ...(isAdminAccount ? ['accounts'] : []), ...(canViewAudit ? ['audit'] : [])];
+  const availableSubtabs = ['clock', ...(canManage ? ['manage'] : []), ...(canViewCommission ? ['commission'] : []), ...(isAdminAccount ? ['accounts'] : []), ...(canViewAudit ? ['audit'] : [])];
   const [subtab, setSubtab] = useState<string>(() => (navTab && NAV_TAB_TO_SUBTAB[navTab]) || 'clock');
-  useEffect(() => { if (!availableSubtabs.includes(subtab)) setSubtab('clock'); }, [canManage, canViewAudit, isAdminAccount]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!availableSubtabs.includes(subtab)) setSubtab('clock'); }, [canManage, canViewCommission, canViewAudit, isAdminAccount]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (navTab && NAV_TAB_TO_SUBTAB[navTab]) setSubtab(NAV_TAB_TO_SUBTAB[navTab]); }, [navTab]);
 
   return (
@@ -70,7 +75,7 @@ export default function StaffPanel({ accountRole, navTab }: { accountRole: Accou
       {subtab === 'clock' && <ClockTab currentStaff={currentStaff} identifyStaff={identifyStaff} clearStaff={clearStaff} />}
       {subtab === 'manage' && canManage && <ManageTab />}
       {subtab === 'accounts' && isAdminAccount && <AccountsTab />}
-      {subtab === 'commission' && canManage && <CommissionTab />}
+      {subtab === 'commission' && canViewCommission && <CommissionTab />}
       {subtab === 'audit' && canViewAudit && <AuditTab />}
     </div>
   );
@@ -451,6 +456,7 @@ function ManageTab() {
   const [rate, setRate] = useState('0');
   const [message, setMessage] = useState('');
   const [pinDrafts, setPinDrafts] = useState<Record<string, string>>({});
+  const [attendanceRow, setAttendanceRow] = useState<StaffRow | null>(null);
 
   const load = async () => {
     const { data } = await supabase.from('staff').select('id, full_name, role, commission_rate, hourly_rate, active, created_at').order('created_at', { ascending: false });
@@ -494,6 +500,7 @@ function ManageTab() {
             <option value="manager">Manager</option>
             <option value="cashier">Cashier</option>
             <option value="inventory_clerk">Inventory Clerk</option>
+            <option value="salesman">Salesman</option>
           </select>
         </div>
         <div>
@@ -517,12 +524,118 @@ function ManageTab() {
               className="w-28 px-3 py-2 bg-paper border border-thread outline-none focus:border-oxblood text-sm font-mono"
             />
             <button onClick={() => setPin(row)} className="px-3 py-2 text-xs font-bold uppercase border border-brass/30 text-brass hover:bg-brass hover:text-white transition-colors">Set PIN</button>
+            <button onClick={() => setAttendanceRow(row)} className="px-3 py-2 text-xs font-bold uppercase border border-thread text-ink hover:bg-paper transition-colors">Attendance</button>
             <button onClick={() => toggleActive(row)} className="px-3 py-2 text-xs font-bold uppercase border border-thread hover:bg-paper transition-colors ml-auto">
               {row.active ? 'Deactivate' : 'Reactivate'}
             </button>
           </div>
         ))}
         {staff.length === 0 && <p className="text-sm text-muted">No staff yet — add one above.</p>}
+      </div>
+      {attendanceRow && <AttendanceModal row={attendanceRow} onClose={() => setAttendanceRow(null)} />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Attendance — "how many days were they present vs absent" for a date
+// range, built from clock_events (the same table Clock In/Out already
+// writes to — this just aggregates it instead of showing only today).
+// A day counts as "present" if there's at least one 'in' event that date;
+// everything else in the range counts as absent. This is what lets a
+// manager or cashier actually calculate a Salesman's work shifts, since
+// Salesmen have no other footprint in the app to go by.
+// ---------------------------------------------------------------------------
+function AttendanceModal({ row, onClose }: { row: StaffRow; onClose: () => void }) {
+  const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().slice(0, 10); });
+  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [loading, setLoading] = useState(true);
+  const [days, setDays] = useState<{ date: string; present: boolean; firstIn: string | null; lastOut: string | null }[]>([]);
+
+  const run = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('clock_events')
+      .select('event_type, occurred_at')
+      .eq('staff_id', row.id)
+      .gte('occurred_at', `${from}T00:00:00`)
+      .lte('occurred_at', `${to}T23:59:59`)
+      .order('occurred_at', { ascending: true });
+
+    const byDate: Record<string, { firstIn: string | null; lastOut: string | null }> = {};
+    (data || []).forEach((ev: any) => {
+      const d = ev.occurred_at.slice(0, 10);
+      if (!byDate[d]) byDate[d] = { firstIn: null, lastOut: null };
+      if (ev.event_type === 'in' && !byDate[d].firstIn) byDate[d].firstIn = ev.occurred_at;
+      if (ev.event_type === 'out') byDate[d].lastOut = ev.occurred_at;
+    });
+
+    // Walk every calendar date in the range (not just the ones with
+    // events) so absent days show up as explicitly absent, not just missing.
+    const result: typeof days = [];
+    const cursor = new Date(`${from}T00:00:00`);
+    const end = new Date(`${to}T00:00:00`);
+    while (cursor <= end) {
+      const key = cursor.toISOString().slice(0, 10);
+      const entry = byDate[key];
+      result.push({ date: key, present: !!entry?.firstIn, firstIn: entry?.firstIn || null, lastOut: entry?.lastOut || null });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    setDays(result.reverse()); // most recent first
+    setLoading(false);
+  };
+  useEffect(() => { run(); }, [from, to]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const presentCount = days.filter(d => d.present).length;
+  const absentCount = days.length - presentCount;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-canvas border border-thread rounded-xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-thread shrink-0">
+          <div>
+            <h3 className="text-sm font-bold text-ink">Attendance</h3>
+            <p className="text-xs text-muted mt-0.5">{row.full_name} · {row.role}</p>
+          </div>
+          <button onClick={onClose} className="text-muted hover:text-ink text-lg leading-none">×</button>
+        </div>
+
+        <div className="px-5 py-3 flex items-end gap-2 border-b border-thread shrink-0">
+          <div>
+            <label className="p-label block mb-1">From</label>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-2.5 py-1.5 bg-paper border border-thread outline-none focus:border-oxblood text-xs" />
+          </div>
+          <div>
+            <label className="p-label block mb-1">To</label>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-2.5 py-1.5 bg-paper border border-thread outline-none focus:border-oxblood text-xs" />
+          </div>
+          <div className="ml-auto text-right">
+            <p className="text-lg font-bold text-ink leading-none">{loading ? '—' : presentCount}<span className="text-muted text-xs font-normal"> / {days.length} days present</span></p>
+            <p className="text-xs text-oxblood mt-0.5">{loading ? '' : `${absentCount} absent`}</p>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1">
+          {loading ? (
+            <p className="text-sm text-muted text-center py-10">Loading…</p>
+          ) : (
+            <table className="p-table w-full">
+              <thead><tr><th>Date</th><th>Status</th><th>Clocked In</th><th>Clocked Out</th></tr></thead>
+              <tbody>
+                {days.map((d) => (
+                  <tr key={d.date}>
+                    <td className="font-mono text-xs">{new Date(`${d.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                    <td>
+                      <span className={`p-badge ${d.present ? 'p-badge-success' : 'p-badge-danger'}`}>{d.present ? 'Present' : 'Absent'}</span>
+                    </td>
+                    <td className="text-xs text-muted">{d.firstIn ? new Date(d.firstIn).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '—'}</td>
+                    <td className="text-xs text-muted">{d.lastOut ? new Date(d.lastOut).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -539,11 +652,11 @@ function CommissionTab() {
     setLoading(true);
     const { data: sales } = await supabase
       .from('sales')
-      .select('staff_id, amount_paid, created_at, status')
+      .select('staff_id, amount_paid, sold_at, status')
       .not('staff_id', 'is', null)
       .neq('status', 'refunded')
-      .gte('created_at', `${from}T00:00:00`)
-      .lte('created_at', `${to}T23:59:59`);
+      .gte('sold_at', `${from}T00:00:00`)
+      .lte('sold_at', `${to}T23:59:59`);
     const { data: staffRows } = await supabase.from('staff').select('id, full_name, commission_rate');
     const byStaff: Record<string, { count: number; total: number }> = {};
     (sales || []).forEach((s: any) => {

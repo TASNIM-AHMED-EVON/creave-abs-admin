@@ -33,8 +33,19 @@ export type Permission =
 const ROLE_PERMISSIONS: Record<Exclude<AccountRole, 'admin'>, Permission[]> = {
   manager: ['view_purchases', 'edit_inventory', 'apply_discount', 'process_refund', 'void_action', 'manage_staff', 'view_audit_log', 'manage_promotions', 'manage_customers'],
   inventory_clerk: ['view_purchases', 'edit_inventory'],
-  cashier: [],
-  // Preserves the original behavior of the 'salesman' account exactly.
+  // Cashiers can now add/manage staff PIN identities too — in practice this
+  // means a cashier on the floor can register a new salesman's PIN without
+  // needing a manager present. It does NOT extend to Commission Report,
+  // which stays manager+ only (gated separately in StaffPanel.tsx) since
+  // that's payroll-sensitive across everyone, not just "add one PIN."
+  cashier: ['manage_staff'],
+  // 'salesman' is a PIN identity (see staffSession.tsx / Manage Staff),
+  // not really a login role — someone whose job is showing clothes on the
+  // floor has no reason to sign into the app at all. This AccountRole
+  // entry exists only so a stray account that somehow still has
+  // app_metadata.role = 'salesman' doesn't fall through to the 'admin'
+  // default in deriveAccountRole (see page.tsx) — it should never
+  // actually be assigned to a login going forward.
   salesman: [],
 };
 
