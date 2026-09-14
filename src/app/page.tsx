@@ -7476,7 +7476,7 @@ export default function AdminDashboard() {
                 })()}
 
                 {/* Add entry form */}
-                <div className="p-card p-6">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink flex items-center gap-2">
                     <IconWallet className="w-4 h-4 text-oxblood" />
                     Add Daily Cost
@@ -8066,7 +8066,7 @@ export default function AdminDashboard() {
                 })()}
 
                 {/* Chart.js bar chart */}
-                <div className="p-card p-6">
+                <div className="p-card p-7">
                   <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                     <div className="flex items-center gap-2">
                       <IconSurvey className="w-4 h-4 text-brass" />
@@ -8113,7 +8113,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Manual entry form */}
-                <div className="p-card p-6">
+                <div className="p-card p-7">
                   <h3 className="text-base font-bold mb-1 text-ink">Manual entry</h3>
                   <p className="text-sm text-muted mb-5">
                     Add or override a day's total — useful for cash-only sales not yet in the system.
