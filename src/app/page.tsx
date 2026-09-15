@@ -7177,8 +7177,8 @@ export default function AdminDashboard() {
                         <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread/60 bg-paper/40">
                           <th className="p-4 font-bold">Code</th>
                           <th className="p-4 font-bold">Type</th>
-                          <th className="p-4 font-bold text-right">Issued</th>
-                          <th className="p-4 font-bold text-right">Balance</th>
+                          <th className="p-4 font-bold">Issued</th>
+                          <th className="p-4 font-bold">Balance</th>
                           <th className="p-4 font-bold">Status</th>
                           <th className="p-4 font-bold">Actions</th>
                         </tr>
@@ -7191,8 +7191,8 @@ export default function AdminDashboard() {
                           <tr key={g.id}>
                             <td className="p-4 font-mono font-bold text-ink text-sm">{g.code}</td>
                             <td className="p-4 text-sm text-muted">{g.source === 'issued_as_credit' ? 'Store credit' : 'Gift card'}</td>
-                            <td className="p-4 text-sm font-mono text-right text-ink">৳{g.initial_balance}</td>
-                            <td className="p-4 text-sm font-mono text-right text-ink font-bold">৳{g.current_balance}</td>
+                            <td className="p-4 text-sm font-mono text-ink">৳{g.initial_balance}</td>
+                            <td className="p-4 text-sm font-mono text-ink font-bold">৳{g.current_balance}</td>
                             <td className="p-4">
                               <span className={`text-[10px] px-2 py-1 font-bold uppercase tracking-wider ${
                                 g.status === 'active' ? 'p-badge p-badge-success'
