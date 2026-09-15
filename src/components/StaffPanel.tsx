@@ -63,12 +63,12 @@ export default function StaffPanel({ accountRole, navTab }: { accountRole: Accou
 
   return (
     <div>
-      <div className="flex gap-2 mb-6 border-b border-thread">
+      <div className="flex gap-2 mb-6 border-b border-thread overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {availableSubtabs.map(t => (
           <button
             key={t}
             onClick={() => setSubtab(t)}
-            className={`px-4 py-2.5 text-sm font-bold uppercase tracking-wide border-b-2 transition-colors ${subtab === t ? 'border-oxblood text-oxblood' : 'border-transparent text-muted hover:text-ink'}`}
+            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-bold uppercase tracking-wide border-b-2 transition-colors ${subtab === t ? 'border-oxblood text-oxblood' : 'border-transparent text-muted hover:text-ink'}`}
           >
             {SUBTAB_LABEL[t]}
           </button>

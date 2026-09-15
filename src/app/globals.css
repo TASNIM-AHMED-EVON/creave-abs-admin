@@ -184,6 +184,50 @@ body {
   border-color: rgba(168,118,59,0.4);
 }
 
+/* ============================================================
+   ANIMATED BORDER SHIMMER — a slow, subtle band of brass-gold
+   light traveling around every card's edge. Applied via a
+   pseudo-element masked down to just the 1px border ring (the
+   middle is punched out with mask-composite), so it never
+   covers a card's actual content — just its outline. Shared
+   across .p-card and .p-section (the two most-used box classes
+   in the app) so it's consistent everywhere instead of one-off
+   per component. .p-card-hero keeps its own existing glow
+   effect instead — it already uses both ::before and ::after
+   for that, so there's no free pseudo-element left to layer a
+   second effect onto without fighting the first one.
+   ============================================================ */
+.p-card::after,
+.p-section::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(115deg,
+    transparent 20%,
+    rgba(196,154,74,0.65) 48%,
+    rgba(230,200,140,0.85) 50%,
+    rgba(196,154,74,0.65) 52%,
+    transparent 80%
+  );
+  background-size: 250% 250%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: p-border-shimmer 6s linear infinite;
+  z-index: 2;
+}
+@keyframes p-border-shimmer {
+  0%   { background-position: 0% 0%; }
+  100% { background-position: 200% 200%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .p-card::after, .p-section::after { animation: none; }
+}
+
 /* Hero dark card */
 .p-card-hero {
   background: linear-gradient(145deg, #1c1a17 0%, #26231c 50%, #1c1a17 100%);
@@ -270,6 +314,7 @@ html.dark .p-card-success {
   border: 1px solid var(--card-border);
   border-radius: var(--card-radius);
   box-shadow: var(--shadow-sm), var(--shadow-inset);
+  position: relative;
   overflow: hidden;
 }
 

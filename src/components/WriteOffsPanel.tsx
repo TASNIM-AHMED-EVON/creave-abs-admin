@@ -98,7 +98,7 @@ export default function WriteOffsPanel() {
         <p className="p-label mb-2">Scan the item</p>
         <form onSubmit={search} className="flex gap-2 mb-4">
           <input value={barcode} onChange={e => setBarcode(e.target.value)} placeholder="Barcode..." className="flex-1 px-4 py-2.5 bg-paper border border-thread outline-none focus:border-oxblood font-mono text-sm" />
-          <button type="submit" className="px-4 py-2.5 bg-ink text-white text-sm font-bold uppercase hover:bg-ink/90">Search</button>
+          <button type="submit" className="p-btn p-btn-primary px-5">Search</button>
         </form>
 
         {item && (

@@ -2074,13 +2074,57 @@ export default function AdminDashboard() {
     setGeneratingAllBarcodes(false);
   };
 
+  // Resizes + re-encodes an image in the browser before it ever reaches
+  // Supabase Storage. A raw phone-camera photo is routinely 3-8MB; capped
+  // at 1000px on the longest side and re-encoded as JPEG at 82% quality,
+  // the same photo typically lands around 150-300KB — roughly a 20x
+  // reduction — with no visible quality loss at the sizes this app
+  // actually displays images (label thumbnails, product cards). This is
+  // what makes the difference between a product catalog's photos fitting
+  // in ~1GB vs needing 20+GB of Storage.
+  // { imageOrientation: 'from-image' } makes sure a photo taken in
+  // portrait on a phone doesn't come out sideways — createImageBitmap
+  // ignores EXIF rotation by default otherwise.
+  // Falls back to the original file untouched if anything about this
+  // fails (old-browser edge case, non-image file, decode error, or the
+  // "compressed" result somehow isn't actually smaller) — compression is
+  // a nice-to-have, never a reason an upload should fail.
+  const compressImageFile = async (file: File, maxDimension = 1000, quality = 0.82): Promise<File> => {
+    if (!file.type.startsWith('image/')) return file;
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as any);
+      let { width, height } = bitmap;
+      if (width > maxDimension || height > maxDimension) {
+        const scale = maxDimension / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return file;
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close?.();
+
+      const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+      if (!blob || blob.size >= file.size) return file;
+
+      const newName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+      return new File([blob], newName, { type: 'image/jpeg' });
+    } catch {
+      return file;
+    }
+  };
+
   // Uploads to the "product-images" Storage bucket and returns the public
   // URL to store on the row. Path is prefixed with the barcode so re-running
   // this for the same product overwrites cleanly rather than piling up.
   const uploadProductImage = async (file: File, barcode: string): Promise<string | null> => {
-    const ext = file.name.split('.').pop() || 'jpg';
+    const compressed = await compressImageFile(file);
+    const ext = compressed.name.split('.').pop() || 'jpg';
     const path = `${barcode}-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('product-images').upload(path, file, {
+    const { error } = await supabase.storage.from('product-images').upload(path, compressed, {
       cacheControl: '3600',
       upsert: false,
     });
@@ -2190,9 +2234,10 @@ export default function AdminDashboard() {
   // as replacing a product photo.
   const handleLogoUpload = async (file: File) => {
     setLogoUploading(true);
-    const ext = file.name.split('.').pop() || 'png';
+    const compressed = await compressImageFile(file);
+    const ext = compressed.name.split('.').pop() || 'png';
     const path = `branding/logo-${Date.now()}.${ext}`;
-    const { error: uploadError } = await supabase.storage.from('product-images').upload(path, file, {
+    const { error: uploadError } = await supabase.storage.from('product-images').upload(path, compressed, {
       cacheControl: '3600',
       upsert: false,
     });
@@ -7119,7 +7164,15 @@ export default function AdminDashboard() {
                     <span className="text-muted text-xs font-mono font-bold">{giftCards.length} ISSUED</span>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="p-table">
+                    <table className="p-table w-full" style={{ tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: '20%' }} />
+                        <col style={{ width: '14%' }} />
+                        <col style={{ width: '15%' }} />
+                        <col style={{ width: '15%' }} />
+                        <col style={{ width: '18%' }} />
+                        <col style={{ width: '18%' }} />
+                      </colgroup>
                       <thead>
                         <tr className="text-muted text-[11px] uppercase tracking-wider border-b border-thread/60 bg-paper/40">
                           <th className="p-4 font-bold">Code</th>
@@ -7883,11 +7936,11 @@ export default function AdminDashboard() {
                     </h3>
                     <p className="text-sm text-muted mt-1">Rates defined here appear as a selectable Tax option on the POS screen, applied to the subtotal after any discount.</p>
                   </div>
-                  <form onSubmit={addTaxRate} className="px-7 mb-5 flex gap-2">
+                  <form onSubmit={addTaxRate} className="px-7 mb-5 grid grid-cols-[1fr_110px_auto] gap-2">
                     <input
                       type="text"
                       placeholder="Name, e.g. VAT"
-                      className="flex-1 p-input text-sm"
+                      className="w-full p-input text-sm"
                       value={newTaxName}
                       onChange={(e) => setNewTaxName(e.target.value)}
                     />
@@ -7895,7 +7948,7 @@ export default function AdminDashboard() {
                       type="number"
                       placeholder="%"
                       step="0.01"
-                      className="w-24 p-input text-sm"
+                      className="w-full p-input text-sm"
                       value={newTaxRate}
                       onChange={(e) => setNewTaxRate(e.target.value)}
                     />
