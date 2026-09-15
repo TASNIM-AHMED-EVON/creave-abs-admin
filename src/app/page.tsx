@@ -4372,7 +4372,7 @@ export default function AdminDashboard() {
                         <IconAlertTriangle className="w-4 h-4 text-oxblood" />
                         Needs Restocking
                       </span>
-                      <button onClick={() => goToTab('products-list', 'products')} className="text-xs font-semibold text-brass hover:text-brass-dark uppercase tracking-wide transition-colors">Manage →</button>
+                      <button onClick={() => goToTab('products-list', 'products')} className="p-btn p-btn-ghost py-1.5 px-3 text-xs">Manage →</button>
                     </div>
                     {lowStockItems.length === 0 ? (
                       <div className="p-empty">
@@ -4438,7 +4438,7 @@ export default function AdminDashboard() {
                       <IconClock className="w-4 h-4 text-brass" />
                       Recent Activity
                     </span>
-                    <button onClick={() => goToTab('reports', null)} className="text-xs font-semibold text-brass hover:text-brass-dark uppercase tracking-wide transition-colors">Full Ledger →</button>
+                    <button onClick={() => goToTab('reports', null)} className="p-btn p-btn-ghost py-1.5 px-3 text-xs">Full Ledger →</button>
                   </div>
                   {salesRecord.length === 0 ? (
                     <div className="p-empty">
